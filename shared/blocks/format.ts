@@ -69,6 +69,11 @@ export const blockSchema = z.object({
   // alongside: the steps after it open once its first round is done, and its rounds go on beside them; the stage
   // closes only when its stop check passes.
   periodic: z.object({ maxMinutes: z.number().int().positive(), alongside: z.boolean().optional() }).strict().optional(),
+  // Engine change 2: an event log beside the stage (interventions, stoppages, time out of the fridge). Its entries are
+  // rounds of the step that the operator adds at any time while the stage runs, each recorded and signed like a step:
+  // none is needed, what follows does not wait for it, and when the stage closes no new entry starts. A later step
+  // reads a field of all its entries as a list (to total the units removed or the time).
+  log: z.boolean().optional(),
   // A new master step from this block starts as a QA hold (the master may change it).
   qaHold: z.boolean().optional(),
   // The name of a step that names a material, "{material}" its name and code: "Issue {material}".

@@ -203,7 +203,9 @@ function myWork(l: LoadedBatch, user: SessionUser) {
     badges.push({ kind: 'late', stage: stageName(t.key.stage), title: check(t), at: t.at, timer: t.kind });
   }
   if (!batchRefusal('production-approve', bv, user)) badges.push({ kind: 'approve', stage: '', title: 'Production approval' });
-  const now = steps.find((s) => s.state === 'in_progress') ?? steps.find((s) => s.state === 'open');
+  // The step under way, else the next open one; an event log's offered entry is not "the current step" (engine change 2).
+  const real = steps.filter((s) => !findBlock(l.doc.stages[s.key.stage]!.steps[s.key.step]!.block)?.log || s.events.length > 0);
+  const now = real.find((s) => s.state === 'in_progress') ?? real.find((s) => s.state === 'open');
   const operates = user.permissions.includes('truebatch_injectables.batch.operate') && bv.status === 'in production';
   if (!operates && !badges.length) return null;
   return {

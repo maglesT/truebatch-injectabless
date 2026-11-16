@@ -178,10 +178,15 @@ export function openSteps(doc: MasterDoc, events: readonly StepEvent[], now: Dat
       if (h.key.stage === si && h.state === 'late' && !earliest(mine, 'started') && !noteAfter(mine, h.at)) why.push(`${h.label} ran out: a deviation note is needed`);
     }
     let closed = true;
+    // The entry offered next in each event log of the stage: gone once the stage is closed.
+    const logs: StepView[] = [];
     for (let sub = 1; sub <= (s.kind === 'sub-batch' ? s.count ?? 1 : 1); sub++) {
       let gate: string | null = why[0] ?? null;
       s.steps.forEach((st, ti) => {
         let last: StepView;
+        const isLog = !!findBlock(st.block)?.log;
+        const before = gate;
+        const log: StepView[] = [];
         for (let round = 1; ; round++) {
           const key = { stage: si, sub, step: ti, round };
           const evs = byKey.get(keyId(key)) ?? [];
@@ -199,9 +204,20 @@ export function openSteps(doc: MasterDoc, events: readonly StepEvent[], now: Dat
           last = { key, id: keyId(key), stageKey: s.key, stepKey: st.key, state: state === 'waiting' && gate === null ? 'open' : state, needsResign,
             ...(state === 'waiting' && gate !== null ? { blocked: gate } : {}), events: evs, ...c, inputChanged, ...(leftOut ? { leftOut } : {}), ...(notYet ? { notYet } : {}) };
           steps.push(last);
+          if (isLog) log.push(last);
           // A round that has events is always shown (an earlier round may be back in progress after a correction).
-          if (!byKey.has(keyId({ ...key, round: round + 1 })) && (st.flow.kind !== 'repeat-until' || !finished(last, st.waitForCheck) || stopPassed(last, st) || round >= maxRounds(st))) break;
-          gate = null;
+          // An event log (engine change 2) offers one more entry after each finished one.
+          const more = isLog ? finished(last, st.waitForCheck) && evs.length > 0
+            : st.flow.kind === 'repeat-until' && finished(last, st.waitForCheck) && !stopPassed(last, st) && round < maxRounds(st);
+          if (!byKey.has(keyId({ ...key, round: round + 1 })) && !more) break;
+          gate = isLog ? before : null;
+        }
+        if (isLog) {
+          // An event log holds the stage only while an entry is under way; what follows does not wait for it.
+          if (log.some((v) => v.events.length > 0 && !finished(v, true))) closed = false;
+          gate = before;
+          logs.push(...log.filter((v) => v.events.length === 0));
+          return;
         }
         // A periodic check that runs alongside (packing): what follows opens once its first round is done.
         const first = findBlock(st.block)?.periodic?.alongside ? steps.find((x) => x.id === keyId({ stage: si, sub, step: ti, round: 1 })) : undefined;
@@ -209,6 +225,9 @@ export function openSteps(doc: MasterDoc, events: readonly StepEvent[], now: Dat
         if (after(doc, st, last!, true) !== null) closed = false;
       });
     }
+    // A stage with only an event log is closed when its other steps are and no entry is under way, once it has started.
+    if (closed && logs.length && s.steps.every((st) => findBlock(st.block)?.log) && !events.some((e) => e.stage === si)) closed = false;
+    if (closed) for (const v of logs) steps.splice(steps.indexOf(v), 1);
     stages.push({ index: si, key: s.key, name: s.name, open: why.length === 0, ...(why[0] ? { blocked: why[0] } : {}), closed });
   });
   return { stages, steps };
