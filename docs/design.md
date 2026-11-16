@@ -64,6 +64,14 @@ adding anything, look how TrueBatch Tablets does it and copy that.
   like every stage, must be closed before production signs (TI-20).
 - The master check: only a preparation starts after a step, the step is of an earlier stage, and no stage uses it.
 
+## Engine change 4: the number of readings set by the master step (built 16 November 2026)
+- A number field of a block may take its number of readings from a **number setting** of the block (`count:
+  "$needles"`), as a field takes its unit from a setting (`unit: "$unit"`). The master step sets it (1-100: one
+  reading per filling needle or probe), so one block serves a 1-needle and a 24-needle filler.
+- The engine resolves it per step (`stepFields`): the floor shows that many boxes, the server takes exactly that many
+  readings, and the worked example uses them. The master check refuses a number that is not a whole number from 1 to
+  100.
+
 ## Platform
 - Runs on the Medhanta platform. Core provides people, sign-in, permissions, e-signature re-authentication and master
   data. Normal platform sign-in (OIDC through core, one person per browser).

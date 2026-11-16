@@ -15,7 +15,7 @@ import { blocking, masterChecks } from '../../shared/master/checks.js';
 import type { MasterDoc } from '../../shared/master/schema.js';
 import { Dec } from '../../shared/templates/index.js';
 import {
-  ACTIONS, BATCH_ACTIONS, CERTIFICATE, LINK_OF, MATERIAL_USE, batchRefusal, inLotUnit, usedQuantity, usesOfLot, stepLabel, stepPlace, stepTitle, handFields, isHand, batchView, doneProblems, evaluate, lateItems, openSteps, parseKey, readValue, refusal, review, timers,
+  ACTIONS, BATCH_ACTIONS, CERTIFICATE, LINK_OF, MATERIAL_USE, batchRefusal, inLotUnit, usedQuantity, usesOfLot, stepLabel, stepPlace, stepTitle, handFields, isHand, batchView, doneProblems, evaluate, lateItems, openSteps, parseKey, readValue, refusal, review, stepFields, timers,
   type Action, type BatchAction, type BatchEvent, type DeviationStatus, type LinkState, type Source, type StageView, type Stored, type StepEvent, type StepKey, type StepView, type Timer, type Value,
 } from '../../shared/engine/index.js';
 
@@ -101,7 +101,7 @@ async function readValues(app: FastifyInstance, doc: MasterDoc, key: StepKey, ra
   const problems: string[] = [];
   // 1. the linked values: machines, rooms and lots
   for (const [name, x] of Object.entries(raw)) {
-    const f = block.fields.find((y) => y.name === name);
+    const f = stepFields(block, step).find((y) => y.name === name);
     if (!f || !LINK_OF[f.kind]) continue;
     let pulled;
     if (f.kind === 'machine' || f.kind === 'room') {
@@ -128,7 +128,7 @@ async function readValues(app: FastifyInstance, doc: MasterDoc, key: StepKey, ra
   }
   // 2. everything typed, with the questions of what is now entered by hand
   const sources = { ...current.source, ...source };
-  const fields = [...block.fields, ...handFields(block.fields, sources)];
+  const fields = [...stepFields(block, step), ...handFields(block.fields, sources)];
   const lot = block.fields.find((f) => f.kind === 'lot');
   for (const [name, x] of Object.entries(raw)) {
     const f = fields.find((y) => y.name === name);

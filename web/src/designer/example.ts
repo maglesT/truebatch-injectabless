@@ -2,7 +2,7 @@
 // run on example values; nothing is saved.
 import { findBlock, type Block } from '../../../shared/blocks/index.js';
 import { refsIn } from '../../../shared/blocks/format.js';
-import { evaluate, lineQuantity, store, type Stored, type StepEvent, type Value } from '../../../shared/engine/index.js';
+import { evaluate, lineQuantity, stepFields, store, type Stored, type StepEvent, type Value } from '../../../shared/engine/index.js';
 import { callTemplate } from '../../../shared/engine/templates.js';
 import { Dec } from '../../../shared/templates/index.js';
 import type { FormulaLine, Limit, MasterDoc, Step } from '../../../shared/master/schema.js';
@@ -27,7 +27,7 @@ function defaults(doc: MasterDoc, si: number, ti: number): Record<string, Value>
     const u = f.unit?.startsWith('$') ? step.settings[f.unit.slice(1)] : f.unit;
     return typeof u === 'string' ? u : '';
   };
-  for (const f of usedFields(b)) {
+  for (const f of usedFields({ ...b, fields: stepFields(b, step) })) {
     if (f.kind === 'yes-no' || f.kind === 'choice') {
       const c4 = b.calcs.find((c) => c.template === 'C4' && refsIn(c.args).includes(f.name));
       out[f.name] = String((c4?.args.expected as string[] | undefined)?.[0] ?? f.options?.[0] ?? 'yes');
@@ -42,7 +42,7 @@ function defaults(doc: MasterDoc, si: number, ti: number): Record<string, Value>
       if ((a.value === `$${f.name}` || a.readings === `$${f.name}`) && lim && typeof lim === 'object' && 'unit' in lim) v = mid(lim) ?? v;
       if (c.template === 'T4' && (a.parts as { value: string }[]).some((p) => p.value === `$${f.name}`) && !b.calcs.some((x) => x.template === 'T3' && x.args.actual === `$${f.name}`)) v = '0.000';
     }
-    out[f.name] = f.count ? vary(v, f.count).map((x) => ({ value: x, unit: unitOf(f) })) : { value: v, unit: unitOf(f) };
+    out[f.name] = typeof f.count === 'number' ? vary(v, f.count).map((x) => ({ value: x, unit: unitOf(f) })) : { value: v, unit: unitOf(f) };
   }
   return out;
 }

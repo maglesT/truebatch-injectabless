@@ -18,11 +18,11 @@ export function FieldInput({ f, unit, saved, picks = [], note, options = [], dis
   onSave?: (raw: Raw) => Promise<void>; onChange?: (raw: Raw) => void;
 }) {
   const initial = rawOf(saved);
-  const [raw, setRaw] = useState<Raw>(f.count && !Array.isArray(initial) ? Array<string>(f.count).fill('') : initial);
+  const [raw, setRaw] = useState<Raw>(typeof f.count === 'number' && !Array.isArray(initial) ? Array<string>(f.count).fill('') : initial);
   const [status, setStatus] = useState<'' | 'saving' | 'saved'>('');
   const [error, setError] = useState('');
   const savedKey = JSON.stringify(initial);
-  useEffect(() => { setRaw(f.count && !Array.isArray(initial) ? Array<string>(f.count).fill('') : initial); }, [savedKey]);
+  useEffect(() => { setRaw(typeof f.count === 'number' && !Array.isArray(initial) ? Array<string>(f.count).fill('') : initial); }, [savedKey]);
 
   const set = (v: Raw) => { setRaw(v); setError(''); onChange?.(v); };
   const save = async (v: Raw) => {
@@ -36,7 +36,7 @@ export function FieldInput({ f, unit, saved, picks = [], note, options = [], dis
   const id = `f-${f.name}`;
 
   let input: ReactNode;
-  if (f.kind === 'number' && f.count) {
+  if (f.kind === 'number' && typeof f.count === 'number') {
     const list = raw as string[];
     const filled = list.filter((x) => x.trim()).length;
     const submit = (e: FormEvent) => { e.preventDefault(); void save(list.map((x) => x.trim())); };

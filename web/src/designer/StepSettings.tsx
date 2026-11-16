@@ -47,7 +47,7 @@ export function StepSettings({ doc, si, ti, onChange }: { doc: MasterDoc; si: nu
 
       <div className="d-section">
         <h3>The operator records</h3>
-        <p className="tokens">{block.fields.map((f) => <span key={f.name} className="tok field">{f.label}{f.count ? ` (${f.count} readings)` : ''}{f.unit && !f.unit.startsWith('$') ? `, ${f.unit}` : ''}{f.optional ? ' · if given' : ''}</span>)}</p>
+        <p className="tokens">{block.fields.map((f) => <span key={f.name} className="tok field">{f.label}{typeof f.count === "string" ? " (as many readings as the step sets)" : f.count ? ` (${f.count} readings)` : ''}{f.unit && !f.unit.startsWith('$') ? `, ${f.unit}` : ''}{f.optional ? ' · if given' : ''}</span>)}</p>
       </div>
 
       {loose.length > 0 && (

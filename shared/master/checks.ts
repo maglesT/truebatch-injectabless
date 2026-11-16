@@ -71,6 +71,11 @@ export function masterChecks(doc: MasterDoc): Problem[] {
       if (st.critical && st.flow.kind === 'optional-with-reason') error(`${p}.flow`, 'A critical step cannot be optional');
       if (st.waitForCheck && !st.checker) warn(p, 'The next step waits for a check this step does not have');
       for (const bs of block.settings) if (!bs.optional && st.settings[bs.name] === undefined) error(`${p}.settings.${bs.name}`, `${bs.label} is not set`);
+      // Engine change 4: a number of readings the step sets is a whole number from 1 to 100.
+      for (const f of block.fields) {
+        const n = typeof f.count === 'string' ? st.settings[f.count.slice(1)] : undefined;
+        if (typeof n === 'string' && !/^([1-9]\d?|100)$/.test(n)) error(`${p}.settings.${String(f.count).slice(1)}`, `${f.label}: the number of readings must be a whole number from 1 to 100`);
+      }
       for (const [name, v] of Object.entries(st.settings)) {
         const bs = block.settings.find((x) => x.name === name);
         const listed = !bs?.options || (typeof v === 'string' && bs.options.includes(v));

@@ -21,8 +21,9 @@ export const fieldSchema = z.object({
   kind: z.enum(FIELD_KINDS),
   // number: the unit from the unit list, or "$setting" when the master step names it.
   unit: z.string().optional(),
-  // number: a list of exactly this many readings (e.g. 20 tablet weights).
-  count: z.number().int().min(2).max(100).optional(),
+  // number: a list of exactly this many readings (e.g. 20 tablet weights), or engine change 4: "$setting", a number
+  // setting of the block the master step sets (1-100: one reading per filling needle or probe).
+  count: z.union([z.number().int().min(2).max(100), z.string().regex(/^\$[a-z][a-zA-Z0-9]*$/)]).optional(),
   // choice: the fixed list.
   options: z.array(z.string().min(1)).optional(),
   optional: z.boolean().optional(),
@@ -109,6 +110,7 @@ export function blockProblems(b: Block): string[] {
     if (f.kind === 'number' && !f.unit) p.push(`field ${f.name}: a number needs a unit`);
     if (f.unit?.startsWith('$') ? !settings.has(f.unit.slice(1)) : f.unit !== undefined && !findUnit(f.unit)) p.push(`field ${f.name}: unknown unit ${f.unit}`);
     if (f.kind === 'choice' && !f.options?.length) p.push(`field ${f.name}: a choice needs options`);
+    if (typeof f.count === 'string' && b.settings.find((s) => s.name === String(f.count).slice(1))?.kind !== 'number') p.push(`field ${f.name}: its count ${f.count} is not a number setting`);
   }
   for (const s of b.settings) if (s.options && (s.kind !== 'text' || !s.options.length)) p.push(`setting ${s.name}: only a text setting has a list`);
   const known = new Set([...b.fields.map((f) => f.name), ...b.settings.map((s) => s.name)]);
