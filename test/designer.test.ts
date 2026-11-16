@@ -71,7 +71,7 @@ describe('master designer', () => {
   });
 
   it('TI-10 the process skeleton is a valid draft and starts every stage with line clearance; what it leaves open is listed by the master check', () => {
-    const header = { productItemId: 'p', productCode: 'P', productName: 'P', batchSize: '100', batchUnit: 'L' as const, densityGPerMl: '1.02', fillVolumeMl: '10.0', dispensingRooms: ['RM-101'] };
+    const header = { productItemId: 'p', productCode: 'P', productName: 'P', batchSize: '100', batchUnit: 'L' as const, densityGPerMl: '1.02', fillVolumeMl: '10.0', fillExcessMl: '0.5', route: 'aseptic' as const, dispensingRooms: ['RM-101'] };
     for (const s of SKELETON_LIST) {
       const doc = masterSchema.parse({ header, formula: [], stages: skeletonStages(s.id, header) });
       expect(doc.stages.every((st) => st.steps[0]!.block.id === 'line-clearance' && st.steps.every((t) => findBlock(t.block)))).toBe(true);

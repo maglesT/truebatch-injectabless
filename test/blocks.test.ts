@@ -36,7 +36,7 @@ const NEW: [string, Record<string, unknown>, object?][] = [
   ['spray-coat', { coreWeight: '250.0 mg', base: 'start', gainLimit: pct('2.8', '3.2') }, { everyMinutes: 15, flow: { kind: 'repeat-until', maxRounds: 20 } }],
   ['polish-print', { print: 'Logo in black' }],
   ['qa-sample', { sampleLimit: { low: '50', high: '60', unit: 'tablets' } }, { flow: { kind: 'qa-hold' } }],
-  ['tablet-reconciliation', { theoretical: { header: 'units' }, meanWeight: '100.0 mg', yieldLimit: pct('97.0', '100.5'), accountabilityLimit: pct('99.0', '100.5') }],
+  ['tablet-reconciliation', { theoretical: '1000 tablets', meanWeight: '100.0 mg', yieldLimit: pct('97.0', '100.5'), accountabilityLimit: pct('99.0', '100.5') }],
 ];
 const using = (id: string, settings: object, options: object = {}): MasterDoc => {
   const b = findBlock({ id, version: 1 })!;

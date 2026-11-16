@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { ApiError } from '../api.js';
 import { createMaster, getVersion, STATE_LABEL, type MasterData, type MasterRow, type Product, type Room } from '../api-designer.js';
-import { masterSchema, type MasterDoc } from '../../../shared/master/schema.js';
+import { CLAIM_PER, masterSchema, type MasterDoc } from '../../../shared/master/schema.js';
 import { headerValue } from '../../../shared/engine/values.js';
 import { scaleDoc } from './model.js';
 import { defaultDispensingRooms, SKELETON_LIST, skeletonStages } from './skeletons.js';
@@ -48,6 +48,15 @@ export function HeaderFields({ header, onChange, products, rooms }: { header: He
         <label>Density (g/mL)<Decimal label="Density" placeholder={header.batchUnit === 'kg' ? 'needed' : 'not given'} value={header.densityGPerMl} onChange={(v) => opt('densityGPerMl', v)} /></label>
         {liquid && <label>Nominal fill (mL per container)<Decimal label="Nominal fill" value={header.fillVolumeMl} onChange={(v) => opt('fillVolumeMl', v)} /></label>}
         {liquid && <label>Fill excess (mL per container)<Decimal label="Fill excess" placeholder="none" value={header.fillExcessMl} onChange={(v) => opt('fillExcessMl', v)} /></label>}
+        <label>Route (how it is made sterile)
+          <select aria-label="Route" value={header.route ?? ''} onChange={(e) => onChange(e.target.value ? { ...header, route: e.target.value as Header['route'] } : (({ route: _, ...h }) => h as Header)(header))}>
+            <option value="">(choose)</option><option value="terminal">Terminal sterilisation after filling</option>
+            <option value="aseptic">Sterile filtration and aseptic processing</option><option value="both">Both</option>
+          </select></label>
+        <label>Label claim is per
+          <select aria-label="Label claim is per" value={header.claimPer ?? ''} onChange={(e) => onChange(e.target.value ? { ...header, claimPer: e.target.value as Header['claimPer'] } : (({ claimPer: _, ...h }) => h as Header)(header))}>
+            <option value="">(choose)</option>{CLAIM_PER.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select></label>
         <div className="calc-note">{units === undefined ? <span className="muted">The expected units show once the batch size and fill are set.</span>
           : typeof units === 'string' ? <>Expected units: <b>{units}</b></> : units.ok ? null : <span className="muted">{units.message}</span>}</div>
       </div>

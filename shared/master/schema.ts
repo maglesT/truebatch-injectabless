@@ -127,6 +127,8 @@ export const lineSchema = z.object({
 // is per unit). A batch in L or kg is filled at the nominal fill plus its excess (overfill), which gives the expected
 // units; nothing of these is typed in the batch.
 export const BATCH_UNITS = ['L', 'kg', 'units'] as const;
+export const ROUTES = ['terminal', 'aseptic', 'both'] as const;
+export const CLAIM_PER = ['mL', 'container (filled content)', 'delivered dose', 'mL after reconstitution', 'dose of a multi-dose container', 'the mixed chambers'] as const;
 export const headerSchema = z.object({
   productItemId: z.string().min(1).max(100),
   productCode: text(),
@@ -138,6 +140,11 @@ export const headerSchema = z.object({
   // The nominal fill per container and the fill excess (overfill), in mL (a batch in L or kg).
   fillVolumeMl: decimal.optional(),
   fillExcessMl: decimal.optional(),
+  // TI-01: how the product is made sterile (terminal sterilisation after filling, sterile filtration and aseptic
+  // processing, or both). A draft may leave it empty; the master check asks for it.
+  route: z.enum(ROUTES).optional(),
+  // N1 (library check 17): what the API's label claim is per.
+  claimPer: z.enum(CLAIM_PER).optional(),
   // TI-11: the rooms of master data (codes) where this product's materials are weighed; a balance is offered there or
   // in a room the stage allows (shared/engine/picks.ts). A version made before this setting has none.
   dispensingRooms: z.array(text()).max(20).optional(),
