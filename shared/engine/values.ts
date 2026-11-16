@@ -70,11 +70,24 @@ export function inputChanges<E extends StepEvent>(events: readonly E[], uses: re
 }
 
 const NUMBER = /^[+-]?(\d+(\.\d*)?|\.\d+)$/;
+/**
+ * Engine change 4: the block's fields for this master step, each count resolved: a count "$setting" is the number the
+ * step sets (one reading per needle or probe); not set, or not a whole number from 1 to 100, it is left unresolved and
+ * the master check refuses the step.
+ */
+export function stepFields(block: Block, step: Pick<Step, 'settings'>): BlockField[] {
+  return block.fields.map((f) => {
+    if (typeof f.count !== 'string') return f;
+    const n = Number(step.settings[f.count.slice(1)]);
+    return Number.isInteger(n) && n >= 1 && n <= 100 ? { ...f, count: n } : f;
+  });
+}
 /** Reads a typed value for a field (machine, room and timer values are the server's). */
 export function readValue(f: BlockField, raw: unknown, unit: string): Value | { error: string } {
   const bad = (why: string) => ({ error: `${f.label}: ${why}` });
   if (f.kind === 'number') {
     const one = (x: unknown) => (typeof x === 'string' && NUMBER.test(x.trim()) ? { value: x.trim(), unit } : null);
+    if (typeof f.count === 'string') return bad('the master step sets no number of readings');
     if (f.count === undefined) return one(raw) ?? bad('type a number, e.g. "50.300"');
     if (!Array.isArray(raw) || raw.length !== f.count) return bad(`give exactly ${f.count} readings`);
     const list = raw.map(one);
