@@ -1,24 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import { findBlock } from '../shared/blocks/index.js';
 import { dispensingRooms, machineRefusal, untypedNote } from '../shared/engine/picks.js';
-import { SKELETON_LIST, skeletonStages } from '../web/src/designer/skeletons.js';
+import { skeletonList, skeletonStages } from '../web/src/designer/skeletons.js';
 
-// The equipment and instrument types of the demo master data (owner's list, 15 Nov 2026), with a few real types that
-// share a word with them and must not be offered (filter press, air compressor, dry heat steriliser, case packer).
-const TYPES = ['Balance', 'Analytical balance', 'Micro balance', 'IPC balance', 'Platform balance', 'Bin blender', 'Blender', 'Auto coater', 'Blister packer',
-  'Strip packer', 'High speed blister line', 'Rapid mixer granulator', 'Fluid bed dryer', 'Tablet compression machine', 'Tablet press', 'Cold forming machine',
-  'Filter press', 'Air compressor', 'Dry heat steriliser', 'Case packer', 'Sifter', 'Multimill', 'Friabilator', 'Disintegration tester', 'Manufacturing vessel'];
+// The equipment and instrument types of the demo master data (owner's list, 15 Nov 2026) and of an injectables plant,
+// with a few real types that share a word with them and must not be offered (filter press, air compressor, case packer,
+// platform balance for a form-fill-seal machine, a container-closure leak tester for a filter test).
+const TYPES = ['Balance', 'Analytical balance', 'Micro balance', 'IPC balance', 'Platform balance', 'Bin blender', 'Manufacturing vessel', 'Filter press',
+  'Air compressor', 'Case packer', 'Compounding vessel', 'Mixing vessel', 'Homogeniser', 'Vial washer', 'Depyrogenation tunnel', 'Dry heat steriliser', 'Autoclave',
+  'Vial filling machine', 'Syringe filling machine', 'Form-fill-seal machine', 'Freeze dryer', 'Filter integrity tester', 'Leak tester (HVLD)',
+  'Container closure integrity tester', 'Visual inspection machine'];
 const MACHINES = TYPES.map((type, i) => ({ code: `EQ-${i}`, type, room: null }));
 const BALANCES = ['Balance', 'IPC balance', 'Platform balance'];
-const BLENDERS = ['Bin blender', 'Blender'];
+const VESSELS = ['Manufacturing vessel', 'Compounding vessel', 'Mixing vessel'];
 const OFFERS: Record<string, string[]> = {
-  'weigh.balance': BALANCES, 'charge.machine': [...BLENDERS, 'Rapid mixer granulator', 'Fluid bed dryer', 'Manufacturing vessel'], 'mix.machine': [...BLENDERS, 'Rapid mixer granulator', 'Manufacturing vessel'],
+  'weigh.balance': BALANCES, 'charge.machine': ['Bin blender', ...VESSELS], 'dissolve.machine': VESSELS, 'mix.machine': ['Bin blender', ...VESSELS], 'make-up.machine': VESSELS, 'phase-prep.machine': VESSELS,
+  'homogenise.machine': ['Homogeniser'], 'component-wash.washer': ['Vial washer'], 'depyrogenate.machine': ['Depyrogenation tunnel', 'Dry heat steriliser'],
+  'sterilise.steriliser': ['Dry heat steriliser', 'Autoclave'], 'terminal-sterilise.steriliser': ['Dry heat steriliser', 'Autoclave'],
+  'fill.machine': ['Vial filling machine', 'Syringe filling machine', 'Form-fill-seal machine'], 'ffs-run.machine': ['Form-fill-seal machine'],
+  'lyo-load.dryer': ['Freeze dryer'], 'filter-test.tester': ['Filter integrity tester'], 'leak-test-100.machine': ['Leak tester (HVLD)', 'Container closure integrity tester'],
 };
 
 describe('machine pickers on the demo master-data types', () => {
   const header = { productItemId: 'p', productCode: 'P', productName: 'P', batchSize: '100', batchUnit: 'L' as const, fillVolumeMl: '10.0' };
   // The types alone: here every stage allows any room (the rooms are tested below).
-  const stages = [...SKELETON_LIST.flatMap((s) => skeletonStages(s.id, header))].map((s) => ({ ...s, roomTypes: [] }));
+  const stages = [...skeletonList().flatMap((s) => skeletonStages(s.id, header))].map((s) => ({ ...s, roomTypes: [] }));
 
   it('TI-11 every machine field of the skeletons offers the machines of its kind, never a QC lab balance', () => {
     const seen = new Set<string>();

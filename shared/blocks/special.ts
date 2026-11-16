@@ -193,7 +193,7 @@ export const ffsRun: Block = {
   id: 'ffs-run', version: 1, name: 'Form-fill-seal or blow-fill-seal run', checker: false, periodic: { maxMinutes: 1440 }, stop: 'done',
   instruction: 'At each round weigh the units shown, check seals and ports, leak check the samples and read the counter.',
   fields: [
-    { name: 'machine', label: 'FFS or BFS machine', kind: 'machine', types: ['form', 'blow', 'bfs', 'ffs', 'bag'] },
+    { name: 'machine', label: 'FFS or BFS machine', kind: 'machine', types: ['form', 'blow', 'bfs', 'ffs'], notTypes: ['platform', 'balance'] },
     { name: 'weights', label: 'Net fill weight per unit', kind: 'number', unit: 'g', count: '$units' }, yes('seals', 'Seals and ports as specified'), yes('leak', 'Leak check of samples passed'),
     num('counter', 'Counter', 'units'), going('filling', 'Filling'),
   ],

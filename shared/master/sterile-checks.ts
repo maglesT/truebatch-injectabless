@@ -124,7 +124,9 @@ export function sterileChecks(doc: MasterDoc, ask: Ask, refuse: Refuse): void {
   // 41/42 ⛔ the route and its heat steps; 43 ⚠️ a minimum F0 below the 15 min reference.
   const terminal = steps.filter((x) => x.id === 'terminal-sterilise');
   const heat = steps.filter((x) => x.id === 'heat-treatment');
-  if ((route === 'terminal' || route === 'both') && !terminal.length) refuse('header.route', 'The route is terminal but no terminal sterilisation step has a minimum F0: a heat treatment or pasteurisation is not sterilisation (library check 41)', 'TI-24');
+  // A bulk only (no fill step) is sterilised where it is filled, under that master.
+  const filled = steps.some((x) => x.id === 'fill' || x.id === 'ffs-run');
+  if (filled && (route === 'terminal' || route === 'both') && !terminal.length) refuse('header.route', 'The route is terminal but no terminal sterilisation step has a minimum F0: a heat treatment or pasteurisation is not sterilisation (library check 41)', 'TI-24');
   if (route === 'terminal' && heat.length) refuse(heat[0]!.path, 'A heat step below sterilising lethality in a master whose route is terminal: the route must be "both" (or aseptic), with the full aseptic record (library check 42)', 'TI-24');
   for (const x of terminal) {
     const low = lowOf(x.t.settings.lethalityLimit);

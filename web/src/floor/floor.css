@@ -183,3 +183,12 @@
   .pending-row { grid-template-columns: 12px minmax(0, 1fr); } .pending-go { display: none; }
   .returns label { grid-template-columns: 1fr; }
 }
+
+/* The filling screen: fill checks, clean-air checks and interventions side by side; one column on a phone. */
+.filling { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.fill-card { display: grid; gap: 6px; align-content: start; padding: 12px 14px; border: 1px solid var(--line, #d9dee5); border-radius: 10px; background: var(--card, #fff); }
+.fill-card h3 { margin: 0; font-size: 1rem; }
+.fill-card .countdown { margin: 0; font-size: 1.4rem; font-weight: 700; }
+.fill-card.bad { border-color: var(--bad, #c62828); }
+.fill-card.bad .countdown { color: var(--bad, #c62828); }
+.fill-card .big { width: 100%; }
