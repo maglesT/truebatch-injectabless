@@ -1,12 +1,33 @@
 # TrueBatch Injectables: design decisions
 
-Owner decisions of 15 November 2026. Built the Logbook way (the platform Logbook is the model for structure, patterns
-and size), not the Batchwright way.
+Owner decisions of 16 November 2026 (the injectables plan), on top of the TrueBatch Tablets decisions of 15 November
+2026 that this copy brings. Built the TrueBatch Tablets way (and the Logbook way), never the Batchwright way: before
+adding anything, look how TrueBatch Tablets does it and copy that.
 
 ## Product
-- **One product per dosage form.** TrueBatch Injectables covers manufacturing, from dispensing to QA release of bulk
-  tablets. Packing is a separate product, "TrueBatch Tablets Packing", in this repository on the same engine
-  (`docs/packing-design.md`).
+- **One product per dosage form.** TrueBatch Injectables covers sterile drug product manufacture, from dispensing to
+  QA release of filled, closed and inspected units: all injectable types and both routes (terminal sterilisation;
+  sterile filtration and aseptic filling; or both). Labelling and packing of the units is a later product of its own,
+  as TrueBatch Tablets Packing is for tablets.
+- **Its own engine**: a copy of the TrueBatch Tablets engine (TrueBatch Tablets a0ec59c), changed only where injections
+  need it. TrueBatch Tablets and Tablets Packing keep their shared engine; a fix in one engine is checked in the other.
+- **Six engine changes, approved by the owner, each reusing a Tablets mechanism**, and nothing else without asking
+  the owner: (1) a liquid batch header (litres or kg, density, fill volume, overfill, expected units, strength per mL),
+  reusing the way Packing has its own header shape; (2) an event log beside filling (interventions, stoppages, time
+  out of the fridge), the "rounds alongside a step" without a timer; (3) results that come days later, a parallel
+  stage that starts after a named step and closes before production signs; (4) the number of readings set by the
+  master step (1-24 needles or probes), the lists of readings; (5) time limits from step X (start or end) to step Y
+  (start or end), the hold-time timer; (6) an item that expires during a step needs a deviation note before the step
+  is signed (starting with an expired item is refused), the "out of limits needs a deviation note" rule.
+- **One fixed clean-air limits table** in the product (EU GMP Annex 1 grade limits for particles and microbes), shown
+  in the master review and confirmed once by QA.
+- **Rules**: only the 29 rules of the minimum register (`docs/rules.md`); nothing the platform or another product
+  already does.
+- **Pull, don't type**: values come from master data or other products (room grade from master data, sterile status
+  from the Logbook, the line's media fill from Qualification through the Logbook's links); typed by hand only while a
+  link is absent or down, with a second-person check.
+- Assumed until the owner confirms: one tank of solution = one filling = one batch; aseptic operators by a QA-given
+  "aseptic operator" permission (no training dates here); a media fill as a TrueBatch batch comes later.
 
 ## Platform
 - Runs on the Medhanta platform. Core provides people, sign-in, permissions, e-signature re-authentication and master
@@ -48,7 +69,7 @@ answering) or **ok**.
   names and columns, so the Logbook and Deviations read TrueBatch as they read Batchwright, and `deviation_note_v1`
   for Deviations to file notes later. `batch_fact_v1` has one more column at its end (`0007`): `manufactured_on`, the
   date of manufacture, the plant-time date the batch's first processing step started (null before), which TrueBatch
-  Tablets Packing reads; readers of Batchwright's columns select them by name and are not affected. `0008` adds
+  TrueBatch Tablets Packing read; readers of Batchwright's columns select them by name and are not affected. `0008` adds
   `product_name` and `master_version` at the end (family_code is the master version's number) and publishes
   `material_use_v1`: per signed weighing step its lot, material and net quantity (status dispensed, or corrected with
   the corrected quantity); MMS reduces the lot's stock by reading it (owner decision), nothing is sent. `0011`: a
@@ -85,8 +106,8 @@ answering) or **ok**.
 ## Engine
 - About 40 calculation and check templates, each a small pure function. No formula language.
 - Step blocks are **data**: a description of their fields, templates, signatures and limits. One engine runs all blocks.
-  The library holds the standard tablet steps, from sifting to the reconciliation of tablets (`shared/blocks/`). A text
-  setting may have a fixed list the author picks from.
+  The library (`shared/blocks/`) still holds the TrueBatch Tablets steps of the copy; the sterile blocks come from the
+  final injectables library (phase E). A text setting may have a fixed list the author picks from.
 - A fixed, short list of units.
 - A master version is stored as one JSON document.
 - The designer is forms and ordered lists.

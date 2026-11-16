@@ -1,49 +1,36 @@
 # TrueBatch Injectables
 
-An electronic batch record for tablet manufacturing, from dispensing to QA release of bulk tablets, on the Medhanta
-platform. Built the way the Medhanta Logbook is built: one app, plain SQL, a small set of rules checked once in the app.
+An electronic batch record for sterile injectables, from dispensing to QA release of filled, closed and inspected
+units, on the Medhanta platform. All injectable types (liquid vials and ampoules, freeze-dried vials, prefilled
+syringes and cartridges, bags and bottles, powders, emulsions, suspensions, liposomes, dual-chamber) and both ways of
+making them sterile (terminal sterilisation after filling; sterile filtration and aseptic filling; or both).
+
+It is built the TrueBatch Tablets way and starts from a copy of TrueBatch Tablets (its engine, templates, master
+format, server, screens and tests), changed only where injections need it (owner, 16 November 2026). One app, plain
+SQL, a small set of rules checked once in the app.
 
 - Design decisions: `docs/design.md`
-- The TrueBatch rules and their tests: `docs/rules.md`
+- The 29 TrueBatch Injectables rules and their tests: `docs/rules.md`
+- The calculation templates: `shared/templates/README.md`
 
-Status: sign-on through core, permissions, the audit trail, e-signatures and master-data reads are in place, with the
-calculation templates (`shared/templates/`), the step blocks (`shared/blocks/`), the master document and its checks
-(`shared/master/`) and the batch engine (`shared/engine/`, routes in `server/routes/`). The engine also works out the
-batch status (production approval, QC approval, QA release or rejection, `shared/engine/release.ts`), marks a step
-"input changed" when a value it used was corrected later, and gives QA the review list (`GET /api/batches/:id/review`).
-Screens: the master designer with review and QA approval (`web/src/designer/`), issuing a batch from an effective
-master (`web/src/floor/IssueDialog.tsx`), the shop floor (`web/src/floor/`) and
-the QC and QA release screens with the audit-trail review (`web/src/release/`). The batch record PDF
-(`GET /api/batches/:id/pdf`, `server/batch-record.ts`) is made with pdfmake and embedded Noto fonts, as the Logbook
-makes its copies. Line clearance is a standard block; the process skeletons start every stage with it. The links to
-Deviations, QMS, Logbook and MMS (`server/links.ts`, `docs/design.md` "Links") are optional: with a link the value is
-pulled and cannot be typed over; without it, or while it is down, it is typed by hand with a second-person check and
-listed for QA. TrueBatch publishes `report.batch_fact_v1` (with `manufactured_on` at its end, 0007, and the product
-name and master version, 0008), `equipment_use_v1`, `deviation_note_v1` (`db/migrations/0006_report_views.sql`) and
-`material_use_v1`, the quantities dispensed, which MMS reads to reduce lot stock (0008), in the material's master-data
-unit; a machine or room is in use by its batch until the last stage of the batch that names it (or may run in its room) closes, a balance is never in use by a batch, and both views name the step in words
-(`step_name`, 0010 and 0011).
-
-## TrueBatch Tablets Packing
-The packing batch record is a separate product on the platform, built from this repository on the same engine and
-screens: `docs/packing-design.md`, its rules TB-P1 to TB-P9 in `docs/rules.md`. Its own parts are in `packing/` (entry
-points, migrations, the views it publishes) and `ops/packing.*`.
-
-```sh
-export DATABASE_URL=postgres://truebatch_injectables_owner:dev@localhost:5432/truebatch_packing_dev DB_APP_ROLE=truebatch_packing_app
-export TRUEBATCH_INJECTABLES_DATABASE_URL=postgres://...   # optional: TrueBatch Injectables' published views (released bulk batches)
-npm run migrate:packing
-npm run dev:packing        # API on :3001
-npm run dev:packing-web    # UI on :5174 (proxies /api)
-```
+## Status (phase C)
+The copy of TrueBatch Tablets, renamed (product `truebatch_injectables`, batch numbers `TI`, permissions
+`truebatch_injectables.*`, rules `TI-xx`), with TrueBatch Tablets Packing removed. Everything the copy brings works:
+sign-on through core, permissions, audit trail, e-signatures, master-data reads, the master designer and its checks,
+the batch engine, shop floor, QC and QA release, the batch record PDF, links to Deviations, QMS, Logbook and MMS with
+hand entry when a link is down, the demo skip. Still from tablets until the next phases: the tablet header and
+formula (mg per tablet), the tablet blocks and process skeletons. Next: the six approved engine changes (liquid
+header, event log beside filling, results that come days later, number of readings set by the master, time limits
+from step X to step Y, an item expiring during a step) and the clean-air limits table; then the sterile templates and
+blocks from the final library.
 
 ## Develop
-Needs Node 22 and PostgreSQL 16.
+Needs Node 22 and PostgreSQL 17.
 
 ```sh
 npm install
 export DATABASE_URL=postgres://truebatch_injectables_owner:dev@localhost:5432/truebatch_injectables_dev DB_APP_ROLE=truebatch_injectables_app
-# Medhanta core: people, sign-in, TrueBatch permissions and master data are managed there
+# Medhanta core: people, sign-in, permissions and master data are managed there
 export MASTER_DATA_DATABASE_URL=postgres://truebatch_injectables_app:...@<core db>:5432/master_data   # read through its report views
 # Optional links, each set by the platform only while the link is on:
 # DEVIATIONS_DATABASE_URL, QMS_DATABASE_URL, LOGBOOK_DATABASE_URL, MMS_DATABASE_URL
@@ -55,35 +42,35 @@ npm run ci         # typecheck, tests, build, rule-to-test check — run before 
 npm run test:e2e   # browser tests (Playwright; once: npx playwright install chromium)
 ```
 
-Tests use `TEST_DATABASE_URL` (default `postgres://truebatch_injectables_owner:dev@localhost:5432/truebatch_injectables_test`); each test file
-gets its own schema. The test login must be able to create roles and databases (the platform test makes its own).
+Tests use `TEST_DATABASE_URL` (default
+`postgres://truebatch_injectables_owner:dev@localhost:5432/truebatch_injectables_test`); each test file gets its own
+schema. The test login must be able to create roles and databases (the platform test makes its own).
 
 ## On the platform
-`ops/manifest.draft.json` is the draft of the product's platform manifest (permissions, back-channel logout, the
-views it reads from master data and the four linked products, and the views it publishes). The app reads its database from `TRUEBATCH_INJECTABLES_DATABASE_URL` and runs as the restricted login
-`truebatch_injectables_app`, which cannot change or delete audit rows or signatures. Migrations run as the database owner.
+`ops/manifest.draft.json` is the draft of the product's platform manifest (permissions, back-channel logout, the views
+it reads from master data and the linked products, and the views it publishes). On the platform the app reads its
+database from `TRUEBATCH_INJECTABLES_DATABASE_URL` and runs as the restricted login `truebatch_injectables_app`, which
+cannot change or delete audit rows or signatures. Migrations run as the database owner.
 
 ## Demo installations
-The platform sets `TRUEBATCH_DEMO=1` only for the demo customer's installation of either product, never for a plant's
-(`server/demo.ts`). Then every screen shows a DEMO banner, and a person with `truebatch_injectables.demo.skip` (packing:
-`truebatch_packing.demo.skip`) sees "Skip wait (demo)" on a step that waits (a minimum time, the next periodic check, a
-hold time running, a mixing time below its lower limit), which ends that wait at once. To prepare a demo from a
-terminal in the product's container:
+The platform sets `TRUEBATCH_DEMO=1` only for the demo customer's installation, never for a plant's
+(`server/demo.ts`). Then every screen shows a DEMO banner, and a person with `truebatch_injectables.demo.skip` sees
+"Skip wait (demo)" on a step that waits (a minimum time, the next periodic check, a hold time running, a mixing time
+below its lower limit), which ends that wait at once. From a terminal in the product's container:
 
 ```sh
-node dist/server/demo-skip.js TI260004 [stage] --as <username>           # TrueBatch Injectables
-node dist/packing/server/demo-skip.js TP260001 [stage] --as <username>   # TrueBatch Tablets Packing
+node dist/server/demo-skip.js TI260004 [stage] --as <username>
 ```
 
-It skips every wait running now in the batch, or in one stage (its key, name or number), as the named demo person
-(someone who has signed in once). Each skip is an insert-only step event `demo_wait_skipped` with who, when and which
-wait, shown in the step history, QA's review and the batch record PDF as "DEMO: wait skipped by … at …"; the engine
-counts that wait as satisfied, nothing else changes. Without `TRUEBATCH_DEMO=1` the button is absent, the route answers
-403 and the command exits non-zero.
+Each skip is an insert-only step event `demo_wait_skipped` with who, when and which wait, shown in the step history,
+QA's review and the batch record PDF as "DEMO: wait skipped by … at …"; the engine counts that wait as satisfied,
+nothing else changes. Without `TRUEBATCH_DEMO=1` the button is absent, the route answers 403 and the command exits
+non-zero.
 
 ## Conventions
-- One app: `server/` (Fastify), `web/` (React), `db/migrations/` (plain SQL), `test/`, `e2e/` (browser tests), `ops/`, `docs/`;
-  `packing/` for TrueBatch Tablets Packing's own entry points and migrations.
-- A test that proves a rule starts its name with the rule ID: `TB-xx` for TrueBatch rules, `PL-xx` for platform rules.
+- One app: `server/` (Fastify), `web/` (React), `db/migrations/` (plain SQL), `shared/` (engine, templates, blocks,
+  master format), `test/`, `e2e/` (browser tests), `ops/`, `docs/`.
+- A test that proves a rule starts its name with the rule ID: `TI-xx` for TrueBatch Injectables rules, `PL-xx` for
+  platform rules.
 - Paraphrase regulations; never paste more than a short phrase.
 - Work on a branch, CI green, one review pass, then merge.
