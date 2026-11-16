@@ -95,7 +95,7 @@ describe('master designer', () => {
     // An aseptic starting master marks its filling stage aseptic and reads the EM plates in a stage of results that come later.
     const lyo = skeletonStages('lyo-aseptic', header('aseptic'));
     expect(lyo.filter((s) => s.aseptic).map((s) => s.steps.map((t) => t.block.id).join(' '))).toEqual([
-      'line-clearance aseptic-ready interventions em-filling transfer-in fill lyo-load lyo-cycle lyo-unload qa-sample seal-check unit-reconcile']);
+      'line-clearance aseptic-ready interventions em-filling transfer-in fill lyo-load lyo-cycle lyo-unload seal-check qa-sample unit-reconcile']);
     expect(lyo.find((s) => s.startsAfter)).toMatchObject({ kind: 'preparation', startsAfter: 'filling/fill', roomTypes: [] });
     // The bulk yield on the batch mass by the density (engine change 1); the units from the header.
     expect(lyo[0]!.steps.at(-1)!.settings.theoretical).toEqual({ header: 'batchMass' });
@@ -107,7 +107,8 @@ describe('master designer', () => {
     expect(masterChecks(bare).filter((p) => p.path === 'header.dispensingRooms')).toEqual([{ level: 'error', path: 'header.dispensingRooms', rule: 'TI-11',
       message: 'The master weighs but names no dispensing rooms: choose them in the header (rooms of master data)' }]);
     expect(defaultDispensingRooms([{ code: 'RM-101', area: 'Dispensing', active: true }, { code: 'RM-102', area: 'Dispensing', active: false },
-      { code: 'RM-301', area: 'Liquid dispensing', active: true }, { code: 'RM-103', area: 'Granulation', active: true }])).toEqual(['RM-101']);
+      { code: 'RM-301', area: 'Liquid dispensing', active: true }, { code: 'RM-103', area: 'Granulation', active: true },
+      { code: 'RM-201', area: 'Sterile dispensing', active: true }])).toEqual(['RM-101', 'RM-201']);
   });
 
   it('the plain view titles each step as the floor does and never shows a step\'s internal key', () => {
