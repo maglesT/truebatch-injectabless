@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { plainError, rawOf, valueText, type BlockField, type PickItem, type Value } from '../api-floor.js';
 
 type Raw = string | string[];
@@ -9,8 +9,9 @@ type Raw = string | string[];
  */
 export function FieldInput({ f, unit, saved, picks = [], note, options = [], disabled, out, onSave, onChange }: {
   f: BlockField; unit: string; saved?: Value; picks?: PickItem[]; disabled?: boolean;
-  // A machine or room: why some of master data are not offered (shared/engine/picks.ts: untypedNote, inLogbook).
-  note?: string | null;
+  // A machine or room: why some of master data are not offered (shared/engine/picks.ts: untypedNote, inLogbook), each
+  // reason its own line.
+  note?: readonly (string | null)[] | string | null;
   // A lot: the lots a link offers, to pick from (typing stays possible when the link is absent or down).
   options?: string[];
   // Readings out of their band (from the results), shown red.
@@ -22,6 +23,9 @@ export function FieldInput({ f, unit, saved, picks = [], note, options = [], dis
   const [status, setStatus] = useState<'' | 'saving' | 'saved'>('');
   const [error, setError] = useState('');
   const savedKey = JSON.stringify(initial);
+  // A refusal is brought fully into view, above the sticky action bar (scroll-margin in floor.css).
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => { if (error) errorRef.current?.scrollIntoView({ block: 'nearest' }); }, [error]);
   useEffect(() => { setRaw(typeof f.count === 'number' && !Array.isArray(initial) ? Array<string>(f.count).fill('') : initial); }, [savedKey]);
 
   const set = (v: Raw) => { setRaw(v); setError(''); onChange?.(v); };
@@ -34,6 +38,7 @@ export function FieldInput({ f, unit, saved, picks = [], note, options = [], dis
   const enter = (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); };
   const tap = (v: string) => { set(v); void save(v); };
   const id = `f-${f.name}`;
+  const notes = (Array.isArray(note) ? note : [note]).filter((n): n is string => !!n);
 
   let input: ReactNode;
   if (f.kind === 'number' && typeof f.count === 'number') {
@@ -75,7 +80,7 @@ export function FieldInput({ f, unit, saved, picks = [], note, options = [], dis
     );
   } else if (f.kind === 'machine' || f.kind === 'room') {
     input = <>
-      {picks.length === 0 ? !note && <p className="muted">No {f.kind === 'room' ? 'room this stage allows' : `${f.label.toLowerCase()} of the types and rooms this stage allows`} is active in master data.</p> : (
+      {picks.length === 0 ? !notes.length && <p className="muted">No {f.kind === 'room' ? 'room this stage allows' : `${f.label.toLowerCase()} of the types and rooms this stage allows`} is active in master data.</p> : (
         <div className="picks" role="group" aria-label={f.label}>
           {picks.map((p) => (
             <button key={p.itemId} type="button" className={raw === p.itemId ? 'on' : ''} aria-pressed={raw === p.itemId} disabled={disabled} onClick={() => tap(p.itemId)}>
@@ -84,7 +89,7 @@ export function FieldInput({ f, unit, saved, picks = [], note, options = [], dis
           ))}
         </div>
       )}
-      {note && <p className="muted small">{note}</p>}
+      {notes.map((n) => <p key={n} className="muted small">{n}</p>)}
     </>;
   } else if (f.kind === 'timer') {
     input = onSave
@@ -105,7 +110,7 @@ export function FieldInput({ f, unit, saved, picks = [], note, options = [], dis
         {status === 'saved' && <span className="saved">✓ Saved</span>}
       </label>
       {input}
-      {error && <p className="field-error" role="alert">{error}</p>}
+      {error && <p ref={errorRef} className="field-error" role="alert">{error}</p>}
     </div>
   );
 }

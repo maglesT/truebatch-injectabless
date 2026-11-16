@@ -103,7 +103,7 @@ export function Designer({ me, versionId, onBack, onOpen }: { me: Me; versionId:
           {tab === 'preview' && <Preview doc={doc} />}
           {tab === 'review' && <Review me={me} version={v} doc={doc} blocked={blocked} onChanged={load} onOpen={onOpen} onGo={go} />}
         </div>
-        <CheckPanel doc={doc} problems={problems} invalid={parsed && !parsed.success ? issueText(doc, parsed.error.issues[0]!.path, parsed.error.issues[0]!.message) : undefined} onGo={go} onAnswer={onAnswer} />
+        <CheckPanel doc={doc} state={v.state} problems={problems} invalid={parsed && !parsed.success ? issueText(doc, parsed.error.issues[0]!.path, parsed.error.issues[0]!.message) : undefined} onGo={go} onAnswer={onAnswer} />
       </div>
     </div>
   );

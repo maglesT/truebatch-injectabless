@@ -15,7 +15,7 @@ import { blocking, masterChecks } from '../../shared/master/checks.js';
 import type { MasterDoc } from '../../shared/master/schema.js';
 import { Dec } from '../../shared/templates/index.js';
 import {
-  ACTIONS, BATCH_ACTIONS, CERTIFICATE, LINK_OF, MATERIAL_USE, batchRefusal, inLotUnit, usedQuantity, usesOfLot, stepLabel, stepPlace, stepTitle, handFields, isHand, batchView, doneProblems, evaluate, lateItems, openSteps, parseKey, readValue, refusal, review, stepFields, timers,
+  ACTIONS, BATCH_ACTIONS, CERTIFICATE, LINK_OF, MATERIAL_USE, batchRefusal, inLotUnit, issuedLots, returnProblems, returnsOf, usedQuantity, usesOfLot, stepLabel, stepPlace, stepTitle, handFields, isHand, batchView, doneProblems, evaluate, lateItems, openSteps, parseKey, readValue, refusal, review, stepFields, timers,
   type Action, type BatchAction, type BatchEvent, type DeviationStatus, type LinkState, type Source, type StageView, type Stored, type StepEvent, type StepKey, type StepView, type Timer, type Value,
 } from '../../shared/engine/index.js';
 
@@ -172,7 +172,8 @@ const BATCH_BODIES: Record<BatchAction, z.ZodTypeAny> = {
   'qc-approve': signBody.extend({ reportNo: z.string().trim().min(1).max(60) }),
   release: signBody,
   reject: signBody.extend({ reason }),
-  terminate: signBody.extend({ reason }),
+  // Per lot the batch used: how much went back to stores unused (stock.ts issuedLots, returnProblems).
+  terminate: signBody.extend({ reason, returns: z.array(z.object({ lot: z.string().max(60), value: z.string().trim().regex(/^\d+(\.\d+)?$/, 'a quantity, 0 or more'), unit: z.string().max(20) })).max(200).optional() }),
   'close-deviation': z.object({ note: z.number().int().positive(), reason }),
 };
 // GET /api/batches/:id shows the last few events of each step; the full history is per step.
@@ -246,7 +247,7 @@ async function stockProblem(app: FastifyInstance, tx: Tx, l: LoadedBatch, v: Ste
     where kind in ('value', 'corrected') and lower(payload->'values'->>'lot') = lower(${lot})`;
   for (const { id } of ids) {
     const b = id === l.batch.id ? l : (await loadBatch(tx, id))!;
-    for (const u of usesOfLot(b.doc, openSteps(b.doc, b.events, b.now).steps, lot)) {
+    for (const u of usesOfLot(b.doc, openSteps(b.doc, b.events, b.now).steps, lot, returnsOf(b.batchEvents))) {
       if (id === l.batch.id && u.step.id === v.id) continue;
       used = used.plus(inLotUnit(u.quantity, unit) ?? 0);
     }
@@ -361,7 +362,9 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
     const decided = bv.status === 'released' || bv.status === 'rejected';
     return {
       batch: { ...l.batch, ...bv, deviationsLink: dv.link, contentHash: batchHash(l), actions: BATCH_NAMES.filter((a) => a !== 'close-deviation' && !batchRefusal(a, bv, req.user!)),
-        terminated: l.batchEvents.find((e) => e.payload.terminated) ?? null },
+        terminated: l.batchEvents.find((e) => e.payload.terminated) ?? null,
+        // What the batch has used of each lot: what terminating it asks about (the quantities that went back to stores).
+        issued: issuedLots(l.doc, steps) },
       // The server time: the screens count timers down on the server clock.
       now: l.now, master: { id: v!.id, masterId: v!.masterId, versionNo: v!.versionNo, doc: l.doc }, stages, timers: decided ? [] : timers(l.doc, l.events, l.now),
       steps: steps.map((s) => {
@@ -442,7 +445,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
       const id = parseId(req.params.id);
       const body = BATCH_BODIES[action].safeParse(req.body);
       if (id === null || !body.success) return reply.code(400).send({ error: 'invalid', problems: body.error?.issues.map((i) => `${i.path.join('.')}: ${i.message}`) ?? [] });
-      const b = body.data as { proof?: string; contentHash?: string; reportNo?: string; reason?: string; note?: number };
+      const b = body.data as { proof?: string; contentHash?: string; reportNo?: string; reason?: string; note?: number; returns?: { lot: string; value: string; unit: string }[] };
       const user = req.user!;
       try {
         const signer = rule.meaning ? await authenticateSigner(sql, app.proofKey, user, { proof: b.proof! }, { objectType: 'batch', objectId: id, meaning: rule.meaning }) : null;
@@ -453,7 +456,12 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
           const no = batchRefusal(action, view(l, (await deviationsRead(app, l)).read), user, b.note);
           if (no) throw new StepError(no.status, no.error, no.problems);
           if (signer && b.contentHash !== batchHash(l)) throw new StepError(409, 'content_changed', ['The batch record changed since you opened it.']);
-          const payload = { ...(action === 'terminate' ? { terminated: true } : {}), ...(b.reportNo ? { reportNo: b.reportNo } : {}), ...(b.reason ? { reason: b.reason } : {}), ...(b.note ? { note: b.note } : {}) };
+          // Terminate: what went back to stores unused of each lot the batch used; material_use_v1 gives it back to MMS.
+          const issued = action === 'terminate' ? issuedLots(l.doc, openSteps(l.doc, l.events, l.now).steps) : [];
+          const wrong = returnProblems(issued, b.returns ?? []);
+          if (wrong.length) throw new StepError(400, 'invalid_values', wrong);
+          const returns = issued.map((x) => ({ ...x, value: b.returns!.find((r) => r.lot.toLowerCase() === x.lot.toLowerCase() && r.unit === x.unit)!.value }));
+          const payload = { ...(action === 'terminate' ? { terminated: true } : {}), ...(returns.length ? { returns } : {}), ...(b.reportNo ? { reportNo: b.reportNo } : {}), ...(b.reason ? { reason: b.reason } : {}), ...(b.note ? { note: b.note } : {}) };
           const [ev] = await tx<{ id: number }[]>`
             insert into batch_events (batch_id, kind, payload, person_id) values (${id}, ${rule.event}, ${tx.json(payload)}, ${user.id}) returning id::int`;
           if (signer && rule.meaning) {

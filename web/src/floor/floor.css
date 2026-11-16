@@ -130,7 +130,8 @@
 .recorded .by { font-size: .84rem; color: var(--muted); font-weight: 500; }
 .corrected { color: var(--muted); font-size: .88rem; }
 .corrected s { color: var(--bad); }
-.field-error { color: var(--bad); font-weight: 600; font-size: .9rem; margin: 0; }
+/* A refusal is scrolled into view above the sticky action bar, never under it (scroll-margin). */
+.field-error { color: var(--bad); font-weight: 600; font-size: .9rem; margin: 0; scroll-margin: 96px 0 180px; }
 
 /* Results */
 .results { display: grid; gap: 10px; }
@@ -148,6 +149,11 @@
   background: rgba(255, 255, 255, .96); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 -4px 18px rgba(60, 40, 30, .08); }
 .action-bar .why { flex: 1 1 260px; color: var(--muted); font-size: .9rem; margin: 0; }
 .action-bar .spacer { flex: 1; }
+
+/* Terminate: what went back to stores of each lot */
+.returns { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px 12px; margin: 0 0 12px; }
+.returns legend { font-weight: 700; padding: 0 4px; }
+.returns label { display: grid; gap: 4px; margin-top: 8px; }
 
 /* Rounds, history, people */
 .rounds { display: grid; gap: 6px; }

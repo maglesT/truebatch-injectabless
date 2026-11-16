@@ -134,6 +134,9 @@ test('TI-21 QA terminates a batch still in production from the To review list: a
   await expect(inProduction).toContainText(batch.batchNo);
   if (process.env.SHOTS) await qa.page.screenshot({ path: `${process.env.SHOTS}/to-review-in-production.png`, fullPage: true });
   await inProduction.locator('.pending-row', { hasText: batch.batchNo }).getByRole('button', { name: 'Terminate batch' }).click();
+  // Nothing was issued to the batch: the window asks nothing about materials.
+  await expect(qa.page.getByRole('dialog')).toBeVisible();
+  await expect(qa.page.getByRole('group', { name: 'Back to stores' })).toHaveCount(0);
   await qa.page.getByLabel('Reason for terminating').fill('The pH meter failed and no other is qualified: the batch cannot be finished');
   await qa.page.getByRole('button', { name: 'Continue to sign' }).click();
   await expect(qa.page.getByRole('dialog')).toContainText('Sign: Rejected');

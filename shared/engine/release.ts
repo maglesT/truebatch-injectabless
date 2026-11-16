@@ -9,11 +9,13 @@ import { openSteps, outOfLimits, stepLabel, timers, type StepView, type Timer } 
 import { keyId, parseKey, type State, type StepEvent } from './state.js';
 import { failed } from './values.js';
 import { isHand, type Source } from './links.js';
+import type { Returned } from './stock.js';
 
 export const BATCH_EVENT_KINDS = ['production_approved', 'qc_approved', 'released', 'rejected', 'deviation_closed'] as const;
 export type BatchEventKind = (typeof BATCH_EVENT_KINDS)[number];
 // A batch QA terminated (stopped, not finished) is a rejection with `terminated` (owner, 16 Nov 2026): the record is kept.
-export interface BatchEvent { id: number; kind: BatchEventKind; payload: { reportNo?: string; note?: number; reason?: string; terminated?: boolean }; person: number; at: Date }
+// `returns`: what went back to stores unused of each lot the batch used (stock.ts returnsOf).
+export interface BatchEvent { id: number; kind: BatchEventKind; payload: { reportNo?: string; note?: number; reason?: string; terminated?: boolean; returns?: Returned[] }; person: number; at: Date }
 
 export const BATCH_STATUSES = ['in production', 'manufacturing complete', 'production approved', 'QC approved', 'released', 'rejected'] as const;
 export type BatchStatus = (typeof BATCH_STATUSES)[number];
@@ -28,6 +30,13 @@ export const BATCH_ACTIONS: Record<BatchAction, { event: BatchEventKind; permiss
   terminate: { event: 'rejected', permission: 'truebatch_injectables.qa.release', meaning: 'rejected' },
   'close-deviation': { event: 'deviation_closed', permission: 'truebatch_injectables.qa.release' },
 };
+
+/** "Terminated by … at …: reason", with what went back to stores unused of each lot the batch used (screens and PDF). */
+export function terminatedText<T extends string | Date>(t: { personName: string; at: T; payload: { reason?: string; returns?: Returned[] } }, clock: (at: T) => string): string {
+  const back = t.payload.returns ?? [];
+  return `Terminated by ${t.personName} at ${clock(t.at)}: ${t.payload.reason ?? ''}${back.length
+    ? ` · Back to stores unused: ${back.map((r) => `lot ${r.lot}${r.material ? ` (${r.material})` : ''} ${r.value} ${r.unit}`).join(', ')}; the rest counts as used` : ''}`;
+}
 
 /**
  * A note with a reference is a linked deviation. While the Deviations link answers, its status is Deviations' (TI-21):

@@ -2,31 +2,36 @@
 // A calculation warning that needs an answer shows its answer controls (a choice and a reason) under it.
 import { useState } from 'react';
 import { blocking, type Problem } from '../../../shared/master/checks.js';
-import type { MasterDoc } from '../../../shared/master/schema.js';
+import type { MasterDoc, MasterState } from '../../../shared/master/schema.js';
 import { placeLabel } from './model.js';
 
 export type OnAnswer = (p: Problem, choice: string, reason: string) => void;
 
-export function CheckPanel({ doc, problems, invalid, onGo, onAnswer }: { doc: MasterDoc; problems: Problem[] | null; invalid?: string; onGo: (path: string) => void; onAnswer?: OnAnswer }) {
-  const errors = problems?.filter((p) => p.level === 'error').length ?? 0;
-  const open = problems?.filter((p) => p.level === 'warning' && blocking(p)).length ?? 0;
+// An approved, effective or retired version is past review: a check added after its approval is not "to fix before
+// review" but what a new version will need (an info line).
+export function CheckPanel({ doc, state, problems, invalid, onGo, onAnswer }: { doc: MasterDoc; state?: MasterState; problems: Problem[] | null; invalid?: string; onGo: (path: string) => void; onAnswer?: OnAnswer }) {
+  const past = state === 'approved' || state === 'effective' || state === 'retired';
+  const later = past ? problems?.filter(blocking).length ?? 0 : 0;
+  const errors = past ? 0 : problems?.filter((p) => p.level === 'error').length ?? 0;
+  const open = past ? 0 : problems?.filter((p) => p.level === 'warning' && blocking(p)).length ?? 0;
   const warnings = problems?.filter((p) => p.level === 'warning' && !blocking(p)).length ?? 0;
   return (
     <aside className="check-panel" aria-label="Master check">
       <div className="cp-head">
         <h2>Master check</h2>
-        {problems && (errors || open || warnings ? <span className={errors || open ? 'count bad' : 'count'}>{errors + open + warnings}</span> : null)}
+        {problems && (errors || open || warnings || later ? <span className={errors || open ? 'count bad' : 'count'}>{errors + open + warnings + later}</span> : null)}
       </div>
       {invalid ? <p className="cp-invalid">The master is checked once every entry is complete. {invalid}</p>
         : problems && !problems.length ? <p className="all-good small">✓ No problems. The master can be sent for review.</p>
         : problems && (
           <>
-            <p className="muted small">{errors ? `${errors} ⛔ to fix before review` : 'No ⛔'}{open ? ` · ${open} ⚠️ to answer before review` : ''}{warnings ? ` · ${warnings} ⚠️ to look at` : ''}</p>
+            {later ? <p className="muted small" role="note">ℹ️ Approved before {later === 1 ? 'this check' : 'these checks'} existed; a new version will need: {[...new Set(problems.filter(blocking).map((p) => placeLabel(doc, p.path)))].join(', ')} (ℹ️ below).{warnings ? ` · ${warnings} ⚠️ to look at` : ''}</p>
+              : <p className="muted small">{errors ? `${errors} ⛔ to fix before review` : 'No ⛔'}{open ? ` · ${open} ⚠️ to answer before review` : ''}{warnings ? ` · ${warnings} ⚠️ to look at` : ''}</p>}
             <ul className="cp-list">
               {problems.map((p, i) => (
-                <li key={i} className={p.level}>
+                <li key={i} className={past && blocking(p) ? 'info' : p.level}>
                   <button type="button" onClick={() => onGo(p.path)}>
-                    <span className="cp-icon" aria-label={p.level === 'error' ? 'Error' : 'Warning'}>{p.level === 'error' ? '⛔' : '⚠️'}</span>
+                    <span className="cp-icon" aria-label={past && blocking(p) ? 'For a new version' : p.level === 'error' ? 'Error' : 'Warning'}>{past && blocking(p) ? 'ℹ️' : p.level === 'error' ? '⛔' : '⚠️'}</span>
                     <span><span className="cp-where">{placeLabel(doc, p.path)}{p.rule && <span className="cp-rule">{p.rule}</span>}</span>{p.message}</span>
                   </button>
                   {p.question && <AnswerBox key={p.question.key} p={p} onAnswer={onAnswer} />}

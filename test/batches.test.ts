@@ -416,9 +416,10 @@ describe('production approval, QC approval and QA release', () => {
 describe('QA terminates a batch that cannot be finished (owner, 16 Nov 2026)', () => {
   let id: number;
   const full = async (who = 'viewer') => (await as(who, 'GET', `/api/batches/${id}`)).json() as {
-    batch: { status: string; contentHash: string; actions: string[]; terminated: { personName: string; payload: { reason: string } } | null };
+    batch: { status: string; contentHash: string; actions: string[]; terminated: { personName: string; payload: { reason: string } } | null; issued: object[] };
     steps: { actions: string[] }[]; timers: unknown[] };
-  const terminate = async (who: string, extra: object = { reason: 'The stirrer broke down; the binder cannot be made' }) =>
+  const back = (value: string) => [{ lot: 'PVP-2611', value, unit: 'kg' }];
+  const terminate = async (who: string, extra: object = { reason: 'The stirrer broke down; the binder cannot be made', returns: back('0.250') }) =>
     as(who, 'POST', `/api/batches/${id}/terminate`, { proof: proofFor(who), contentHash: (await full()).batch.contentHash, ...extra });
   const uses = () => t.owner.unsafe(`select equipment_code, ended_at from ${t.schema}_report.equipment_use_v1 where batch_number = (select batch_no from batches where id = $1)`, [id]);
   beforeAll(async () => {
@@ -443,13 +444,27 @@ describe('QA terminates a batch that cannot be finished (owner, 16 Nov 2026)', (
     expect(await uses()).toEqual([{ equipment_code: 'STR-01', ended_at: null }]);
   });
 
+  it('TI-21 terminating asks how much of each lot the batch used went back to stores unused: 0 up to what was used', async () => {
+    expect((await full('meera')).batch.issued).toEqual([{ lot: 'PVP-2611', material: expect.stringContaining('Povidone'), value: '1', unit: 'kg' }]);
+    const refused = async (returns?: object[]) => (await terminate('meera', { reason: 'x', ...(returns ? { returns } : {}) })).json() as { error: string; problems: string[] };
+    expect(await refused()).toMatchObject({ error: 'invalid_values', problems: ['Say how much of lot PVP-2611 (MAT-003 · Povidone K30) went back to stores unused: 0 if none.'] });
+    expect(await refused(back('1.5'))).toMatchObject({ problems: ['Lot PVP-2611: 1 kg was issued to this batch; 1.5 kg cannot have gone back to stores.'] });
+    expect(await refused([...back('0'), { lot: 'MCC-1', value: '1', unit: 'kg' }])).toMatchObject({ problems: ['Lot MCC-1 (kg) was not issued to this batch.'] });
+    expect((await terminate('meera', { reason: 'x', returns: back('-1') })).statusCode).toBe(400);
+    expect((await full()).batch.status).toBe('in production');
+  });
+
   it('TI-21 terminate frees the uses: a signed rejection; equipment_use_v1 ends every open use then, batch_fact_v1 says REJECTED', async () => {
     const res = await terminate('meera');
     expect(res.statusCode).toBe(200);
     const { eventId } = res.json() as { eventId: number };
     expect(await t.owner`select 1 from signatures where object_type = 'batch_event' and object_id = ${eventId} and meaning = 'rejected'`).toHaveLength(1);
     const [e] = await t.owner<{ at: Date; payload: object }[]>`select at, payload from batch_events where id = ${eventId}`;
-    expect(e!.payload).toEqual({ terminated: true, reason: 'The stirrer broke down; the binder cannot be made' });
+    expect(e!.payload).toEqual({ terminated: true, reason: 'The stirrer broke down; the binder cannot be made',
+      returns: [{ lot: 'PVP-2611', material: expect.stringContaining('Povidone'), value: '0.250', unit: 'kg' }] });
+    // material_use_v1 gives back what went back to stores: MMS has it available again.
+    expect(await t.owner.unsafe(`select lot_number, quantity::text, unit from ${t.schema}_report.material_use_v1 where batch_number = (select batch_no from batches where id = $1)`, [id]))
+      .toEqual([{ lot_number: 'PVP-2611', quantity: '0.750', unit: 'kg' }]);
     expect(await uses()).toEqual([{ equipment_code: 'STR-01', ended_at: e!.at }]);
     const [f] = await t.owner.unsafe(`select status from ${t.schema}_report.batch_fact_v1 where batch_number = (select batch_no from batches where id = $1)`, [id]);
     expect(f).toEqual({ status: 'REJECTED' });

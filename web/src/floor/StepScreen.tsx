@@ -15,6 +15,7 @@ import { lineQuantity, stepFields } from '../../../shared/engine/values.js';
 import { plantText } from '../../../shared/plant-time.js';
 import { dispensingRooms, inLogbook, machineRefusal, roomRefusal, untypedNote } from '../../../shared/engine/picks.js';
 import { materialLines } from '../../../shared/master/schema.js';
+import { unitName } from '../../../shared/engine/stock.js';
 
 type Dialog = { kind: 'done' | 'repeat' | 'check' | 'na' | 'send-back' | 'note' } | { kind: 'na-sign'; reason: string } | { kind: 'correct'; field: BlockField };
 const INVOLVING = ['started', 'value', 'done', 'corrected', 'not_applicable'];
@@ -63,6 +64,15 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   const line = Object.values(st.settings).find((v): v is { formula: string } => typeof v === 'object' && 'formula' in v);
   const material = line && materialLines(doc).find((l) => l.key === line.formula)?.materialItemId;
   const lots = useLinked<{ lotNumber: string }>(block.fields.some((f) => f.kind === 'lot') && material ? `/api/mms/lots?material=${encodeURIComponent(material)}` : null, 'lots');
+  // The material's unit in master data, as MMS and the refusals name it: a count is shown as master data names it (nos).
+  const [mdUnit, setMdUnit] = useState<string | null>(null);
+  useEffect(() => {
+    if (!material) return;
+    let live = true;
+    void api<{ itemId: string; unit?: string | null }[]>('GET', '/api/master/materials').then((m) => live && setMdUnit(m.find((x) => x.itemId === material)?.unit?.trim() || null), () => {});
+    return () => { live = false; };
+  }, [material]);
+  const shownUnit = (f: BlockField) => unitName(unitOf(f, st), mdUnit);
   const deviationPicks = useLinked<{ number: string; title: string | null }>(`/api/batches/${d.batch.id}/deviations`, 'deviations');
   const lotField = block.fields.find((f) => f.kind === 'lot');
   const lotPulled = lotField && row.source[lotField.name] && row.source[lotField.name]!.from !== 'hand';
@@ -83,7 +93,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   const pickOf = (f: BlockField) => inLogbook(f.kind === 'room' ? md.room.filter((r) => r.active && !roomRefusal(stage, r))
     : f.kind === 'machine' ? md.machine.filter((m) => m.active && !machineRefusal(stage, f, m, md.room, dispensingRooms(doc, md.room))) : [], logbook);
   const picksFor = (f: BlockField) => pickOf(f).offered;
-  const noteFor = (f: BlockField) => [untypedNote(f, md.machine), pickOf(f).note].filter(Boolean).join(' ') || null;
+  const noteFor = (f: BlockField) => [untypedNote(f, md.machine), pickOf(f).note];
 
   const post = (action: string, body: object = {}, key = row.id) => api('POST', `/api/batches/${d.batch.id}/steps/${key}/${action}`, body);
   const run = async (fn: () => Promise<unknown>) => {
@@ -143,7 +153,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
 
   const fieldView = (f: BlockField) => {
     const v = row.values[f.name];
-    const unit = unitOf(f, st);
+    const unit = shownUnit(f);
     const src = row.source[f.name];
     // Pulled through a link: shown, never typed over. Certificate values come only with an MMS lot.
     const pulled = (src && src.from !== 'hand' && !LINK_OF[f.kind]) || (lotPulled && CERTIFICATE[f.name] !== undefined);
@@ -298,7 +308,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
         <SignDialog meaning="performed" what={`${title} · batch ${d.batch.batchNo}: not applicable. Reason: “${dialog.reason}”`} onCancel={() => setDialog(null)} onSign={signed('not-applicable', { reason: dialog.reason })} />
       )}
       {dialog?.kind === 'correct' && (
-        <Correct f={dialog.field} unit={unitOf(dialog.field, st)} saved={row.values[dialog.field.name]} picks={picksFor(dialog.field)}
+        <Correct f={dialog.field} unit={shownUnit(dialog.field)} saved={row.values[dialog.field.name]} picks={picksFor(dialog.field)}
           onCancel={() => setDialog(null)} onSave={async (raw, reason) => { await post('correct', { values: { [dialog.field.name]: raw }, reason }); setDialog(null); await reload(); }} />
       )}
     </>

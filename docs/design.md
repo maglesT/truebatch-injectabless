@@ -164,7 +164,18 @@ answering) or **ok**.
   and an e-signature meaning "rejected". It is a rejection (batch event `rejected` with `terminated`), so the status is
   rejected (`batch_fact_v1`: REJECTED), the record is kept and takes no more actions, and `equipment_use_v1` ends every
   open use of the batch then (machines and rooms dirty, no longer in use). Screens, review and PDF say "Terminated by
-  … at …: reason".
+  … at …: reason", followed by what went back to stores.
+  **Material of a terminated batch** (owner, 16 Nov 2026; ported from TrueBatch Tablets 6f812b4): when the batch has used material
+  (signed weighings), the "Terminate batch" window also asks, for each lot it used, how much went
+  back to stores unused; the rest counts as used (destroyed or in the batch). Refused unless every lot is answered,
+  from 0 up to what the batch counts as used of the lot (as published), and only for lots it used. The answers are
+  kept in the terminate event, `payload.returns` [{lot, material, value, unit}], in the unit `material_use_v1`
+  publishes for the lot, and signed with it. `material_use_v1` (`db/migrations/0012`) takes them off:
+  same columns and rows, `quantity` is now the quantity as before less what was returned of the same lot and unit,
+  taken off the batch's uses of that lot from its last step back (stage, sub-batch, step, round), never below 0;
+  `data_as_of` is then the later of the step's last event and the termination. So MMS shows the returned material
+  available again with no change there. The app counts the same when it compares a lot with MMS's stock
+  (`shared/engine/stock.ts`: materialUses, issuedLots, returnProblems). A batch that used no material is asked nothing.
 - **Where machines are**: a stage that works machines or names a room chooses the rooms it may run in (master check,
   TI-11); the floor is offered the machines of the field's type standing in those rooms. A balance is offered where
   the weighing is done: in one of the master's **dispensing rooms** (header, picked from master data's rooms; a new
