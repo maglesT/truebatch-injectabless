@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { api } from '../api.js';
 import { SignDialog } from '../components/SignDialog.js';
 import { plainError, type BatchDetail } from '../api-floor.js';
@@ -9,7 +10,8 @@ import { terminatedText } from '../../../shared/engine/release.js';
 // much went back to stores unused (the rest counts as used; material_use_v1 gives the returned part back to MMS), then
 // a signature meaning "rejected". The record is kept; no more actions; its machines and rooms are freed
 // (equipment_use_v1). On the batch screen and the QA "To review" list; the batch is read when the window opens, and the
-// signature covers it as read then.
+// signature covers it as read then. Its windows open over the whole page (a portal), not inside the row or card that
+// holds the button: a row on the To review list moves on hover, which would hold a fixed window inside its card.
 export function Terminate({ id, batchNo, onDone }: { id: number; batchNo: string; onDone: () => Promise<void> | void }) {
   const [step, setStep] = useState<'reason' | 'sign' | null>(null);
   const [reason, setReason] = useState('');
@@ -29,8 +31,8 @@ export function Terminate({ id, batchNo, onDone }: { id: number; batchNo: string
   return (<>
     <button type="button" className="big soft-bad" onClick={() => void open()}>Terminate batch</button>
     {error && <p className="notice bad" role="alert">{error}</p>}
-    {step === 'reason' && d && (
-      <ReasonDialog title={`Terminate batch ${batchNo}`} label="Reason for terminating" submit="Continue to sign" onCancel={close}
+    {step && d && createPortal(<>{step === 'reason' && (
+      <ReasonDialog title={`Terminate batch ${batchNo}`} label="Reason for terminating" submit="Continue to sign" onCancel={close} wide
         hint="The batch stops here and is rejected. Its record is kept; no step can be recorded any more, and its machines and rooms are freed."
         onSubmit={async (why) => {
           const missing = lots.filter((_, i) => !/^\d+(\.\d+)?$/.test(back[i]!.trim()));
@@ -42,7 +44,7 @@ export function Terminate({ id, batchNo, onDone }: { id: number; batchNo: string
             <legend>Back to stores unused</legend>
             <p className="muted small">For each lot this batch used: how much went back to stores unused. The rest counts as used (destroyed or in the batch).</p>
             {lots.map((l, i) => (
-              <label key={`${l.lot}-${l.unit}`}>Lot {l.lot}{l.material && ` · ${l.material}`} <small className="muted">(used {l.value} {l.unit})</small>
+              <label key={`${l.lot}-${l.unit}`}><span>Lot {l.lot}{l.material && ` · ${l.material}`} <small className="muted">(used {l.value} {l.unit})</small></span>
                 <span className="num">
                   <input inputMode="decimal" autoComplete="off" aria-label={`Lot ${l.lot} back to stores`} value={back[i]} onChange={(e) => setBack(back.map((x, j) => (j === i ? e.target.value : x)))} />
                   <span className="unit">{l.unit}</span>
@@ -53,7 +55,7 @@ export function Terminate({ id, batchNo, onDone }: { id: number; batchNo: string
         )}
       </ReasonDialog>
     )}
-    {step === 'sign' && d && (
+    {step === 'sign' && (
       <SignDialog meaning="rejected" what={`Terminate batch ${batchNo} · ${d.master.doc.header.productName} (status now: ${d.batch.status})`} onCancel={close}
         onSign={async ({ proof }) => { await api('POST', `/api/batches/${id}/terminate`, { proof, contentHash: d.batch.contentHash, reason, ...(lots.length ? { returns } : {}) }); close(); await onDone(); }}>
         <div className="summary-box">
@@ -61,7 +63,7 @@ export function Terminate({ id, batchNo, onDone }: { id: number; batchNo: string
           {lots.length > 0 && <p>Back to stores unused: {returns.map((r, i) => <span key={i}>{i ? ', ' : ''}lot {r.lot} <b>{r.value} {r.unit}</b></span>)}; the rest counts as used.</p>}
         </div>
       </SignDialog>
-    )}
+    )}</>, document.body)}
   </>);
 }
 

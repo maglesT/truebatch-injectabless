@@ -2,8 +2,8 @@ import { useState, type FormEvent, type ReactNode } from 'react';
 import { plainError } from '../api-floor.js';
 
 // A reason (send back, correct, not applicable) or a deviation note, with an optional reference for a note.
-export function ReasonDialog({ title, label, hint, reference, options = [], submit, children, onSubmit, onCancel }: {
-  title: string; label: string; hint?: string; reference?: boolean; submit: string; children?: ReactNode;
+export function ReasonDialog({ title, label, hint, reference, options = [], submit, children, wide, onSubmit, onCancel }: {
+  title: string; label: string; hint?: string; reference?: boolean; submit: string; children?: ReactNode; wide?: boolean;
   // The deviations the Deviations system has for this batch, to pick from.
   options?: { number: string; title: string | null }[];
   onSubmit: (reason: string, reference: string) => Promise<void>; onCancel: () => void;
@@ -21,7 +21,7 @@ export function ReasonDialog({ title, label, hint, reference, options = [], subm
   };
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-label={title}>
-      <form className="card dialog fl" onSubmit={send}>
+      <form className={`card dialog fl${wide ? ' wide' : ''}`} onSubmit={send}>
         <h2>{title}</h2>
         {hint && <p className="muted">{hint}</p>}
         {children}

@@ -148,6 +148,10 @@ test('TI-21 QA terminates a batch still in production from the To review list: a
   await expect(qa.page.locator('.bh')).toContainText('rejected');
   await expect(qa.page.getByRole('button', { name: 'Terminate batch' })).toHaveCount(0);
   await expect(qa.page.getByRole('region', { name: 'Production approval' })).toHaveCount(0);
+  // The batch runs no more: no stage is "now"; the stages left unclosed say Terminated.
+  const stages = qa.page.getByRole('navigation', { name: 'Stages' });
+  await expect(stages).toContainText('Terminated');
+  await expect(stages.locator('small', { hasText: /^(Now|Open|Waiting)$/ })).toHaveCount(0);
   if (process.env.SHOTS) await qa.page.screenshot({ path: `${process.env.SHOTS}/batch-terminated.png`, fullPage: true });
   await qa.ctx.close();
 });

@@ -4,11 +4,11 @@
 import { batchText } from '../../../shared/engine/values.js';
 import { useEffect, useState, type FormEvent } from 'react';
 import { ApiError, can, plantTime, type Me } from '../api.js';
-import { addComment, getReview, reviewAction, STATE_LABEL, type MasterEvent, type ReviewAction, type ReviewData, type Version } from '../api-designer.js';
+import { addComment, getReview, loadMasterData, reviewAction, STATE_LABEL, type MasterEvent, type ReviewAction, type ReviewData, type Version } from '../api-designer.js';
 import { SignDialog } from '../components/SignDialog.js';
 import { useLinked } from '../api-floor.js';
 import type { MasterDoc } from '../../../shared/master/schema.js';
-import { describeMaster, diffMasters, type DiffSection } from './describe.js';
+import { describeMaster, diffMasters, type DiffSection, type Units } from './describe.js';
 import { placeLabel } from './model.js';
 import { CLEAN_AIR, GRADES, VIABLE_WORDS, type ViableSample } from '../../../shared/master/clean-air.js';
 
@@ -34,6 +34,9 @@ export function Review({ me, version, doc, blocked, onChanged, onGo }: {
   const [error, setError] = useState('');
   const load = async () => setData(await getReview(version.id));
   useEffect(() => { void load(); }, [version.id, version.state]);
+  // Master data's units of the materials, named as master data names them (nos for units); without it, as in the master.
+  const [units, setUnits] = useState<Units>();
+  useEffect(() => { void loadMasterData().then((md) => setUnits(new Map(md.materials.flatMap((m) => (m.unit?.trim() ? [[m.itemId, m.unit.trim()]] : [])))), () => {}); }, []);
   if (!data) return <div className="skel skel-block" />;
 
   const close = () => { setDoing(null); setCc(''); setCcDone(false); setReason(''); setError(''); };
@@ -46,9 +49,9 @@ export function Review({ me, version, doc, blocked, onChanged, onGo }: {
     data.actions.includes(a) || (a === 'submit' && version.state === 'draft' && can(me, 'master.author'))
     // QA who typed the change control by hand sees why another person makes the version effective.
     || (a === 'make-effective' && version.state === 'approved' && can(me, 'master.approve')));
-  const sections: DiffSection[] = view === 'changes' && data.previous ? diffMasters(data.previous.doc, doc)
-    : describeMaster(doc).map((s) => ({ ...s, change: 'same', lines: s.lines.map((l) => ({ ...l, change: 'same' })) }));
-  const changed = data.previous ? diffMasters(data.previous.doc, doc).filter((s) => s.change !== 'same').length : 0;
+  const sections: DiffSection[] = view === 'changes' && data.previous ? diffMasters(data.previous.doc, doc, units)
+    : describeMaster(doc, units).map((s) => ({ ...s, change: 'same', lines: s.lines.map((l) => ({ ...l, change: 'same' })) }));
+  const changed = data.previous ? diffMasters(data.previous.doc, doc, units).filter((s) => s.change !== 'same').length : 0;
 
   return (
     <div className="review">
