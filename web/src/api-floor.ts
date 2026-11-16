@@ -5,7 +5,7 @@ import type { Block, BlockField } from '../../shared/blocks/format.js';
 import type { MasterDoc, Step } from '../../shared/master/schema.js';
 import type { Action, EventKind, Payload, State, StepKey } from '../../shared/engine/state.js';
 import type { Stored, Value } from '../../shared/engine/values.js';
-import type { Returned } from '../../shared/engine/stock.js';
+import { unitName, type Returned } from '../../shared/engine/stock.js';
 import { PROVIDER_NAME, type Source } from '../../shared/engine/links.js';
 import { stepTitle as sharedStepTitle } from '../../shared/engine/batch.js';
 import { plantText, sep } from '../../shared/plant-time.js';
@@ -133,11 +133,12 @@ export const STATUS_CHIP: Record<string, string> = {
 };
 
 const isItem = (v: Value): v is { itemId: string; code: string; name: string; version: number } => typeof v === 'object' && !Array.isArray(v) && 'itemId' in v;
-export function valueText(v: Value | undefined): string {
+/** A recorded value in words; `stockUnit`: master data's unit of the step's material, its name shown for the same unit (nos for units). */
+export function valueText(v: Value | undefined, stockUnit?: string | null): string {
   if (v === undefined) return '—';
-  if (Array.isArray(v)) return v.map((x) => x.value).join(', ') + (v[0]?.unit ? ` ${v[0].unit}` : '');
+  if (Array.isArray(v)) return v.map((x) => x.value).join(', ') + (v[0]?.unit ? ` ${unitName(v[0].unit, stockUnit)}` : '');
   if (isItem(v)) return `${v.code} · ${v.name}`;
-  if (typeof v === 'object') return `${v.value}${v.unit ? ` ${v.unit}` : ''}`;
+  if (typeof v === 'object') return `${v.value}${v.unit ? ` ${unitName(v.unit, stockUnit)}` : ''}`;
   return plantText(v);
 }
 /** What an input holds for a recorded value. */

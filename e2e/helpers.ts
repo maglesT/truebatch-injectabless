@@ -27,3 +27,15 @@ export async function clearOfActionBar(page: Page, what: Locator) {
 export async function justAboveActionBar(what: Locator) {
   await what.evaluate((el) => window.scrollBy(0, el.getBoundingClientRect().bottom - (document.querySelector('.action-bar')!.getBoundingClientRect().top - 4)));
 }
+
+/** A window wholly on the screen: within the viewport, with nothing in it scrolled out of sight. */
+export async function wholeOnScreen(page: Page, what: Locator) {
+  await expect(what).toBeVisible();
+  const view = page.viewportSize()!;
+  await expect.poll(async () => {
+    const box = (await what.boundingBox())!;
+    const hidden = await what.evaluate((el) => el.scrollHeight - el.clientHeight);
+    const whole = box.x >= 0 && box.y >= 0 && box.x + box.width <= view.width && box.y + box.height <= view.height && hidden <= 1;
+    return whole ? 'whole' : `at ${box.y}, ${box.height} px high (${hidden} px scrolled out of sight) in ${view.height} px`;
+  }).toBe('whole');
+}

@@ -24,8 +24,11 @@ const same = (a: StepRow['key'], b: StepRow['key']) => a.stage === b.stage && a.
 // The value at the end of a worked line ("10.0 mg/mL × 100 L = 1.000 kg" → "1.000 kg").
 const endOf = (r: Stored) => (r.ok ? /=\s*([^=;]+)$/.exec(r.shown)?.[1]?.trim() ?? `${r.value} ${r.unit}` : '');
 
-/** The material, limits and values the master set for this step, in words; a quantity of a formula line with its amount. */
-function settingsText(doc: BatchDetail['master']['doc'], block: Block, st: Step, row: StepRow): [string, string][] {
+/**
+ * The material, limits and values the master set for this step, in words; a quantity of a formula line with its amount.
+ * `mdUnit`: master data's unit of the material, its name shown for the same unit (nos for units).
+ */
+function settingsText(doc: BatchDetail['master']['doc'], block: Block, st: Step, row: StepRow, mdUnit: string | null): [string, string][] {
   return block.settings.flatMap((s): [string, string][] => {
     const v = st.settings[s.name];
     const m = v && typeof v === 'object' && 'formula' in v ? materialLines(doc).find((l) => l.key === v.formula) : undefined;
@@ -67,6 +70,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   // The material's unit in master data, as MMS and the refusals name it: a count is shown as master data names it (nos).
   const [mdUnit, setMdUnit] = useState<string | null>(null);
   useEffect(() => {
+    setMdUnit(null);
     if (!material) return;
     let live = true;
     void api<{ itemId: string; unit?: string | null }[]>('GET', '/api/master/materials').then((m) => live && setMdUnit(m.find((x) => x.itemId === material)?.unit?.trim() || null), () => {});
@@ -165,7 +169,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
             disabled={!can('record')} out={outOf(f)} onSave={can('record') ? (raw) => record(f.name, raw) : undefined} />
           {src && <p className="muted small">{sourceWords(src)}</p>}
           {!can('record') && can('correct') && <button className="big" onClick={() => setDialog({ kind: 'correct', field: f })}>Correct {f.label.toLowerCase()}</button>}
-          <Replaced h={history} field={f.name} names={names} />
+          <Replaced h={history} field={f.name} names={names} mdUnit={mdUnit} />
         </div>
       );
     }
@@ -175,12 +179,12 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
       <div key={f.name} className="fl-field">
         <div className="lbl"><span>{f.label}</span></div>
         <div className="recorded">
-          <span>{valueText(v)}</span>
+          <span>{valueText(v, mdUnit)}</span>
           {e && <span className="by">{e.personName}, {plainClock(e.at)}</span>}
           {can('correct') && v !== undefined && !pulled && <button className="big" onClick={() => setDialog({ kind: 'correct', field: f })}>Correct</button>}
         </div>
         {src && <p className="muted small">{sourceWords(src)}</p>}
-        <Replaced h={history} field={f.name} names={names} />
+        <Replaced h={history} field={f.name} names={names} mdUnit={mdUnit} />
       </div>
     );
   };
@@ -215,17 +219,17 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
         <div>
           <section className="dash-panel" aria-label="Instruction">
             <p className="instr">{st.instruction || block.instruction}</p>
-            {settingsText(doc, block, st, row).length > 0 && <dl className="fields">{settingsText(doc, block, st, row).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}
+            {settingsText(doc, block, st, row, mdUnit).length > 0 && <dl className="fields">{settingsText(doc, block, st, row, mdUnit).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}
           </section>
           {checking ? (
             <section className="dash-panel" aria-label="What was recorded">
               <div className="panel-head"><h2>What was recorded</h2>{lastDone && <span className="muted">performed by {lastDone.personName}, {plainClock(lastDone.at)}</span>}</div>
               <table className="recorded-table"><thead><tr><th>Field</th><th>Value</th><th>Recorded by</th></tr></thead>
                 <tbody>{fields.filter((f) => row.values[f.name] !== undefined).map((f) => (
-                  <tr key={f.name}><td>{f.label}<small className="muted"> {sourceWords(row.source[f.name])}</small></td><td className="v">{valueText(row.values[f.name])}</td><td>{by[f.name] ? `${by[f.name]!.personName}, ${plainClock(by[f.name]!.at)}` : '—'}</td></tr>
+                  <tr key={f.name}><td>{f.label}<small className="muted"> {sourceWords(row.source[f.name])}</small></td><td className="v">{valueText(row.values[f.name], mdUnit)}</td><td>{by[f.name] ? `${by[f.name]!.personName}, ${plainClock(by[f.name]!.at)}` : '—'}</td></tr>
                 ))}</tbody></table>
               {handEntered(row.source) && <p className="notice warn">Entered by hand because a link is off or down: check each value against the status label, the lot label and the QC report.</p>}
-              {fields.filter((f) => row.values[f.name] !== undefined).map((f) => <Replaced key={f.name} h={history} field={f.name} names={names} label={f.label} />)}
+              {fields.filter((f) => row.values[f.name] !== undefined).map((f) => <Replaced key={f.name} h={history} field={f.name} names={names} label={f.label} mdUnit={mdUnit} />)}
               {!can('check') && <p className="notice info">{involved ? 'You performed or recorded this step: a second person checks it on their own device.' : 'Waiting for a second person to check this step.'}</p>}
             </section>
           ) : (
@@ -284,12 +288,12 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
 
       {(dialog?.kind === 'done' || dialog?.kind === 'repeat') && (
         <SignDialog meaning="performed" what={`${title} · batch ${d.batch.batchNo}: performed as recorded.`} onCancel={() => setDialog(null)} onSign={signed('done', {}, dialog.kind === 'repeat' ? repeat : undefined)}>
-          <Summary row={row} block={block} />
+          <Summary row={row} block={block} mdUnit={mdUnit} />
         </SignDialog>
       )}
       {dialog?.kind === 'check' && (
         <SignDialog meaning="verified" what={`${title} · batch ${d.batch.batchNo}: checked by a second person.`} onCancel={() => setDialog(null)} onSign={signed('check')}>
-          <Summary row={row} block={block} />
+          <Summary row={row} block={block} mdUnit={mdUnit} />
         </SignDialog>
       )}
       {dialog?.kind === 'send-back' && (
@@ -308,7 +312,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
         <SignDialog meaning="performed" what={`${title} · batch ${d.batch.batchNo}: not applicable. Reason: “${dialog.reason}”`} onCancel={() => setDialog(null)} onSign={signed('not-applicable', { reason: dialog.reason })} />
       )}
       {dialog?.kind === 'correct' && (
-        <Correct f={dialog.field} unit={shownUnit(dialog.field)} saved={row.values[dialog.field.name]} picks={picksFor(dialog.field)}
+        <Correct f={dialog.field} unit={shownUnit(dialog.field)} mdUnit={mdUnit} saved={row.values[dialog.field.name]} picks={picksFor(dialog.field)}
           onCancel={() => setDialog(null)} onSave={async (raw, reason) => { await post('correct', { values: { [dialog.field.name]: raw }, reason }); setDialog(null); await reload(); }} />
       )}
     </>
@@ -332,10 +336,10 @@ function ResultCard({ label, r, big, stop }: { label: string; r: Stored; big?: b
   );
 }
 
-function Summary({ row, block }: { row: StepRow; block: Block }) {
+function Summary({ row, block, mdUnit }: { row: StepRow; block: Block; mdUnit: string | null }) {
   return (
     <dl className="summary summary-box">
-      {block.fields.filter((f) => row.values[f.name] !== undefined).map((f) => <div key={f.name} style={{ display: 'contents' }}><dt>{f.label}</dt><dd>{valueText(row.values[f.name])}</dd></div>)}
+      {block.fields.filter((f) => row.values[f.name] !== undefined).map((f) => <div key={f.name} style={{ display: 'contents' }}><dt>{f.label}</dt><dd>{valueText(row.values[f.name], mdUnit)}</dd></div>)}
       {block.calcs.filter((c) => row.results[c.name]?.ok).map((c) => {
         const r = row.results[c.name]!;
         return <div key={c.name} style={{ display: 'contents' }}><dt>{c.label}</dt><dd>{headline(r) ?? ''} {c.name === row.notYet ? '(not yet: the rounds go on)' : tone(r) === 'bad' ? '(out of limits)' : tone(r) === 'ok' ? '(within limits)' : ''}</dd></div>;
@@ -345,10 +349,10 @@ function Summary({ row, block }: { row: StepRow; block: Block }) {
 }
 
 // TI-06: the original value stays, crossed out, with who changed it, when and why.
-function Replaced({ h, field, names, label }: { h: History | null; field: string; names: Map<number | null, string | null>; label?: string }) {
+function Replaced({ h, field, names, label, mdUnit }: { h: History | null; field: string; names: Map<number | null, string | null>; label?: string; mdUnit: string | null }) {
   const list = h?.replaced.filter((r) => r.field === field) ?? [];
   return <>{list.map((r, i) => (
-    <p key={i} className="corrected">{label && `${label}: `}<s>{valueText(r.was)}</s> → {valueText(r.now)} · corrected by {names.get(r.person) ?? '—'}, {plainClock(r.at)}: “{r.reason}”</p>
+    <p key={i} className="corrected">{label && `${label}: `}<s>{valueText(r.was, mdUnit)}</s> → {valueText(r.now, mdUnit)} · corrected by {names.get(r.person) ?? '—'}, {plainClock(r.at)}: “{r.reason}”</p>
   ))}</>;
 }
 
@@ -404,12 +408,12 @@ function History_({ h, block }: { h: History | null; block: Block }) {
   );
 }
 
-function Correct({ f, unit, saved, picks, onSave, onCancel }: { f: BlockField; unit: string; saved: StepRow['values'][string] | undefined; picks: PickItem[];
+function Correct({ f, unit, mdUnit, saved, picks, onSave, onCancel }: { f: BlockField; unit: string; mdUnit: string | null; saved: StepRow['values'][string] | undefined; picks: PickItem[];
   onSave: (raw: unknown, reason: string) => Promise<void>; onCancel: () => void }) {
   const [raw, setRaw] = useState<unknown>(rawOf(saved));
   return (
     <ReasonDialog title={`Correct: ${f.label}`} label="Reason for the correction" submit="Save the correction" onCancel={onCancel}
-      hint={`Now: ${valueText(saved)}. The original value stays in the record, crossed out, with your reason; the step must be signed again.`}
+      hint={`Now: ${valueText(saved, mdUnit)}. The original value stays in the record, crossed out, with your reason; the step must be signed again.`}
       onSubmit={(reason) => onSave(raw, reason)}>
       <FieldInput f={f} unit={unit} saved={saved} picks={picks} onChange={setRaw} />
     </ReasonDialog>

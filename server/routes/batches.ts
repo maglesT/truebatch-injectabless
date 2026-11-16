@@ -69,10 +69,14 @@ const batchSignatures = (q: Sql, id: number) => q<Signature[]>`
      or (s.object_type = 'batch_event' and s.object_id in (select b.id from batch_events b where b.batch_id = ${id}))
   order by s.signed_at, s.id`;
 /** What the batch record PDF is made from: the batch with its master version, issuer and signatures. */
-export async function recordInput(q: Sql, l: LoadedBatch): Promise<RecordInput> {
+export async function recordInput(q: Sql, l: LoadedBatch, master?: FastifyInstance['master']): Promise<RecordInput> {
   const v = await masterVersion(q, l.batch.masterVersionId);
   const [issuer] = await q<{ name: string }[]>`select full_name as name from users where id = ${l.batch.issuedBy}`;
-  return { ...l, versionNo: v!.versionNo, issuedByName: issuer?.name ?? '', signatures: [...await batchSignatures(q, l.batch.id)] };
+  return { ...l, versionNo: v!.versionNo, issuedByName: issuer?.name ?? '', signatures: [...await batchSignatures(q, l.batch.id)], ...(master ? { units: await materialUnits(master) } : {}) };
+}
+/** Master data's unit of each material, by item id; none when master data does not answer. */
+async function materialUnits(master: FastifyInstance['master']): Promise<Map<string, string>> {
+  try { return new Map((await master.materials()).flatMap((m) => (m.unit?.trim() ? [[m.itemId, m.unit.trim()] as const] : []))); } catch { return new Map(); }
 }
 const batchHash = (l: LoadedBatch) => contentHash('batch', l.batch.id, batchContent(l));
 const view = (l: LoadedBatch, read?: ReadonlyMap<string, DeviationStatus> | null) => batchView(l.doc, l.events, l.batchEvents, l.now, read);
@@ -224,8 +228,7 @@ function myWork(l: LoadedBatch, user: SessionUser) {
 async function stockUnit(app: FastifyInstance, doc: MasterDoc, key: StepKey): Promise<string | undefined> {
   const st = doc.stages[key.stage]!.steps[key.step]!;
   const line = MATERIAL_USE.includes(st.block.id) ? lineOf(doc, st) : undefined;
-  if (!line) return undefined;
-  try { return (await app.master.materials()).find((m) => m.itemId === line.materialItemId)?.unit?.trim() || undefined; } catch { return undefined; }
+  return line && (await materialUnits(app.master)).get(line.materialItemId);
 }
 
 /**
@@ -437,7 +440,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
     const id = parseId(req.params.id);
     const l = id === null ? null : await loadBatch(sql, id);
     if (!l) return reply.code(404).send({ error: 'not_found' });
-    const def = batchRecordDoc({ ...await recordInput(sql, l), deviationsRead: (await deviationsRead(app, l)).read }, req.user!.fullName, new Date(), app.demo);
+    const def = batchRecordDoc({ ...await recordInput(sql, l, app.master), deviationsRead: (await deviationsRead(app, l)).read }, req.user!.fullName, new Date(), app.demo);
     return sendPdf(reply, `batch-record-${l.batch.batchNo}`, await render(def));
   });
 
