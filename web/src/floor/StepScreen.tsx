@@ -19,7 +19,7 @@ import { dispensingRooms, inLogbook, machineRefusal, roomRefusal, untypedNote } 
 import { materialLines } from '../../../shared/master/schema.js';
 import { unitName } from '../../../shared/engine/stock.js';
 
-type Dialog = { kind: 'done' | 'repeat' | 'check' | 'na' | 'send-back' | 'note' } | { kind: 'na-sign'; reason: string } | { kind: 'correct'; field: BlockField };
+type Dialog = { kind: 'done' | 'repeat' | 'check' | 'release-hold' | 'na' | 'send-back' | 'note' } | { kind: 'na-sign'; reason: string } | { kind: 'correct'; field: BlockField };
 const INVOLVING = ['started', 'value', 'done', 'corrected', 'not_applicable'];
 const same = (a: StepRow['key'], b: StepRow['key']) => a.stage === b.stage && a.sub === b.sub && a.step === b.step;
 
@@ -290,6 +290,11 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
           <button className="big soft-bad" disabled={busy} onClick={() => setDialog({ kind: 'send-back' })}>Send back</button>
           <button className="big ok" disabled={busy} onClick={() => setDialog({ kind: 'check' })}>Checked</button>
         </>)}
+        {/* A QA hold: QA releases it (signed) before the next step can start. */}
+        {can('release-hold') && (<>
+          <p className="why">QA hold: review the recorded values and results; the next step starts only once QA releases the hold.</p>
+          <button className="big ok" disabled={busy} onClick={() => setDialog({ kind: 'release-hold' })}>QA: release the hold</button>
+        </>)}
         {next && next.actions.includes('start') && row.id !== next.id && <button className="big primary" onClick={() => go(stepLink(d.batch.id, next.id))}>Repeat: round {next.key.round} →</button>}
         {['done', 'checked', 'not_applicable'].includes(row.state) && !next && <p className="why">This step is finished.</p>}
         <span className="spacer" />
@@ -299,6 +304,11 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
 
       {(dialog?.kind === 'done' || dialog?.kind === 'repeat') && (
         <SignDialog meaning="performed" what={`${title} · batch ${d.batch.batchNo}: performed as recorded.`} onCancel={() => setDialog(null)} onSign={signed('done', {}, dialog.kind === 'repeat' ? repeat : undefined)}>
+          <Summary row={row} block={block} mdUnit={mdUnit} />
+        </SignDialog>
+      )}
+      {dialog?.kind === 'release-hold' && (
+        <SignDialog meaning="released" what={`${title} · batch ${d.batch.batchNo}: QA hold released, the next step may start.`} onCancel={() => setDialog(null)} onSign={signed('release-hold')}>
           <Summary row={row} block={block} mdUnit={mdUnit} />
         </SignDialog>
       )}
