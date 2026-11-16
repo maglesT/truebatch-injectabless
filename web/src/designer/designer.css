@@ -49,6 +49,7 @@ fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
 .cp-list > li { border: 1px solid transparent; border-radius: 8px; }
 .cp-list li.error { background: #fff5f4; border-color: #f5c6c1; }
 .cp-list li.warning { background: #fffbea; border-color: #f1dfa6; }
+.cp-list li.info { background: #f3f7fd; border-color: #cfdcf0; }
 .cp-list li > button { background: transparent; border: 0; }
 .cp-where { display: flex; gap: 6px; align-items: center; font-weight: 650; font-size: 0.8rem; color: var(--brand-grey); margin-bottom: 2px; }
 .cp-rule { font-size: 0.7rem; font-weight: 700; padding: 0 6px; border-radius: 99px; background: #fff; border: 1px solid var(--line-strong); }

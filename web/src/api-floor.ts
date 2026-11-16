@@ -5,6 +5,7 @@ import type { Block, BlockField } from '../../shared/blocks/format.js';
 import type { MasterDoc, Step } from '../../shared/master/schema.js';
 import type { Action, EventKind, Payload, State, StepKey } from '../../shared/engine/state.js';
 import type { Stored, Value } from '../../shared/engine/values.js';
+import type { Returned } from '../../shared/engine/stock.js';
 import { PROVIDER_NAME, type Source } from '../../shared/engine/links.js';
 import { stepTitle as sharedStepTitle } from '../../shared/engine/batch.js';
 import { plantText, sep } from '../../shared/plant-time.js';
@@ -25,7 +26,9 @@ export interface Deviation { note: number; step: string; reference: string; text
 export interface BatchDetail {
   now: string;
   batch: { id: number; batchNo: string; issuedAt: string; status: string; open: string[]; late: string[]; deviations: Deviation[]; yieldOut: string[]; contentHash: string; actions: string[]; deviationsLink: string;
-    terminated: { personName: string; at: string; payload: { reason?: string } } | null };
+    terminated: { personName: string; at: string; payload: { reason?: string; returns?: Returned[] } } | null;
+    // What the batch has used of each lot (signed steps), as published to MMS: terminating asks what went back to stores.
+    issued: Returned[] };
   master: { id: number; versionNo: number; doc: MasterDoc };
   stages: StageRow[]; timers: TimerRow[]; steps: StepRow[];
 }

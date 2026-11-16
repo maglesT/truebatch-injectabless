@@ -3,7 +3,7 @@ import { connect } from '../server/db.js';
 import { TEST_DATABASE_URL } from '../test/helpers.js';
 import { small } from '../test/engine-fixture.js';
 import { E2E_SCHEMA } from './config.js';
-import { logIn } from './helpers.js';
+import { clearOfActionBar, justAboveActionBar, logIn } from './helpers.js';
 
 // The floor screens, one stage of a small fixture master: a pH check (second-person check) and the stage yield.
 
@@ -50,6 +50,13 @@ test('TI-14 floor journey: start, a value out of limits needs a deviation note, 
   await expect(op.getByRole('navigation', { name: 'Stages' })).toContainText('Blending');
   await op.getByRole('button', { name: /^1 Check a value against limits: pH/ }).click();
   await op.getByRole('button', { name: 'Start', exact: true }).click();
+  // A refusal under the field is shown in full above the sticky Done bar (here on a 1366 × 900 screen).
+  await op.setViewportSize({ width: 1366, height: 900 });
+  await justAboveActionBar(op.getByLabel('Reading'));
+  await op.getByLabel('Reading').fill('7.5 pH');
+  await op.getByLabel('Reading').press('Enter');
+  await clearOfActionBar(op, op.locator('.fl-field', { hasText: 'Reading' }).getByRole('alert'));
+  await op.setViewportSize({ width: 1024, height: 768 });
   await op.getByLabel('Reading').fill('7.5');
   await op.getByLabel('Reading').press('Enter');
   const results = op.getByRole('region', { name: 'Results' });
