@@ -102,7 +102,7 @@ adding anything, look how TrueBatch Tablets does it and copy that.
   environmental readings against it (phase E); a master may set stricter limits, never looser.
 - **QA confirms the table once** (owner, 16 Nov 2026): the plant's **QA head** checks it against the plant's copy of
   Annex 1 when the product is installed, as part of the plant's validation, and signs that record with name and
-  date. Not confirmed for the demo.
+  date. On the demo, the demo admin (who holds every right) confirms it in the plant's place.
 
 ## Platform
 - Runs on the Medhanta platform. Core provides people, sign-in, permissions, e-signature re-authentication and master
