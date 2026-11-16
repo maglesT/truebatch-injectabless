@@ -21,7 +21,7 @@ async function issueBatch(page: Page): Promise<{ id: number; batchNo: string }> 
   await page.goto('/');
   await page.getByRole('button', { name: 'Master records' }).click();
   await page.getByRole('row', { name: /PRD-050/ }).last().getByRole('button', { name: 'Issue a batch' }).click();
-  await expect(page.getByRole('dialog', { name: 'Issue a batch' })).toContainText('Demolol 50 mg tablets, version 1');
+  await expect(page.getByRole('dialog', { name: 'Issue a batch' })).toContainText('Demolol 50 mg/mL injection, version 1');
   await page.getByRole('button', { name: 'Next: sign' }).click();
   await sign(page);
   await page.waitForURL(/#\/batch\/\d+$/);
@@ -45,7 +45,7 @@ test('TI-14 floor journey: start, a value out of limits needs a deviation note, 
   const op = await opCtx.newPage();
   await logIn(op, 'op1');
   await expect(op.getByRole('heading', { name: 'My work' })).toBeVisible();
-  await op.getByRole('button', { name: new RegExp(`${batch.batchNo} · Demolol 50 mg tablets`) }).click();
+  await op.getByRole('button', { name: new RegExp(`${batch.batchNo} · Demolol 50 mg/mL injection`) }).click();
   await expect(op.locator('.bh')).toContainText('Master version');
   await expect(op.getByRole('navigation', { name: 'Stages' })).toContainText('Blending');
   await op.getByRole('button', { name: /^1 Check a value against limits: pH/ }).click();

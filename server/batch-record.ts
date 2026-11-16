@@ -4,7 +4,7 @@
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces.js';
 import { findBlock, type Block } from '../shared/blocks/index.js';
 import type { Step } from '../shared/master/schema.js';
-import { batchView, deviations, fieldLabel, handFields, lateItems, lineQuantity, notYetText, openSteps, PROVIDER_NAME, deviationStatusWords, stepTitle, type DeviationStatus, type EventKind, type Source, type Stored, type StepView, type Value } from '../shared/engine/index.js';
+import { batchText, batchView, deviations, fieldLabel, handFields, lateItems, lineQuantity, notYetText, openSteps, PROVIDER_NAME, deviationStatusWords, stepTitle, type DeviationStatus, type EventKind, type Source, type Stored, type StepView, type Value } from '../shared/engine/index.js';
 import type { LoadedBatch } from './routes/batches.js';
 import { pageFrame, plant, runs } from './pdf.js';
 import { plantText } from '../shared/plant-time.js';
@@ -72,7 +72,7 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
     { text: runs(`${h.productCode} · ${h.productName}`), fontSize: 11, margin: [0, 2, 0, 8] },
     { table: { widths: [90, '*', 90, '*', 90, '*'], body: [
       [th('Product'), small(`${h.productCode} · ${h.productName}`), th('Batch no.'), small(r.batch.batchNo, { bold: true }), th('Status'), small(view.status, { bold: true })],
-      [th('Batch size'), small(`${Number(h.batchSize).toLocaleString('en-IN')} tablets`), th('Core tablet weight'), small(`${h.coreWeightMg} mg${h.coatedWeightMg ? ` (coated ${h.coatedWeightMg} mg)` : ''}`), th('Master version'), small(`version ${r.versionNo}`)],
+      [th('Batch'), small(batchText(doc)), th('Formula'), small(`mg per ${h.batchUnit === 'units' ? 'unit' : 'mL'}`), th('Master version'), small(`version ${r.versionNo}`)],
       [th('Issued'), small(`${r.issuedByName}, ${plant(r.batch.issuedAt)}`), th('Times'), small('plant time (IST)'), th('Changed values'), small('marked CHANGED; the original is struck through, with the reason', { color: RED })],
     ] }, layout: 'lightHorizontalLines' },
     ...(endedText ? [small(endedText, { bold: true, color: RED, margin: [0, 6, 0, 0] })] : []),
@@ -80,10 +80,10 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
 
   // The formula, with the lots and the quantities dispensed (the weighing steps that name the line).
   content.push(heading('Formula'));
-  content.push(table([150, 90, 55, 80, '*'], ['Material', 'Role · place', 'mg per tablet', 'Batch quantity', 'Lots and dispensed quantities'], doc.formula.map((l) => {
+  content.push(table([150, 90, 55, 80, '*'], ['Material', 'Role', `mg per ${h.batchUnit === 'units' ? 'unit' : 'mL'}`, 'Batch quantity', 'Lots and dispensed quantities'], doc.formula.map((l) => {
     const q = lineQuantity(doc, [], { stage: 0, sub: 1, step: 0, round: 1 }, l, false, {});
     const weighed = steps.filter((v) => Object.values(stepOf(v).settings).some((s) => typeof s === 'object' && 'formula' in s && s.formula === l.key && findBlock(stepOf(v).block)?.gmp === 'weighing'));
-    return [small(`${l.code} · ${l.name}`), small(`${l.role} · ${l.place}`), small(l.mgPerTablet), small(endOf(q)),
+    return [small(`${l.code} · ${l.name}`), small(l.role), small(l.mg ?? 'q.s.'), small(endOf(q)),
       small(weighed.map((v) => {
         const net = v.results.net;
         if (!net) return `not weighed yet · ${stepName(v)}`;

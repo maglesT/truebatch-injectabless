@@ -25,7 +25,7 @@ async function issuedBatch(browser: Browser): Promise<{ id: number; batchNo: str
   const iss = await person(browser, 'iss1');
   const doc = small([{ name: 'Blending', steps: [{ checker: true },
     { block: { id: 'stage-yield', version: 1 }, checker: true, settings: { theoretical: '0.100 kg', yieldLimit: { low: '97.0', high: '100.5', unit: '%' } } }] }]);
-  doc.header.productName = 'Demolol 50 mg tablets';
+  doc.header.productName = 'Demolol 50 mg/mL injection';
   const { id: mv } = await (await iss.page.request.post('/api/masters', { data: { doc } })).json() as { id: number };
   const owner = connect(TEST_DATABASE_URL, { searchPath: E2E_SCHEMA });
   for (const s of ['in_review', 'approved', 'effective']) await owner`update master_versions set state = ${s} where id = ${mv}`;

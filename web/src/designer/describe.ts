@@ -2,15 +2,15 @@
 // changes view against the previous version. Each line has a key, so two versions can be compared line by line.
 import { findBlock } from '../../../shared/blocks/index.js';
 import { masterChecks } from '../../../shared/master/checks.js';
-import type { FormulaLine, MasterDoc, Stage, Step } from '../../../shared/master/schema.js';
+import { batchText } from '../../../shared/engine/values.js';
 import { placeLabel } from './model.js';
+import type { FormulaLine, MasterDoc, Stage, Step } from '../../../shared/master/schema.js';
 import { sentence, sentenceText, settingText, slotsOf } from './sentences.js';
 
 export interface Line { key: string; text: string }
 export interface Section { key: string; title: string; lines: Line[] }
 
-const PLACE: Record<FormulaLine['place'], string> = { intragranular: 'intragranular', extragranular: 'extragranular', binder: 'in the binder solution', coating: 'coating' };
-const ROLE: Record<FormulaLine['role'], string> = { api: 'API', excipient: 'excipient', solvent: 'solvent, removed in processing' };
+const ROLE: Record<FormulaLine['role'], string> = { api: 'API', excipient: 'excipient', solvent: 'vehicle or solvent' };
 
 function adjustText(doc: MasterDoc, l: FormulaLine): string {
   const a = l.adjust;
@@ -55,13 +55,11 @@ export function describeMaster(doc: MasterDoc): Section[] {
   return [
     { key: 'header', title: 'Header', lines: [
       { key: 'product', text: `Product ${h.productCode}, ${h.productName}.` },
-      { key: 'batch', text: `Batch size ${h.batchSize} tablets.` },
-      { key: 'weights', text: `Theoretical core weight ${h.coreWeightMg} mg per tablet${h.coatedWeightMg ? `; coated weight ${h.coatedWeightMg} mg` : '; uncoated'}${h.dieAreaMm2 ? `; die bore area ${h.dieAreaMm2} mm²` : ''}.` },
+      { key: 'batch', text: `Batch ${batchText(doc)}; formula per ${h.batchUnit === 'units' ? 'unit' : 'mL'}.` },
       ...(h.dispensingRooms?.length ? [{ key: 'dispensing', text: `Weighed in the dispensing rooms ${h.dispensingRooms.join(', ')}.` }] : []),
-      ...(h.otherStrengths ?? []).map((x, n) => ({ key: `strength:${n}`, text: `Also compressed from the same blend: ${x.name}, label claim ${x.labelClaim}, core weight ${x.coreWeightMg} mg.` })),
     ] },
     { key: 'formula', title: 'Formula', lines: doc.formula.map((l) => ({ key: l.key,
-      text: `${l.name} (${l.code}), ${ROLE[l.role]}, ${PLACE[l.place]}${l.place === 'coating' ? ` layer ${l.layer ?? 1}` : ''}: ${l.mgPerTablet} mg per tablet${l.labelClaim ? ` (label claim ${l.labelClaim})` : ''}${l.batchQuantity ? ` (batch quantity written as ${l.batchQuantity})` : ''}${adjustText(doc, l)}.` })) },
+      text: `${l.name} (${l.code}), ${ROLE[l.role]}: ${l.mg === undefined ? 'to volume (q.s.)' : `${l.mg} mg per ${h.batchUnit === 'units' ? 'unit' : 'mL'}`}${l.labelClaim ? ` (label claim ${l.labelClaim})` : ''}${l.batchQuantity ? ` (batch quantity written as ${l.batchQuantity})` : ''}${adjustText(doc, l)}.` })) },
     ...doc.stages.map((s, i) => ({ key: `stage:${s.key}`, title: `Stage ${i + 1}: ${s.name}`, lines: [
       { key: 'about', text: stageText(doc, s) },
       ...s.steps.map((t, j) => ({ key: t.key, text: stepText(doc, t, j) })),

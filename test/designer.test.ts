@@ -70,12 +70,12 @@ describe('master designer', () => {
     expect(rows[2]!.adjusted).toBeUndefined();
   });
 
-  it('TI-10 both process skeletons are valid drafts and start every stage with line clearance; what they leave open is listed by the master check', () => {
-    const header = { productItemId: 'p', productCode: 'P', productName: 'P', batchSize: '100000', coreWeightMg: '250.0', coatedWeightMg: '257.5', dispensingRooms: ['RM-101'] };
+  it('TI-10 the process skeleton is a valid draft and starts every stage with line clearance; what it leaves open is listed by the master check', () => {
+    const header = { productItemId: 'p', productCode: 'P', productName: 'P', batchSize: '100', batchUnit: 'L' as const, densityGPerMl: '1.02', fillVolumeMl: '10.0', dispensingRooms: ['RM-101'] };
     for (const s of SKELETON_LIST) {
       const doc = masterSchema.parse({ header, formula: [], stages: skeletonStages(s.id, header) });
-      expect(doc.stages.every((st) => st.steps.every((t) => findBlock(t.block)))).toBe(true);
-      expect(masterChecks(doc).every((p) => /not set|no core materials|choose the rooms/.test(p.message))).toBe(true);
+      expect(doc.stages.every((st) => st.steps[0]!.block.id === 'line-clearance' && st.steps.every((t) => findBlock(t.block)))).toBe(true);
+      expect(masterChecks(doc).every((p) => /not set|no drug substance/.test(p.message))).toBe(true);
     }
     // TI-11: a master that weighs names its dispensing rooms; a new one starts with the rooms of the Dispensing area
     // exactly (not the liquids block's "Liquid dispensing" booth, nor an inactive room).
@@ -84,24 +84,10 @@ describe('master designer', () => {
       message: 'The master weighs but names no dispensing rooms: choose them in the header (rooms of master data)' }]);
     expect(defaultDispensingRooms([{ code: 'RM-101', area: 'Dispensing', active: true }, { code: 'RM-102', area: 'Dispensing', active: false },
       { code: 'RM-301', area: 'Liquid dispensing', active: true }, { code: 'RM-103', area: 'Granulation', active: true }])).toEqual(['RM-101']);
-    // The rooms: the usual areas where every plant has them; a preparation and blending are left for the author (TI-11).
-    const rooms = (id: string) => masterChecks(masterSchema.parse({ header, formula: [], stages: skeletonStages(id, header) })).filter((p) => p.rule === 'TI-11').map((p) => p.message.split(':')[0]);
-    expect(rooms('wet-granulation-film-coated')).toEqual(['Stage Binder solution', 'Stage Blending', 'Stage Coating suspension']);
-    expect(skeletonStages('wet-granulation-film-coated', header).map((s) => s.roomTypes.join())).toEqual(['', 'Granulation', '', 'Compression', '', 'Coating']);
-    const dc = skeletonStages('direct-compression-uncoated', header);
-    expect(dc.map((s) => s.steps.map((t) => t.block.id).join(' '))).toEqual(['line-clearance weigh sift dry-mix stage-yield',
-      'line-clearance punch-die-check compress friability disintegration punch-die-check tablet-reconciliation']);
-    expect(dc[1]!.steps[2]!.settings.meanLimit).toEqual({ low: '237.5', high: '262.5', unit: 'mg' });
-    expect(dc[1]!.steps.filter((t) => t.block.id === 'punch-die-check').map((t) => t.name)).toEqual(['Punch and die check — before compression', 'Punch and die check — after compression']);
-    expect(dc[0]!.steps[1]!.settings).toEqual({ tolerance: '0.5' });
-    const wg = skeletonStages('wet-granulation-film-coated', header);
-    const at = (stage: string, step: string) => wg.find((s) => s.key === stage)!.steps.find((t) => t.key === step)!;
-    expect(at('coating', 'coat')).toMatchObject({ block: { id: 'spray-coat' }, everyMinutes: 30, flow: { kind: 'repeat-until' } });
-    // Later stages' yields on the actual input; the coating gain on the actual core mean; the end point checked.
-    expect(at('blending', 'yield').settings.theoretical).toEqual({ ref: 'granulation/yield/output' });
-    expect(at('coating', 'yield')).toMatchObject({ block: { id: 'tablet-reconciliation' }, settings: { theoretical: { ref: 'compression/yield/goodTablets' }, meanWeight: { ref: 'coating/coat/meanWeight' } } });
-    expect(at('coating', 'coat').settings.coreWeight).toEqual({ ref: 'compression/compress/meanWeight' });
-    expect(at('granulation', 'granulate').checker).toBe(true);
+    const sol = skeletonStages('solution-compounding', header);
+    expect(sol.map((s) => [s.roomTypes.join(), s.steps.map((t) => t.block.id).join(' ')])).toEqual([['Compounding', 'line-clearance weigh charge mix check stage-yield']]);
+    // The bulk yield on the batch mass by the density (engine change 1).
+    expect(sol[0]!.steps.at(-1)!.settings.theoretical).toEqual({ header: 'batchMass' });
   });
 
   it('a weigh step added from the library starts with the usual tolerance', () => {
@@ -109,18 +95,18 @@ describe('master designer', () => {
     expect(stepFrom(block('sift'), []).settings).toEqual({});
   });
 
-  it('copy to a new batch size scales typed batch quantities, not limits or quantities per tablet', () => {
-    const d = scaleDoc(tablet(), '50000');
-    expect(d.header.batchSize).toBe('50000');
+  it('copy to a new batch size scales typed batch quantities, not limits or quantities per mL', () => {
+    const d = scaleDoc(tablet(), '50');
+    expect(d.header.batchSize).toBe('50');
     expect(d.stages[1]!.steps[6]!.settings.theoretical).toBe('11.500 kg');
     expect(d.stages[1]!.steps[6]!.settings.yieldLimit).toEqual({ low: '97.0', high: '100.5', unit: '%' });
-    expect(d.formula[0]!.mgPerTablet).toBe('100.0');
+    expect(d.formula[0]!.mg).toBe('100.0');
   });
 
   it('the changes view shows what changed, was added or removed since the previous version', () => {
     const prev = tablet();
     const next = tablet();
-    next.formula[4]!.mgPerTablet = '18.0';
+    next.formula[4]!.mg = '18.0';
     next.stages[2]!.steps.pop();
     next.stages[1]!.produces!.holdHours = 48;
     const diff = diffMasters(prev, next);
@@ -143,7 +129,7 @@ describe('master designer', () => {
     expect(line).toMatch(/^Formula › Examplol hydrochloride: Label claim .* Answered: as Examplol hydrochloride\. Reason: The label for this market states the salt\.$/);
     expect(diffMasters(prev, next).flatMap((s) => s.lines.filter((l) => l.change !== 'same').map((l) => `${s.title} ${l.change}: ${l.text}`))).toEqual([`Calculation checks changed: ${line}`]);
     // A changed item asks again: the answer was for the warning as it read then.
-    const changed = { ...next, formula: next.formula.map((l, i) => (i === 0 ? { ...l, mgPerTablet: '90.0' } : l)) };
+    const changed = { ...next, formula: next.formula.map((l, i) => (i === 0 ? { ...l, mg: '90.0' } : l)) };
     expect(masterChecks(changed).find((p) => p.question?.key === 'label-basis/api')?.question?.answer).toBeUndefined();
   });
 });
