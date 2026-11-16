@@ -29,6 +29,24 @@ adding anything, look how TrueBatch Tablets does it and copy that.
 - Assumed until the owner confirms: one tank of solution = one filling = one batch; aseptic operators by a QA-given
   "aseptic operator" permission (no training dates here); a media fill as a TrueBatch batch comes later.
 
+## Engine change 1: the liquid batch header (built 16 November 2026)
+- The header is the product, the batch size and its unit: **litres or kg** (the formula is per mL; a batch in kg turns
+  into its volume by the density) or **units** (a dry powder filled as it is; the formula is per unit). Then the
+  density (g/mL; needed for kg, and for the batch mass of a batch in litres), the **nominal fill** per container and
+  the **fill excess** (overfill), both in mL, and the dispensing rooms. Nothing is typed in the batch.
+- Worked out, never typed: the batch volume, the batch mass, the **expected units** (volume ÷ (fill + excess), whole
+  units) and the fill target (fill + excess). A step setting may name them (`HEADER_VALUES`), as Tablets' steps named
+  the core batch weight.
+- A formula line has its mg per mL (or per unit); the vehicle made up to volume (water for injections, "q.s.") has
+  none. Its batch quantity is T8: mg/mL × the batch volume (a concentration times a volume, one more pairing of T8's
+  per-unit mode). The label claim of the API is per mL ("50 mg/mL") or per unit.
+- The master check: a batch in kg needs its density; a batch in L or kg its nominal fill; a fill excess needs the
+  fill; only the vehicle may be q.s.; the general calculation checks of Tablets stay (label basis and claim, salt
+  factor, solvent-wet API, double adjustment, ratio basis, one-sided particle size, order-critical steps, a batch
+  quantity written that T8 does not give, one material twice). The tablet-only ones are not used (core and coated
+  weights, coating lines, tooling, other strengths from one blend, processing aids, herbal lines).
+- No new mechanism: the header is a different shape of the same master document (as Packing had its own header).
+
 ## Platform
 - Runs on the Medhanta platform. Core provides people, sign-in, permissions, e-signature re-authentication and master
   data. Normal platform sign-in (OIDC through core, one person per browser).

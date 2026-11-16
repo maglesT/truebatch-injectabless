@@ -1,3 +1,4 @@
+import { batchText } from '../../../shared/engine/values.js';
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../api.js';
 import { SignDialog } from '../components/SignDialog.js';
@@ -26,7 +27,7 @@ export function IssueDialog({ row, onCancel }: { row: MasterRow; onCancel: () =>
     <div className="overlay" role="dialog" aria-modal="true" aria-label="Issue a batch">
       <form className="card dialog fl" onSubmit={(e) => { e.preventDefault(); setSigning(true); }}>
         <h2>Issue a batch</h2>
-        <p>{doc.header.productCode} · {doc.header.productName}, version {row.versionNo}: {Number(doc.header.batchSize).toLocaleString('en-IN')} tablets. The batch number is given by the server.</p>
+        <p>{doc.header.productCode} · {doc.header.productName}, version {row.versionNo}: {batchText(doc)}. The batch number is given by the server.</p>
         {problems.length > 0 && <div className="notice bad" role="alert">{problems.map((p, i) => <p key={i}>{p}</p>)}</div>}
         <div className="actions">
           <button type="button" className="big" onClick={onCancel}>Cancel</button>

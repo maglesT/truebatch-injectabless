@@ -19,6 +19,8 @@ describe('T8 Batch scaling', () => {
     [{ mode: 'rate x time' as const, rate: '10 kg/h', time: '24 h' }, 'kg', '240.000'], // continuous line (formulation 50): 10 kg/h × 24 h
     [{ mode: 'rate x time' as const, rate: '135000 tablets/h', time: '90 min' }, 'units', '202500.000'], // 135000/h × 1.5 h
     [{ mode: 'rate x time' as const, rate: '500 g/min', time: '2 h' }, 'kg', '60.000'], // 0.5 kg/min × 120 min
+    [{ mode: 'per unit' as const, perUnit: '40.0 mg/mL', count: '200 L' }, 'kg', '8.000'], // injection 40 mg/mL × 200 L (a liquid formula per mL)
+    [{ mode: 'per unit' as const, perUnit: '9.0 mg/mL', count: '500000 mL', unit: 'g' }, 'g', '4500.000'], // sodium chloride 0.9 % × 500 L
   ])('T8: %o = %s %s', (i, unit, want) => {
     const r = ok(t8BatchScaling(i));
     expect(r.unit).toBe(unit);
@@ -27,10 +29,12 @@ describe('T8 Batch scaling', () => {
 
   it('T8: shows the worked line', () => {
     expect(ok(t8BatchScaling({ mode: 'per unit', perUnit: '478.000 mg', count: '350000 tablets' })).shown).toBe('478.000 mg × 350000 tablets = 167.300 kg');
+    expect(ok(t8BatchScaling({ mode: 'per unit', perUnit: '40.0 mg/mL', count: '200000 mL' })).shown).toBe('40.0 mg/mL × 200000 mL = 8.000 kg');
   });
 
   it.each([
     [{ mode: 'per unit' as const, perUnit: '478 mg', count: '350 kg' }, /number of units must be a count/],
+    [{ mode: 'per unit' as const, perUnit: '40 mg/mL', count: '200 kg' }, /batch volume must be a volume/],
     [{ mode: 'percent' as const, percent: '120 %', batch: '210 kg' }, /between 0 and 100/],
     [{ mode: 'rate x time' as const, rate: '10 kg', time: '24 h' }, /mass, volume or count per time/],
     [{ mode: 'rate x time' as const, rate: '10 kg/h', time: '24 kg' }, /must be a time/],

@@ -42,6 +42,11 @@ export const BLOCKS: readonly Block[] = [
   friability, disintegration, uniformityByWeight, contentUniformity, coat, sprayCoat, polishPrint, check, qaSample,
   stageYield, tabletReconciliation, lineClearance,
 ];
+// The blocks a new injectables master may use: the eleven the draft library reuses from TrueBatch Tablets. The other
+// tablet blocks stay in the engine copy only as fixtures of the engine tests, until the sterile blocks of the final
+// library (phase E) replace them there; the designer does not offer them.
+export const OFFERED = ['weigh', 'charge', 'mix', 'check', 'line-clearance', 'sub-batch-combine', 'qa-sample', 'stage-yield', 'blend-uniformity', 'sieve', 'dry-constant'];
+
 export function findBlock(ref: { id: string; version: number }): Block | undefined {
   return BLOCKS.find((b) => b.id === ref.id && b.version === ref.version);
 }

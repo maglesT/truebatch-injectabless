@@ -4,7 +4,7 @@
  */
 import { Dec, type Outcome, type Q, type ResultValue } from '../templates/index.js';
 import { findBlock, type Block, type BlockField } from '../blocks/index.js';
-import type { FormulaLine, Limit, MasterDoc, SettingValue, Step } from '../master/schema.js';
+import type { FormulaLine, HEADER_VALUES, Limit, MasterDoc, SettingValue, Step } from '../master/schema.js';
 import { callTemplate } from './templates.js';
 import { keyId, type StepEvent, type StepKey } from './state.js';
 import type { Source } from './links.js';
@@ -135,17 +135,63 @@ function refValue(doc: MasterDoc, events: readonly StepEvent[], here: StepKey, r
   return name in c.values ? c.values[name] : c.results[name] ? asQ(c.results[name]) : undefined;
 }
 
-const tablets = (doc: MasterDoc) => `${doc.header.batchSize} tablets`;
-const perBatch = (mg: string, doc: MasterDoc) => callTemplate('T8', { mode: 'per unit', perUnit: `${mg} mg`, count: tablets(doc), unit: 'kg' });
+// Engine change 1: the liquid batch header. A batch in L or kg is scaled per mL of its volume (a batch in kg by the
+// density); a batch in units (a dry powder fill) per unit.
+const L_DP = 3;
+/** The batch volume in L, or why there is none. */
+function batchLitres(doc: MasterDoc): Dec | string {
+  const { batchSize, batchUnit, densityGPerMl } = doc.header;
+  if (batchUnit === 'L') return new Dec(batchSize);
+  if (batchUnit === 'units') return 'A batch made in units has no volume';
+  if (!densityGPerMl || new Dec(densityGPerMl).isZero()) return 'The header gives no density, so a batch in kg has no volume';
+  return new Dec(batchSize).div(densityGPerMl).toDecimalPlaces(L_DP, Dec.ROUND_HALF_UP);
+}
+function perBatch(mg: string | undefined, doc: MasterDoc): Outcome<object> {
+  if (mg === undefined) return { ok: false, message: 'Made up to volume (q.s.): no quantity of its own' };
+  if (doc.header.batchUnit === 'units') return callTemplate('T8', { mode: 'per unit', perUnit: `${mg} mg`, count: `${doc.header.batchSize} units`, unit: 'kg' });
+  const l = batchLitres(doc);
+  if (typeof l === 'string') return { ok: false, message: l };
+  return callTemplate('T8', { mode: 'per unit', perUnit: `${mg} mg/mL`, count: `${l.toString()} L`, unit: 'kg' });
+}
 
-/** A header value: as written, or the batch weight (T8: weight per tablet × batch size). */
-export function headerValue(doc: MasterDoc, h: 'batchSize' | 'coreWeight' | 'coatedWeight' | 'coreBatch' | 'coatedBatch'): string | Stored {
-  const { coreWeightMg: core, coatedWeightMg: coated } = doc.header;
-  if (h === 'batchSize') return tablets(doc);
-  if (h === 'coreWeight') return `${core} mg`;
-  if (h === 'coreBatch') return store(perBatch(core, doc));
-  if (coated === undefined) return { ok: false, message: 'The master has no coated tablet weight' };
-  return h === 'coatedWeight' ? `${coated} mg` : store(perBatch(coated, doc));
+/** The header values in words, for messages ("only when the batch volume is …"). */
+export const HEADER_WORDS: Record<(typeof HEADER_VALUES)[number], string> = {
+  batchSize: 'batch size', batchVolume: 'batch volume', batchMass: 'batch mass', units: 'expected units', fillVolume: 'nominal fill',
+  fillTarget: 'fill target', density: 'density',
+};
+
+/** The batch in words, for the screens and the PDF: "100 L · fill 10.0 mL + 0.5 mL excess · 9523 units expected". */
+export function batchText(doc: MasterDoc): string {
+  const h = doc.header;
+  const units = headerValue(doc, 'units');
+  return [`${Number(h.batchSize).toLocaleString('en-IN')} ${h.batchUnit}`, h.densityGPerMl ? `density ${h.densityGPerMl} g/mL` : '',
+    h.fillVolumeMl ? `fill ${h.fillVolumeMl} mL${h.fillExcessMl ? ` + ${h.fillExcessMl} mL excess` : ''}` : '',
+    h.batchUnit !== 'units' && typeof units === 'string' ? `${Number(units.split(' ')[0]).toLocaleString('en-IN')} units expected` : ''].filter(Boolean).join(' · ');
+}
+
+/** A header value: as written, or worked out from it (the volume, mass and expected units). */
+export function headerValue(doc: MasterDoc, h: (typeof HEADER_VALUES)[number]): string | Stored {
+  const { batchSize, batchUnit, densityGPerMl: d, fillVolumeMl: fill, fillExcessMl: excess } = doc.header;
+  const no = (message: string): Stored => ({ ok: false, message });
+  const target = fill ? new Dec(fill).plus(excess ?? '0') : undefined;
+  switch (h) {
+    case 'batchSize': return `${batchSize} ${batchUnit}`;
+    case 'density': return d ? `${d} g/mL` : no('The header gives no density');
+    case 'fillVolume': return fill ? `${fill} mL` : no('The header gives no nominal fill');
+    case 'fillTarget': return target ? `${target.toString()} mL` : no('The header gives no nominal fill');
+    case 'batchVolume': { const l = batchLitres(doc); return typeof l === 'string' ? no(l) : `${l.toString()} L`; }
+    case 'batchMass':
+      if (batchUnit === 'kg') return `${batchSize} kg`;
+      if (batchUnit === 'units') return no('A batch made in units has no mass in the header');
+      return d ? `${new Dec(batchSize).times(d).toString()} kg` : no('The header gives no density, so a batch in L has no mass');
+    case 'units': {
+      if (batchUnit === 'units') return `${batchSize} units`;
+      const l = batchLitres(doc);
+      if (typeof l === 'string') return no(l);
+      if (!target || target.isZero()) return no('The header gives no nominal fill, so the expected units are not known');
+      return `${l.times(1000).div(target).floor().toString()} units`;
+    }
+  }
 }
 
 /** The adjusted quantity a step recorded for a formula line (its setting that asks for the adjusted line). */
@@ -167,7 +213,7 @@ function recordedAdjusted(doc: MasterDoc, events: readonly StepEvent[], here: St
  * or T10 for a filler that compensates other lines. The worked lines are joined.
  */
 export function lineQuantity(doc: MasterDoc, events: readonly StepEvent[], here: StepKey, line: FormulaLine, adjusted: boolean, values: Record<string, Value>, uses: number[] = []): Stored {
-  let q: Outcome<object> = perBatch(line.mgPerTablet, doc);
+  let q: Outcome<object> = perBatch(line.mg, doc);
   const shown: string[] = [];
   const next = (o: Outcome<object>) => { if (q.ok) shown.push(q.shown); q = o; };
   const a = adjusted ? line.adjust : undefined;
@@ -191,7 +237,7 @@ export function lineQuantity(doc: MasterDoc, events: readonly StepEvent[], here:
   return r.ok && shown.length ? { ...r, shown: [...shown, r.shown].join('; then ') } : r;
 }
 const perBatchQ = (doc: MasterDoc, l: FormulaLine | undefined) => {
-  const r = l ? store(perBatch(l.mgPerTablet, doc)) : undefined;
+  const r = l ? store(perBatch(l.mg, doc)) : undefined;
   return r ? asQ(r) : undefined;
 };
 

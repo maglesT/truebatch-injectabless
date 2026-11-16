@@ -1,3 +1,4 @@
+import { batchText } from '../../../shared/engine/values.js';
 import { useCallback, useEffect, useState } from 'react';
 import { api, type Me } from '../api.js';
 import { SignDialog } from '../components/SignDialog.js';
@@ -59,7 +60,7 @@ export function BatchHeader({ d }: { d: BatchDetail }) {
         <h1>{h.productName}</h1>
         <div className="meta">
           <span>Product <b>{h.productCode}</b></span>
-          <span>Batch size <b>{Number(h.batchSize).toLocaleString('en-IN')} tablets</b></span>
+          <span>Batch <b>{batchText(d.master.doc)}</b></span>
           <span>Master version <b>{d.master.versionNo}</b></span>
           <span>Issued <b>{plainClock(d.batch.issuedAt)}</b></span>
         </div>

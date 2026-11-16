@@ -18,7 +18,7 @@ export type Tab = 'header' | 'formula' | 'process' | 'preview' | 'review';
 const TABS: [Tab, string][] = [['header', 'Header'], ['formula', 'Formula'], ['process', 'Process'], ['preview', 'Calculation preview'], ['review', 'Review and approval']];
 type Save = { kind: 'saved' | 'saving' | 'pending' } | { kind: 'invalid' | 'error'; message: string };
 
-const FIELD: Record<string, string> = { mgPerTablet: 'mg per tablet', batchSize: 'batch size', coreWeightMg: 'core weight', coatedWeightMg: 'coated weight', name: 'name', key: 'key', holdHours: 'hold time', count: 'number of sub-batches' };
+const FIELD: Record<string, string> = { mg: 'mg per mL', batchSize: 'batch size', densityGPerMl: 'density', fillVolumeMl: 'nominal fill', fillExcessMl: 'fill excess', name: 'name', key: 'key', holdHours: 'hold time', count: 'number of sub-batches' };
 function issueText(doc: MasterDoc, path: (string | number)[], message: string): string {
   const [a, i, b, j] = path;
   const where = a === 'formula' && typeof i === 'number' ? `Formula line ${i + 1} (${doc.formula[i]?.name || 'no material'})`
@@ -82,7 +82,7 @@ export function Designer({ me, versionId, onBack, onOpen }: { me: Me; versionId:
         <button className="link dark" onClick={async () => { await flush(); onBack(); }}>← {product.masters}</button>
         <div className="d-title">
           <h1>{doc.header.productCode} · {doc.header.productName}</h1>
-          <span className="muted">Version {v.versionNo} · {Number(doc.header.batchSize || 0).toLocaleString('en-IN')} tablets</span>
+          <span className="muted">Version {v.versionNo} · {Number(doc.header.batchSize || 0).toLocaleString('en-IN')} {doc.header.batchUnit}</span>
           <span className={STATE_CHIP[v.state]}>{STATE_LABEL[v.state]}</span>
           {editable && <span className={`save save-${save.kind}`} role="status">
             {save.kind === 'saved' ? 'All changes saved' : save.kind === 'saving' ? 'Saving…' : save.kind === 'pending' ? 'Changes not saved yet' : `Not saved: ${'message' in save ? save.message : ''}`}

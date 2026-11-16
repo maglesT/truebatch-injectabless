@@ -16,7 +16,10 @@ export const limitSchema = z.object({
 
 // A step setting: a value as written ("0.5", "250.0 mg"), a limit, or a reference to an earlier step's field or
 // calculation ("stage/step/name"), to a formula line (its batch quantity, adjusted when asked) or to the header.
-export const HEADER_VALUES = ['batchSize', 'coreWeight', 'coatedWeight', 'coreBatch', 'coatedBatch'] as const;
+// Header values (shared/engine/values.ts headerValue): the batch as written, its volume (L), its mass (kg; by the
+// density), the expected units (the volume ÷ the fill target, or the units of a batch in units), the nominal fill and
+// the fill target (fill + excess, mL), and the density.
+export const HEADER_VALUES = ['batchSize', 'batchVolume', 'batchMass', 'units', 'fillVolume', 'fillTarget', 'density'] as const;
 export const settingValueSchema = z.union([
   text(),
   limitSchema,
@@ -51,7 +54,7 @@ export const stepSchema = z.object({
   everyMinutesLater: z.object({ afterMinutes: z.number().int().positive().max(10_000), everyMinutes: z.number().int().positive().max(10_000) }).strict().optional(),
   // F4 by a rule: the step is done only when a header value is within the limit (F0040: the bag premix only for a
   // batch of at most 50 kg); otherwise it is not applicable, with no operator choice.
-  onlyIf: z.object({ header: z.enum(['batchSize', 'coreBatch']), limit: limitSchema }).strict().optional(),
+  onlyIf: z.object({ header: z.enum(HEADER_VALUES), limit: limitSchema }).strict().optional(),
   // A spray of a liquid made in excess: the amount of liquid to apply per amount charged (F0339: 971 g per 150 g).
   applyPerCharge: z.object({ liquid: text(40), charge: text(40) }).strict().optional(),
   // Order-critical: this step must come after the step with this key in the same stage (F0318: the drug after the PVP).
@@ -84,14 +87,15 @@ export const lineSchema = z.object({
   materialItemId: z.string().min(1).max(100),
   code: text(),
   name: text(),
-  mgPerTablet: decimal,
-  // A solvent is removed in processing (granulation water) and is not part of the tablet weight.
+  // mg per mL of the batch (a batch in L or kg), or mg per unit (a batch in units: a dry powder fill). A solvent made
+  // up to volume (water for injections "q.s.") has none: it is whatever makes the volume.
+  mg: decimal.optional(),
+  // solvent: the vehicle the batch is made up to volume with (water for injections), or a solvent removed in processing.
   role: z.enum(['api', 'excipient', 'solvent']),
-  place: z.enum(['intragranular', 'extragranular', 'binder', 'coating']),
-  layer: z.number().int().min(1).max(10).optional(),
-  // The API's label claim per tablet ("20 mg", "10 mEq"), on the basis the label-basis answer gives; checked, never used.
+  // The API's label claim per mL or per unit ("50 mg", "10 mEq"), on the basis the label-basis answer gives; checked,
+  // never used.
   labelClaim: text(40).optional(),
-  // A batch quantity as written in the source ("120.000 kg"); only checked against mg per tablet × batch size (T8).
+  // A batch quantity as written in the source ("12.000 kg"); only checked against mg per mL × batch volume (T8).
   batchQuantity: text(40).optional(),
   // Settings of the adjustment templates, applied in this order: T11 salt factor, T9 potency or T18 content, T16
   // overage; or, for a filler, T10 compensation of the named lines.
@@ -115,17 +119,22 @@ export const lineSchema = z.object({
   }).strict().optional(),
 }).strict();
 
+// Engine change 1 (owner, 16 Nov 2026): the liquid batch header. The batch is made in litres or kg (the formula is per
+// mL; a batch in kg turns into its volume by the density) or, for a dry powder filled as it is, in units (the formula
+// is per unit). A batch in L or kg is filled at the nominal fill plus its excess (overfill), which gives the expected
+// units; nothing of these is typed in the batch.
+export const BATCH_UNITS = ['L', 'kg', 'units'] as const;
 export const headerSchema = z.object({
   productItemId: z.string().min(1).max(100),
   productCode: text(),
   productName: text(),
-  batchSize: z.string().regex(/^[1-9]\d{0,9}$/, 'a whole number of tablets'),
-  coreWeightMg: decimal,
-  coatedWeightMg: decimal.optional(),
-  // The die bore area from the tooling record, to check that the target weight fits the tooling (F0135).
-  dieAreaMm2: decimal.optional(),
-  // Other strengths compressed from the same blend at their own core weight (F0225, F0366).
-  otherStrengths: z.array(z.object({ name: text().min(1), labelClaim: text(40), coreWeightMg: decimal }).strict()).max(10).optional(),
+  batchSize: decimal,
+  batchUnit: z.enum(BATCH_UNITS),
+  // g/mL at the stated temperature: needed for a batch in kg, and for its mass when made in litres.
+  densityGPerMl: decimal.optional(),
+  // The nominal fill per container and the fill excess (overfill), in mL (a batch in L or kg).
+  fillVolumeMl: decimal.optional(),
+  fillExcessMl: decimal.optional(),
   // TI-11: the rooms of master data (codes) where this product's materials are weighed; a balance is offered there or
   // in a room the stage allows (shared/engine/picks.ts). A version made before this setting has none.
   dispensingRooms: z.array(text()).max(20).optional(),

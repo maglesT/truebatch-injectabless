@@ -28,32 +28,35 @@ test('TI-02 build a master from a skeleton, fix a master-check problem, then che
   await author.getByRole('button', { name: 'New master' }).click();
   await author.getByLabel('Product').fill('PRD-001');
   await author.getByRole('button', { name: /PRD-001/ }).click();
-  await author.getByLabel('Batch size (tablets)').fill('100000');
-  await author.getByLabel('Theoretical core weight (mg per tablet)').fill('250.0');
-  await author.getByText('Process skeleton: Direct compression, uncoated').click();
+  // The liquid header (engine change 1): 100 L at 1.02 g/mL, filled at 10.0 mL.
+  await author.getByLabel('Batch size', { exact: true }).fill('100');
+  await author.getByLabel('Density').fill('1.02');
+  await author.getByLabel('Nominal fill').fill('10.0');
+  await expect(author.locator('.calc-note')).toContainText('Expected units: 10000 units');
+  await author.getByText('Process skeleton: Solution: compounding').click();
   await author.getByRole('button', { name: 'Create draft' }).click();
-  await expect(author.getByRole('heading', { name: 'PRD-001 · Examplol 100 mg tablets' })).toBeVisible();
+  await expect(author.getByRole('heading', { name: 'PRD-001 · Examplol 50 mg/mL injection' })).toBeVisible();
 
-  // The formula: one material, picked from master data.
+  // The formula: one material, picked from master data, in mg per mL.
   await author.getByRole('button', { name: 'Formula', exact: true }).click();
   await author.getByRole('button', { name: '+ Add a material' }).click();
   await author.getByLabel('Material').fill('Examplol');
   await author.getByRole('button', { name: /MAT-001/ }).click();
-  await author.getByLabel('mg per tablet of Examplol').fill('250.0');
+  await author.getByLabel('mg per mL of Examplol').fill('50.0');
   await author.getByLabel('Role of Examplol').selectOption('api');
-  await expect(author.locator('.total.ok')).toContainText('equals the theoretical core weight');
+  await expect(author.locator('.formula-table')).toContainText('5.000 kg');
 
-  // The process: 2 stages, each starting with line clearance (TI-10); the dry-mix step of blending is removed, leaving 4.
+  // The process: 1 stage starting with line clearance (TI-10); the mixing step is removed, leaving 5.
   await author.getByRole('button', { name: 'Process', exact: true }).click();
   await expect(author.locator('.steps-col .olist li').first()).toContainText('Line clearance');
   // Remove and move are there without selecting the step first.
-  await author.getByRole('button', { name: 'Remove Dry mix for a time' }).click();
-  await expect(author.locator('.steps-col .olist li')).toHaveCount(4);
+  await author.getByRole('button', { name: 'Remove Mix for a time' }).click();
+  await expect(author.locator('.steps-col .olist li')).toHaveCount(5);
   // The stage yield: its theoretical quantity, used in two sentences, is one input; More options opens per step.
-  await author.locator('.steps-col').getByRole('button', { name: /4\. Stage yield/ }).click();
+  await author.locator('.steps-col').getByRole('button', { name: /5\. Stage yield/ }).click();
   await expect(author.locator('.settings-col').getByLabel('Theoretical quantity', { exact: true })).toHaveCount(1);
   await author.getByText('More options').click();
-  await author.locator('.steps-col').getByRole('button', { name: /3\. Sift/ }).click();
+  await author.locator('.steps-col').getByRole('button', { name: /3\. Charge/ }).click();
   await expect(author.locator('.settings-col details.more')).not.toHaveAttribute('open');
 
   // The master check shows what is missing; its link selects the step, and the template sentence takes the input.
@@ -62,21 +65,18 @@ test('TI-02 build a master from a skeleton, fix a master-check problem, then che
   await expect(author.getByRole('heading', { name: 'Weigh a material' })).toBeVisible();
   const sentence = author.locator('.sentence', { hasText: 'must be within ±' });
   await sentence.getByLabel('Target quantity').selectOption({ label: 'Examplol' });
-  await expect(author.locator('.ex-results')).toContainText('250.0 mg × 100000 tablets = 25.000 kg');
+  await expect(author.locator('.ex-results')).toContainText('50.0 mg/mL × 100 L = 5.000 kg');
   await expect(check.getByRole('button', { name: /Target quantity is not set/ })).toBeHidden();
 
-  await check.getByRole('button', { name: /Sieve no\. \(mesh and aperture\) is not set/ }).click();
-  await author.getByLabel('Sieve no. (mesh and aperture)').fill('40 mesh (425 µm)');
-  await expect(check.getByRole('button', { name: /Sieve no\. \(mesh and aperture\) is not set/ })).toBeHidden();
+  await check.getByRole('button', { name: /Material \(formula line\) is not set/ }).click();
+  await author.getByLabel('Material (formula line)').selectOption({ label: 'MAT-001 Examplol' });
+  await expect(check.getByRole('button', { name: /Material \(formula line\) is not set/ })).toBeHidden();
 
-  await check.getByRole('button', { name: /Hardness limits is not set/ }).click();
-  await author.getByLabel('Hardness limits: lowest').fill('60');
-  await author.getByLabel('Hardness limits: highest').fill('120');
-  await author.getByLabel('Thickness limits: lowest').fill('3.8');
-  await author.getByLabel('Thickness limits: highest').fill('4.2');
-  // TI-11: blending names no rooms in the skeleton; the check opens its stage settings, where the rooms are picked.
-  await check.getByRole('button', { name: /Stage Blending: choose the rooms/ }).click();
-  await author.getByLabel('Add to rooms this stage may run in (an area, or a room)').selectOption('Blending');
+  await check.getByRole('button', { name: /What is checked is not set/ }).click();
+  await author.getByLabel('What is checked').fill('Temperature of the bulk');
+  await author.getByLabel('Unit', { exact: true }).selectOption('°C');
+  await author.getByLabel('Limits: lowest').fill('20');
+  await author.getByLabel('Limits: highest').fill('25');
   await expect(check).toContainText('No problems');
   await expect(author.getByRole('status')).toHaveText('All changes saved');
 

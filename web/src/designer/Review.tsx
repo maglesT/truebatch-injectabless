@@ -1,6 +1,7 @@
 // Screen 7: review and approval. The version in plain sentences, stage by stage, or its changes from the previous
 // version; comments; and the workflow (TI-02): the author sends it for review, a second person checks it or returns
 // it, QA approves it with a change control number, then makes it effective (the previous effective one retires).
+import { batchText } from '../../../shared/engine/values.js';
 import { useEffect, useState, type FormEvent } from 'react';
 import { ApiError, can, plantTime, type Me } from '../api.js';
 import { addComment, getReview, reviewAction, STATE_LABEL, type MasterEvent, type ReviewAction, type ReviewData, type Version } from '../api-designer.js';
@@ -107,7 +108,7 @@ export function Review({ me, version, doc, blocked, onChanged, onGo }: {
             await done();
           }}>
           <div className="signbox">
-            <p><b>{doc.header.productCode} {doc.header.productName}</b>, version {version.versionNo}, {doc.header.batchSize} tablets</p>
+            <p><b>{doc.header.productCode} {doc.header.productName}</b>, version {version.versionNo}, {batchText(doc)}</p>
             {doing === 'approve' && <p>Change control number: <b>{cc}</b></p>}
           </div>
         </SignDialog>

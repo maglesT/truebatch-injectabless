@@ -21,7 +21,7 @@ await schemaOwner.end();
 
 // The product and material of the small fixture master (test/engine-fixture.ts, small()).
 const master = fakeMaster();
-master.products_.push({ itemId: 'p', code: 'PRD-050', name: 'Demolol 50 mg tablets', version: 1, active: true, strength: null, dosageForm: 'tablet' });
+master.products_.push({ itemId: 'p', code: 'PRD-050', name: 'Demolol 50 mg/mL injection', version: 1, active: true, strength: null, dosageForm: 'injection' });
 master.materials_.push({ itemId: 'm', code: 'MAT-010', name: 'Demolol', version: 1, active: true, category: null, unit: 'kg' });
 // The designer journey's products, materials, equipment and rooms.
 seedMasterData(master);

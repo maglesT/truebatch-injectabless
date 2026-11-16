@@ -41,11 +41,13 @@ export function t8BatchScaling(i: T8Input): Outcome {
     if (i.mode === 'per unit') {
       const per = parse(i.perUnit, 'The quantity per unit');
       const n = parse(i.count, 'The number of units');
-      needKind(n, ['count', 'number'], 'The number of units');
+      // A concentration per mL × the batch volume (a liquid formula per mL): the mass in the batch.
+      const perMl = per.unit.kind === 'mass concentration';
+      needKind(n, perMl ? ['volume'] : ['count', 'number'], perMl ? 'The batch volume' : 'The number of units');
       if (n.v.isNegative() || per.v.isNegative()) refuse('Quantities and counts cannot be negative');
-      const def = per.unit.kind === 'mass' ? 'kg' : per.unit.kind === 'volume' ? 'L' : per.unit.symbol;
+      const def = perMl || per.unit.kind === 'mass' ? 'kg' : per.unit.kind === 'volume' ? 'L' : per.unit.symbol;
       u = unitOf(i.unit ?? def);
-      value = to(per, u).times(n.v);
+      value = perMl ? to({ v: to(per, 'mg/mL').times(to(n, 'mL')), unit: unitOf('mg'), text: '' }, u) : to(per, u).times(n.v);
       line = `${per.text} × ${n.text}`;
     } else if (i.mode === 'percent') {
       const pc = percent(i.percent, 'The % w/w');

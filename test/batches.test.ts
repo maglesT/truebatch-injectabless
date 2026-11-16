@@ -288,7 +288,7 @@ describe('walking a stage', () => {
     expect(text).not.toMatch(/\b(?:balance|lot|machine|room)\.[a-zA-Z]/);
     expect(text).toContain('limit ± 0.5 %: within limits');
     expect(text).toContain('FAIL: out of limits');
-    expect(text).toContain('MAT-001 · Examplol | api · intragranular | 100.0 | 10.000 kg | Lot API-2611: 10.151 kg (target');
+    expect(text).toContain('MAT-001 · Examplol | api | 100.0 | 10.000 kg | Lot API-2611: 10.151 kg (target');
     expect(text).toMatch(/Checked: RAVI, .* IST · signed "Verified \(second person\)"/);
     expect(text).toMatch(/Sent back: RAVI, .* · reason: Tare looks wrong/);
     expect(text).toMatch(/DEV-26-003 \| Granulation · 2\.2 Weigh a material: Lactose monohydrate \| Lactose 0\.9 % over the corrected target \| ASHA, .* \| OPEN/);

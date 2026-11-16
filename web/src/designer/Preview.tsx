@@ -5,7 +5,8 @@ import { findBlock } from '../../../shared/blocks/index.js';
 import { evaluate, type Stored } from '../../../shared/engine/index.js';
 import { Dec } from '../../../shared/templates/index.js';
 import { masterSchema, type MasterDoc } from '../../../shared/master/schema.js';
-import { batchWeight, dispensing, type LotValues } from './example.js';
+import { dispensing, type LotValues } from './example.js';
+import { batchText, headerValue } from '../../../shared/engine/values.js';
 import { settingText } from './sentences.js';
 import { Decimal } from './ui.js';
 
@@ -25,8 +26,7 @@ export function Preview({ doc: raw }: { doc: MasterDoc }) {
   const doc = parsed.data;
   const rows = dispensing(doc, lots);
   const adjusted = doc.formula.filter((l) => l.adjust && (l.adjust.potency || l.adjust.content));
-  const core = batchWeight(doc, doc.header.coreWeightMg);
-  const coated = batchWeight(doc, doc.header.coatedWeightMg);
+  const mass = headerValue(doc, 'batchMass');
   const yields = doc.stages.flatMap((s, si) => s.steps.flatMap((t, ti) => {
     if (findBlock(t.block)?.gmp !== 'yield') return [];
     const v = t.settings.theoretical;
@@ -51,7 +51,7 @@ export function Preview({ doc: raw }: { doc: MasterDoc }) {
         ) : <p className="muted">No material is adjusted for its lot: the dispensing quantities are the batch quantities.</p>}
       </div>
       <div className="card">
-        <h2>Dispensing quantities for {Number(doc.header.batchSize).toLocaleString('en-IN')} tablets</h2>
+        <h2>Dispensing quantities for {batchText(doc)}</h2>
         <div className="table-wrap">
           <table className="plain-table">
             <thead><tr><th>Material</th><th>Batch quantity</th><th>To dispense</th><th>Worked out</th></tr></thead>
@@ -71,8 +71,8 @@ export function Preview({ doc: raw }: { doc: MasterDoc }) {
       <div className="card">
         <h2>Theoretical quantities and yields</h2>
         <dl className="details">
-          <dt>Core batch weight</dt><dd>{core?.ok ? core.shown : '—'}</dd>
-          {coated && <><dt>Coated batch weight</dt><dd>{coated.ok ? coated.shown : coated.message}</dd></>}
+          <dt>Batch mass</dt><dd>{typeof mass === 'string' ? mass : mass.ok ? mass.shown : mass.message}</dd>
+          <dt>Expected units</dt><dd>{(() => { const u = headerValue(doc, 'units'); return typeof u === 'string' ? u : u.ok ? u.shown : u.message; })()}</dd>
           {yields.map((y, i) => <Fragment key={i}><dt>Yield of {y.stage}: theoretical</dt><dd className={y.ok ? '' : 'error'}>{y.text}</dd></Fragment>)}
         </dl>
       </div>

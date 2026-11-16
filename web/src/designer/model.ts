@@ -1,6 +1,6 @@
 // Pure helpers of the designer over the master document: keys, units and their kinds, what an input may be picked
 // from, scaling to a new batch size. No GMP maths here: numbers go through the templates library.
-import { BLOCKS, findBlock, type Block } from '../../../shared/blocks/index.js';
+import { BLOCKS, findBlock, OFFERED, type Block } from '../../../shared/blocks/index.js';
 import { refsIn } from '../../../shared/blocks/format.js';
 import { stepTitle as title } from '../../../shared/engine/batch.js';
 import { Dec, findUnit, type Kind } from '../../../shared/templates/index.js';
@@ -94,11 +94,13 @@ export function earlierRefs(doc: MasterDoc, si: number, ti: number): RefOption[]
 }
 
 export const HEADER_LABEL: Record<(typeof HEADER_VALUES)[number], { label: string; kind: Kind }> = {
-  batchSize: { label: 'the batch size (tablets)', kind: 'count' },
-  coreWeight: { label: 'the theoretical core tablet weight', kind: 'mass' },
-  coatedWeight: { label: 'the theoretical coated tablet weight', kind: 'mass' },
-  coreBatch: { label: 'the theoretical core batch weight', kind: 'mass' },
-  coatedBatch: { label: 'the theoretical coated batch weight', kind: 'mass' },
+  batchSize: { label: 'the batch size as written', kind: 'volume' },
+  batchVolume: { label: 'the batch volume (L)', kind: 'volume' },
+  batchMass: { label: 'the batch mass (kg, by the density)', kind: 'mass' },
+  units: { label: 'the expected units', kind: 'count' },
+  fillVolume: { label: 'the nominal fill (mL)', kind: 'volume' },
+  fillTarget: { label: 'the fill target (fill + excess, mL)', kind: 'volume' },
+  density: { label: 'the density (g/mL)', kind: 'density' },
 };
 
 export const stepTitle = (doc: MasterDoc, t: Step, j?: number) => `${j === undefined ? '' : `${j + 1}. `}${title(doc, t)}`;
@@ -116,7 +118,7 @@ export const newStage = (name: string, taken: string[]): Stage =>
   ({ key: newKey(name, taken), name, kind: 'normal', roomTypes: [], machineTypes: [], role: '', uses: [], steps: [] });
 
 /** The latest version of each block of this product (the library offers only these for new steps). */
-export const LIBRARY = BLOCKS.filter((b) => !BLOCKS.some((x) => x.id === b.id && x.version > b.version));
+export const LIBRARY = BLOCKS.filter((b) => OFFERED.includes(b.id)).filter((b) => !BLOCKS.some((x) => x.id === b.id && x.version > b.version));
 /** Blocks found by plain words in their name, instruction, fields and settings. */
 export function searchBlocks(q: string): Block[] {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);

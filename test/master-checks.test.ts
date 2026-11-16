@@ -79,9 +79,16 @@ describe('master checks', () => {
     expect(after((d) => { d.stages[2]!.steps.pop(); })).toEqual(['error - stages[2]: Stage Compression has no yield step']);
   });
 
-  it('the formula must add up to the theoretical core weight (coating and solvents left out)', () => {
-    expect(after((d) => { d.formula[4]!.mgPerTablet = '17.0'; })).toEqual(['error - formula: The core materials add up to 249.5 mg per tablet, not the theoretical core weight 250.0 mg']);
-    expect(after((d) => { d.formula[3]!.mgPerTablet = '80.0'; d.formula[6]!.mgPerTablet = '9.0'; d.header.coatedWeightMg = '259.0'; })).toEqual([]);
+  it('TI-01 the liquid header: a batch in kg needs its density, a batch in L or kg its nominal fill; only the vehicle may be q.s. (engine change 1)', () => {
+    // The lines that need the batch volume say so too.
+    expect(after((d) => { d.header.batchUnit = 'kg'; delete d.header.densityGPerMl; }))
+      .toEqual(expect.arrayContaining(['error TI-01 header.densityGPerMl: A batch in kg needs the density (g/mL): the formula is per mL',
+        'error TI-13 formula[0].adjust: The header gives no density, so a batch in kg has no volume']));
+    expect(after((d) => { delete d.header.fillVolumeMl; delete d.header.fillExcessMl; })).toEqual(['error TI-01 header.fillVolumeMl: A batch in L or kg needs the nominal fill per container (mL)']);
+    expect(after((d) => { delete d.header.fillVolumeMl; })).toContain('error - header.fillExcessMl: A fill excess needs the nominal fill');
+    expect(after((d) => { delete d.formula[4]!.mg; })).toEqual(['error - formula[4].mg: Microcrystalline cellulose has no quantity per mL; only the vehicle made up to volume (q.s.) may have none']);
+    expect(after((d) => { delete d.formula[3]!.mg; })).toEqual([]);
+    expect(after((d) => { d.header.batchUnit = 'units'; })).toEqual(['error - header.fillVolumeMl: A batch in units is filled as units: it has no fill volume']);
   });
 
   it('TI-13 adjustment settings the templates library refuses are errors (same basis, overage, salt factor)', () => {
@@ -194,14 +201,12 @@ describe('calculation checks', () => {
   });
 
   const hcl: Change = (d) => { d.formula[0]!.name = 'Examplol hydrochloride'; };
-  const herbal: Change = (d) => { d.formula[4]!.name = 'Withania root extract'; };
   const premix: Change = (d) => { step(d, 'granulation', 'charge-api').instruction = 'Premix with lactose 1:4, then charge.'; };
   const double: Change = (d) => { d.formula[4]!.adjust = { content: { formulaQuantityIs: 'dry', contentSource: 'in-process result' } }; };
   // 405.4 ÷ 383.4 = 1.0574: 1.10 is 4.0 % off, 1.060 is 0.2 % off
   const factor = (f: string): Change => (d) => { d.formula[0]!.adjust = { salt: { from: { name: 'base', mw: '383.4' }, to: { name: 'sodium', mw: '405.4' }, factor: f } }; };
   it.each<[string, Change, Change, string, string, string]>([
     ['(a) label basis per market', hcl, () => {}, 'label-basis/api', 'formula[0]', 'as Examplol hydrochloride'],
-    ['(b) herbal or extract line', herbal, () => {}, 'herbal/mcc', 'formula[4]', 'extract weight'],
     ['(c) ratio in a step instruction with the API', premix, (d) => { step(d, 'granulation', 'mill').instruction = 'Mill 10 % of the granules first.'; }, 'ratio-basis/granulation/charge-api', 'stages[1].steps[2]', 'as weighed'],
     ['(d) potency adjusted at dispensing and again from a blend assay', double, (d) => { delete d.formula[0]!.adjust; double(d); }, 'double-adjustment/mcc', 'formula[4].adjust', 'intended'],
     ['(e) salt factor differing from the molecular weights by more than 0.5 %', factor('1.10'), factor('1.060'), 'salt-factor/api', 'formula[0].adjust.salt', 'confirmed'],
@@ -238,7 +243,7 @@ it('calculation check ⚠️ the messages say what to answer, in plain words', (
   const d = tablet();
   d.formula[0]!.adjust = { salt: { from: { name: 'base', mw: '383.4' }, to: { name: 'sodium', mw: '405.4' }, factor: '1.10' } };
   expect(checks(d).map((p) => `${p.path}: ${p.message}`)).toEqual([
-    "formula[0]: Label claim for this master's market: is the strength of Examplol stated as base or as sodium? The formula gives 100.0 mg of base per tablet.",
+    "formula[0]: Label claim for this master's market: is the strength of Examplol stated as base or as sodium? The formula gives 100.0 mg of base per mL.",
     'formula[0].adjust.salt: The salt factor 1.10 written for Examplol differs by 4.0 % from the molecular weights of base and sodium (factor 1.0574), which the batch quantity uses. Confirm with a reason, or correct the factor or the molecular weights.',
   ]);
 });
