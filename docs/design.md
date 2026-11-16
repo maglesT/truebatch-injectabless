@@ -93,6 +93,16 @@ adding anything, look how TrueBatch Tablets does it and copy that.
   time).
 - The sterilised items' "use by" (TI-17, TI-24) will use the same field when the sterile blocks come (phase E).
 
+## The clean-air limits table (built 16 November 2026)
+- One fixed table in the product (`shared/master/clean-air.ts`), from EU GMP Annex 1 (2022): Table 5, total particles
+  per m³ for monitoring (at rest and in operation, ≥ 0.5 µm and ≥ 5 µm), and Table 6, the action limits for viable
+  particles (air sample CFU/m³, settle plate CFU per 4 h, contact plate CFU per plate, glove print CFU per glove;
+  grade A no growth). Where Annex 1 sets none (grade D in operation; glove prints in C and D) the plant sets it.
+- Shown with every master in the review screen (checker and QA). The count template of the sterile library checks
+  environmental readings against it (phase E); a master may set stricter limits, never looser.
+- **QA confirms the table once**: confirmed by ________ (QA) on ________ (to be filled in when QA has checked it
+  against the plant's copy of Annex 1).
+
 ## Platform
 - Runs on the Medhanta platform. Core provides people, sign-in, permissions, e-signature re-authentication and master
   data. Normal platform sign-in (OIDC through core, one person per browser).

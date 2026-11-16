@@ -10,6 +10,7 @@ import { useLinked } from '../api-floor.js';
 import type { MasterDoc } from '../../../shared/master/schema.js';
 import { describeMaster, diffMasters, type DiffSection } from './describe.js';
 import { placeLabel } from './model.js';
+import { CLEAN_AIR, GRADES, VIABLE_WORDS, type ViableSample } from '../../../shared/master/clean-air.js';
 
 const EVENT_TEXT: Record<MasterEvent['kind'], string> = { submitted: 'Sent for review', passed: 'Checked (passed)', returned: 'Returned to the author', approved: 'Approved by QA', effective: 'Made effective', retired: 'Retired' };
 const SIGNED: Partial<Record<ReviewAction, { meaning: string; what: string }>> = {
@@ -97,6 +98,7 @@ export function Review({ me, version, doc, blocked, onChanged, onGo }: {
         ))}
         {view === 'changes' && changed === 0 && <p className="muted">No changes from version {data.previous?.versionNo}.</p>}
       </div>
+      {view === 'plain' && <CleanAir />}
 
       <Comments me={me} doc={doc} data={data} versionId={version.id} onAdded={load} onGo={onGo} />
 
@@ -176,5 +178,26 @@ function Comments({ me, doc, data, versionId, onAdded, onGo }: { me: Me; doc: Ma
         </form>
       )}
     </div>
+  );
+}
+
+/** The clean-air limits table, fixed in the product (EU GMP Annex 1), shown with every master for the checker and QA. */
+function CleanAir() {
+  const n = (x: number | null) => (x === null ? 'set by the plant' : x === 0 ? 'no growth' : x.toLocaleString('en-IN'));
+  const p = (x: number | null) => (x === null ? 'set by the plant' : x.toLocaleString('en-IN'));
+  return (
+    <details className="card">
+      <summary><b>Clean-air limits</b> <span className="muted small">fixed in the product, confirmed once by QA: {CLEAN_AIR.source}</span></summary>
+      <div className="table-wrap">
+        <table className="plain-table">
+          <thead><tr><th>Grade</th>{Object.values(VIABLE_WORDS).map((w) => <th key={w}>{w}</th>)}<th>Particles ≥ 0.5 µm/m³ (at rest · in operation)</th><th>Particles ≥ 5 µm/m³ (at rest · in operation)</th></tr></thead>
+          <tbody>{GRADES.map((g) => (
+            <tr key={g}><td><b>{g}</b></td>{(Object.keys(VIABLE_WORDS) as ViableSample[]).map((k) => <td key={k}>{n(CLEAN_AIR.viable[g][k])}</td>)}
+              <td>{p(CLEAN_AIR.particles[g].atRest['0.5'])} · {p(CLEAN_AIR.particles[g].inOperation['0.5'])}</td>
+              <td>{p(CLEAN_AIR.particles[g].atRest['5'])} · {p(CLEAN_AIR.particles[g].inOperation['5'])}</td></tr>
+          ))}</tbody>
+        </table>
+      </div>
+    </details>
   );
 }
