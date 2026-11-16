@@ -49,7 +49,7 @@ const LOT_WORDS: Record<string, string> = { quarantine: 'in quarantine', quarant
 const plantDay = (now: Date, tz: string) => now.toLocaleDateString('en-CA', { timeZone: tz });
 
 /** TI-12: a lot MMS has, of this step's material, released and in date; its certificate numbers come with it (TI-13). */
-export async function pullLot(app: FastifyInstance, doc: MasterDoc, st: Step, block: Block, lot: string, was: Record<string, Value>, now: Date, tz: string): Promise<Pulled> {
+export async function pullLot(app: FastifyInstance, doc: MasterDoc, st: Step, block: Block, lot: string, was: Record<string, Value>, now: Date, tz: string, field = 'lot'): Promise<Pulled> {
   const r = await app.links.mms.lot(lot);
   if (r.state !== 'ok') return hand('mms', r.state);
   const l = r.value;
@@ -63,6 +63,10 @@ export async function pullLot(app: FastifyInstance, doc: MasterDoc, st: Step, bl
   if (l.retestDate && l.retestDate < today) problems.push(`Lot ${lot} is past its retest date ${plantDate(l.retestDate)}.`);
   const source: Source = { from: 'mms', asOf: l.dataAsOf, shown: `MMS lot ${lot}: ${l.status}, expiry ${l.expiryDate ?? '—'}, retest ${l.retestDate ?? '—'}, QC report ${l.qcReportRef ?? '—'}` };
   const out: Pulled = { source, values: {}, sources: {}, problems };
+  // Engine change 6: the lot's use-by date (expiry or retest, whichever is first) is kept with the step, as the date
+  // typed from the label is without the link; signing the step done after it needs a deviation note.
+  const useBy = [l.expiryDate, l.retestDate].filter((d): d is string => !!d).sort()[0];
+  if (useBy) { out.values[`${field}.expiry`] = useBy.slice(0, 10); out.sources[`${field}.expiry`] = source; }
   for (const [name, test] of Object.entries(CERTIFICATE)) {
     const f = block.fields.find((x) => x.name === name);
     if (!f) continue;

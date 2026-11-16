@@ -262,7 +262,8 @@ describe('TI-12 MMS: only released, in-date lots of the material; certificate va
     expect(await problems(record(b.id, '0.1.0.1', { assay: '99.0' }))).toEqual(['Assay (certificate): record the lot first']);
     expect((await record(b.id, '0.1.0.1', { lot: 'API-OK', balance: 'eq-bal', gross: '11.000', tare: '0.850' })).statusCode).toBe(200);
     const s = await stepOf(b.id, '0.1.0.1');
-    expect(s.values).toMatchObject({ lot: 'API-OK', assay: { value: '99.1', unit: '%' }, lod: { value: '0.4', unit: '%' } });
+    // Engine change 6: the lot's use-by date (expiry or retest, whichever is first) is kept with the step.
+    expect(s.values).toMatchObject({ lot: 'API-OK', 'lot.expiry': '2099-01-31', assay: { value: '99.1', unit: '%' }, lod: { value: '0.4', unit: '%' } });
     expect(s.source.lot).toMatchObject({ from: 'mms', shown: 'MMS lot API-OK: approved, expiry 2099-01-31, retest —, QC report QC-26-101' });
     expect(s.source.assay).toMatchObject({ from: 'mms', shown: 'assay 99.1 % (dried), report QC-26-101' });
     expect(s.results.target).toMatchObject({ ok: true });
