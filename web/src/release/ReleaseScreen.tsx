@@ -11,6 +11,7 @@ import { deviationStatusWords } from '../../../shared/engine/release.js';
 import { BatchHeader } from '../floor/BatchScreen.js';
 import { ReasonDialog } from '../floor/ReasonDialog.js';
 import { terminatedText } from './Terminate.js';
+import { SterileSummary } from './SterileSummary.js';
 import { product } from '../product.js';
 import '../floor/floor.css';
 import './release.css';
@@ -109,6 +110,7 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
       </div>
       {r.deviationsLink === 'down' && <p className="notice warn">The Deviations link is down: the deviation statuses shown are TrueBatch's own (closed by hand).</p>}
 
+      <SterileSummary d={d} blocks={blocks} />
       <section className="dash-panel" aria-label="Review of the record and its audit trail">
         <div className="panel-head"><h2>Review of the record and its audit trail</h2>
           <span className="muted">every change, departure and finding of the batch; QA's release signature covers this review</span></div>
