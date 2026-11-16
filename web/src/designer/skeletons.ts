@@ -20,26 +20,27 @@ const yieldStep: StepPlan = { block: 'stage-yield', key: 'yield', settings: () =
 
 // The pieces most types share. Each stage after compounding ends with its reconciliation of units (its yield step).
 const filtrationSteps = [s('filter-test', 'filter-pre', 'Filter integrity test before use'), s('filtration', 'filter'), s('filter-test', 'filter-post', 'Filter integrity test after use')];
-const compounding = (end: StepPlan[] = []): StagePlan => ({ key: 'compounding', name: 'Compounding', role: 'Compounding operator', rooms: ['Compounding'],
+const compounding = (end: StepPlan[] = []): StagePlan => ({ key: 'compounding', name: 'Compounding', role: 'Compounding operator', rooms: ['Sterile compounding', 'Sterile filtration'],
   produces: ['bulk solution', 24],
   steps: [s('weigh', 'weigh-api'), s('vehicle'), s('charge', 'charge-api'), s('dissolve'), s('ph-adjust'), s('make-up'), s('bulk-test'), ...end, yieldStep] });
-const components: StagePlan = { key: 'components', name: 'Containers and closures', kind: 'preparation', role: 'Washing operator', rooms: ['Washing'],
+const components: StagePlan = { key: 'components', name: 'Containers and closures', kind: 'preparation', role: 'Washing operator', rooms: ['Vial washing', 'Depyrogenation', 'Component preparation', 'Sterilisation'],
   produces: ['clean, depyrogenated containers and sterile closures', 72],
   steps: [s('component-wash', 'wash-vials', 'Wash the vials'), s('depyrogenate'), s('sterilise', 'stoppers', 'Sterilise the stoppers')] };
 const asepticFill = (between: StepPlan[], o: { fill?: StepPlan[]; close?: StepPlan[]; uses?: string[] } = {}): StagePlan => ({
-  key: 'filling', name: 'Aseptic filling', role: 'Aseptic operator', rooms: ['Aseptic filling'], aseptic: true, uses: o.uses ?? ['compounding', 'components'],
+  key: 'filling', name: 'Aseptic filling', role: 'Aseptic operator', rooms: ['Aseptic filling', 'Lyophilisation', 'Capping'], aseptic: true, uses: o.uses ?? ['compounding', 'components'],
   // The interventions log and the clean-air checks open with the set-up and run beside the filling (what follows a fill
   // waits for the filling to finish).
   steps: [s('aseptic-ready'), s('interventions'), s('em-filling'), s('transfer-in'), ...(o.fill ?? [s('fill')]), ...between,
-    s('qa-sample', 'sterility', 'Sterility and endotoxin samples'), ...(o.close ?? [s('seal-check')]), s('unit-reconcile')] });
+    // The samples are a QA hold: taken once the units are closed, so capping never waits for QA.
+    ...(o.close ?? [s('seal-check')]), s('qa-sample', 'sterility', 'Sterility and endotoxin samples'), s('unit-reconcile')] });
 const resultsLater = (after: string): StagePlan => ({ key: 'results', name: 'Results later (EM plates, bioburden)', kind: 'preparation', role: 'QC microbiologist', rooms: [],
   startsAfter: after, steps: [s('incubated-results', 'plates', 'EM plates read')] });
 const terminal = (fillName: string, fill: StepPlan[], uses: string[]): StagePlan[] => [
-  { key: 'filling', name: fillName, role: 'Filling operator', rooms: ['Filling'], uses, steps: [s('filtration-clarifying'), ...fill, s('unit-reconcile')] },
+  { key: 'filling', name: fillName, role: 'Filling operator', rooms: ['Aseptic filling', 'Capping'], uses, steps: [s('filtration-clarifying'), ...fill, s('unit-reconcile')] },
   { key: 'sterilisation', name: 'Terminal sterilisation', role: 'Sterilisation operator', rooms: ['Sterilisation'],
     steps: [s('terminal-sterilise'), s('qa-sample', 'sterility', 'Sterility and endotoxin samples (each load)'), s('unit-reconcile')] },
 ];
-const inspection = (extra: StepPlan[] = []): StagePlan => ({ key: 'inspection', name: 'Inspection', role: 'Visual inspector', rooms: ['Inspection'],
+const inspection = (extra: StepPlan[] = []): StagePlan => ({ key: 'inspection', name: 'Inspection', role: 'Visual inspector', rooms: ['Visual inspection'],
   steps: [...extra, s('visual-inspect'), s('aql-sample'), s('unit-reconcile')] });
 
 const SKELETONS: { id: string; route?: Route; name: string; text: string; stages: StagePlan[] }[] = [
@@ -47,7 +48,7 @@ const SKELETONS: { id: string; route?: Route; name: string; text: string; stages
     // Any route: a bulk filled at another site or under another master.
     id: 'bulk-only', name: 'Bulk solution only (compounding, no filling)',
     text: 'Weighing, charging and mixing the bulk solution, an in-process check and the bulk yield; for a bulk filled elsewhere.',
-    stages: [{ key: 'compounding', name: 'Compounding', role: 'Compounding operator', rooms: ['Compounding'], produces: ['bulk solution', 24],
+    stages: [{ key: 'compounding', name: 'Compounding', role: 'Compounding operator', rooms: ['Sterile compounding'], produces: ['bulk solution', 24],
       steps: [s('weigh', 'weigh-api'), s('charge', 'charge-api'), s('mix'), s('check', 'ph', 'pH of the bulk solution'), yieldStep] }],
   },
   {
@@ -80,7 +81,7 @@ const SKELETONS: { id: string; route?: Route; name: string; text: string; stages
     id: 'dispersion-aseptic', route: 'aseptic', name: 'Emulsion, liposomes or nanoparticles, aseptic',
     text: 'The oil (or lipid) and water phases, homogenised to size, sterile filtered and aseptically filled; samples at start, middle and end.',
     stages: [
-      { key: 'compounding', name: 'Compounding', role: 'Compounding operator', rooms: ['Compounding'], produces: ['bulk dispersion', 24],
+      { key: 'compounding', name: 'Compounding', role: 'Compounding operator', rooms: ['Sterile compounding', 'Sterile filtration'], produces: ['bulk dispersion', 24],
         steps: [s('weigh', 'weigh-api'), s('phase-prep', 'oil', 'Prepare the oil (lipid) phase'), s('phase-prep', 'water', 'Prepare the water phase'), s('homogenise'),
           s('size-check'), s('make-up'), s('bulk-test'), ...filtrationSteps, yieldStep] },
       components,
@@ -93,9 +94,9 @@ const SKELETONS: { id: string; route?: Route; name: string; text: string; stages
 export const skeletonList = (route?: Route) => SKELETONS.filter((k) => !route || !k.route || k.route === route || (route === 'both' && k.route === 'aseptic'))
   .map(({ id, name, text }) => ({ id, name, text }));
 
-/** The dispensing rooms a new master starts with (TI-11): the active rooms whose area is exactly "Dispensing". */
+/** The dispensing rooms a new master starts with (TI-11): the active rooms whose area is exactly "Dispensing" or "Sterile dispensing". */
 export const defaultDispensingRooms = (rooms: readonly { code: string; area: string | null; active: boolean }[]) =>
-  rooms.filter((r) => r.active && r.area === 'Dispensing').map((r) => r.code);
+  rooms.filter((r) => r.active && (r.area === 'Dispensing' || r.area === 'Sterile dispensing')).map((r) => r.code);
 
 /** The stages of a starting master for this header. */
 export function skeletonStages(id: string, h: Header): Stage[] {
