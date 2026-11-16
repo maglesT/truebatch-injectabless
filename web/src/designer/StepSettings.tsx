@@ -20,7 +20,7 @@ export function StepSettings({ doc, si, ti, onChange }: { doc: MasterDoc; si: nu
   const block = findBlock(step.block);
   if (!block) return <p className="error">No block {step.block.id} version {step.block.version} in the library.</p>;
   // An optional step field: set, or left out when undefined.
-  const opt = <K extends 'everyMinutesLater' | 'onlyIf' | 'orderAfter' | 'applyPerCharge'>(k: K, v: Step[K] | undefined) => {
+  const opt = <K extends 'everyMinutesLater' | 'onlyIf' | 'orderAfter'>(k: K, v: Step[K] | undefined) => {
     const next: Step = { ...step, [k]: v };
     if (v === undefined) delete next[k];
     onChange(next);
@@ -109,10 +109,6 @@ export function StepSettings({ doc, si, ti, onChange }: { doc: MasterDoc; si: nu
             onChange={(v) => opt('onlyIf', v ? { header: 'batchVolume', limit: { high: v, unit: 'L' } } : undefined)} /></label>
           <label>Order-critical: must come after<select value={step.orderAfter ?? ''} onChange={(e) => opt('orderAfter', e.target.value || undefined)}>
             <option value="">(not order-critical)</option>{doc.stages[si]!.steps.filter((t) => t.key !== step.key).map((t) => <option key={t.key} value={t.key}>{t.key}</option>)}</select></label>
-          {/^(coat|spray-coat)$/.test(block.id) && <>
-            <label>Liquid to apply<input aria-label="Liquid to apply" placeholder="e.g. 971 g" value={step.applyPerCharge?.liquid ?? ''} onChange={(e) => opt('applyPerCharge', e.target.value ? { liquid: e.target.value, charge: step.applyPerCharge?.charge ?? '' } : undefined)} /></label>
-            {step.applyPerCharge && <label>per charge of<input aria-label="per charge of" placeholder="e.g. 150 g" value={step.applyPerCharge.charge} onChange={(e) => opt('applyPerCharge', { ...step.applyPerCharge!, charge: e.target.value })} /></label>}
-          </>}
         </div>
       </details>
     </div>

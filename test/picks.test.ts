@@ -52,7 +52,7 @@ describe('machine pickers on the demo master-data types', () => {
     const stage = { ...stages[0]!, roomTypes: ['Granulation', 'Coating'], machineTypes: ['Granulator', 'Coater'] };
     const offered = (block: string, s = stage, dispensing = ['RM-101']) => BALS.filter((b) => !machineRefusal(s, field(block, 'balance'), b, ROOMS, dispensing)).map((b) => b.code);
     expect(offered('weigh')).toEqual(['IN-BAL-03', 'IN-BAL-04']);
-    expect(offered('lubricate', { ...stage, roomTypes: ['Compression'] })).toEqual(['IN-BAL-03', 'IN-BAL-04', 'IN-BAL-05']);
+    expect(offered('weigh', { ...stage, roomTypes: ['Compression'] })).toEqual(['IN-BAL-03', 'IN-BAL-04', 'IN-BAL-05']);
     expect(offered('weigh', stage, ['RM-301'])).toEqual(['INL-BAL-01']);
     expect(offered('weigh', { ...stage, roomTypes: [] })).toEqual(['IN-BAL-03', 'IN-BAL-04', 'IN-BAL-05', 'INL-BAL-01']);
     expect(machineRefusal(stage, field('weigh', 'balance'), BALS[5]!, ROOMS, ['RM-101'])).toBe('INL-BAL-01 stands in RM-301, neither in a dispensing room of the master nor in a room this stage allows (Granulation, Coating)');
@@ -65,9 +65,9 @@ describe('machine pickers on the demo master-data types', () => {
 
   it('TI-11 a machine is offered only standing in a room the stage allows; one with no type is named in the note', () => {
     const stage = { ...stages[0]!, roomTypes: ['Granulation'] };
-    const sifter = field('sift', 'machine');
-    const items = [{ code: 'EQ-S-01', type: 'Sifter', room: 'RM-103' }, { code: 'EQ-X', type: 'Sifter', room: 'RM-107' },
-      { code: 'SF-01', type: 'Sifter', room: null }, { code: 'SF-02', type: null, room: 'RM-103' }];
+    const sifter = field('dissolve', 'machine');
+    const items = [{ code: 'EQ-S-01', type: 'Compounding vessel', room: 'RM-103' }, { code: 'EQ-X', type: 'Compounding vessel', room: 'RM-107' },
+      { code: 'SF-01', type: 'Compounding vessel', room: null }, { code: 'SF-02', type: null, room: 'RM-103' }];
     expect(items.map((m) => machineRefusal(stage, sifter, m, ROOMS))).toEqual([null, 'EQ-X stands in RM-107, not in a room this stage allows (Granulation)',
       'SF-01 stands in no room in master data, so it is not in a room this stage allows (Granulation)', expect.stringContaining('SF-02 has no type in master data')]);
     expect(untypedNote(sifter, items)).toBe('Not offered, because master data gives no type: SF-02. Engineering sets the type (and the room) in master data.');

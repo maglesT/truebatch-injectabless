@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { openSteps, timers } from '../shared/engine/index.js';
 import { blocking, masterChecks } from '../shared/master/checks.js';
 import type { MasterDoc } from '../shared/master/schema.js';
 import { at, ev, tablet, unplaced } from './engine-fixture.js';
+
+// The shared test master is built from test-only blocks (test/test-blocks.ts).
+vi.mock('../shared/blocks/index.js', async (original) => (await import('./test-blocks.js')).withTestBlocks(original as never));
 // The problems, without the rooms a stage must name (TI-11): the fixtures name none.
 const checks = (d: Parameters<typeof masterChecks>[0]) => unplaced(masterChecks(d));
 
@@ -58,20 +61,6 @@ describe('calculation checks ⛔ from the formulation test', () => {
   ])('calculation check ⛔ %s', (_what, bad, fixed, path, message) => {
     expect(only('error', path)(bad)).toEqual([expect.stringMatching(message)]);
     expect(only('error', path)(fixed)).toEqual([]);
-  });
-
-  it('calculation check ⛔ F0339 a liquid made with an overage needs the amount to apply per charge on the spray step', () => {
-    const suspension = (apply?: { liquid: string; charge: string }): Change => (d) => {
-      d.formula[6]!.adjust = { overage: { percent: '20.0' } };
-      d.stages.splice(3, 0, { key: 'suspension', name: 'Coating suspension', kind: 'preparation', roomTypes: [], machineTypes: [], role: '', uses: [], produces: { name: 'coating suspension', holdHours: 24 },
-        steps: [{ key: 'make', block: { id: 'coating-suspension', version: 1 }, checker: true, waitForCheck: false, critical: false, flow: { kind: 'none' },
-          settings: { powder: { formula: 'coat', adjusted: true }, targetSolids: '15 %', tolerance: '1.0', mixTimeLimit: { low: '30', high: '60', unit: 'min' } } }] });
-      d.stages[4]!.uses.push('suspension');
-      if (apply) d.stages[4]!.steps[0]!.applyPerCharge = apply;
-    };
-    expect(only('error', 'stages[4].steps[0]')(suspension())).toEqual([expect.stringMatching(/made with an overage: state the amount to apply per charge.*F0339/)]);
-    expect(lines(suspension({ liquid: '971 g', charge: '150 g' })).filter((p) => p.startsWith('error'))).toEqual([]);
-    expect(only('error', 'stages[4].steps[0].applyPerCharge.charge')(suspension({ liquid: '971 g', charge: '150' }))).toEqual([expect.stringMatching(/not a mass with a unit/)]);
   });
 
   it('calculation check ⛔ F0393 a label claim in mEq with the charge passes, and the formula form is the ion', () => {

@@ -1,7 +1,8 @@
 // The sterile blocks of the injectables library (v1, sections 4.2-4.8) run on the engine like any block: each is a
 // valid description, and the main ones work out their results from realistic values.
 import { describe, expect, it } from 'vitest';
-import { BLOCKS, findBlock, OFFERED } from '../shared/blocks/index.js';
+import { BLOCKS, findBlock } from '../shared/blocks/index.js';
+import { LIBRARY } from '../web/src/designer/model.js';
 import { blockProblems } from '../shared/blocks/format.js';
 import { doneProblems, evaluate, openSteps, parseKey, type StepEvent } from '../shared/engine/index.js';
 import { masterSchema, type MasterDoc } from '../shared/master/schema.js';
@@ -21,7 +22,7 @@ const g = (value: string) => ({ value, unit: 'g' });
 describe('the sterile blocks of the injectables library', () => {
   it('library v1: every block is a valid description, and the designer offers the sterile ones', () => {
     for (const b of BLOCKS) expect([b.id, blockProblems(b)]).toEqual([b.id, []]);
-    for (const id of ['fill', 'filtration', 'filtration-clarifying', 'terminal-sterilise', 'heat-treatment', 'interventions', 'incubated-results', 'lyo-cycle', 'column', 'chamber-seal']) expect(OFFERED).toContain(id);
+    for (const id of ['fill', 'filtration', 'filtration-clarifying', 'terminal-sterilise', 'heat-treatment', 'interventions', 'incubated-results', 'lyo-cycle', 'column', 'chamber-seal']) expect(LIBRARY.map((b) => b.id)).toContain(id);
   });
 
   it('TI-14 fill: the target fill weight comes from the header (10.5 mL × 1.012 g/mL = 10.626 g); one weight per needle (N4)', () => {

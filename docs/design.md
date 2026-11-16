@@ -55,7 +55,7 @@ adding anything, look how TrueBatch Tablets does it and copy that.
   holds the stage until it is signed. Once the stage is closed no new entry starts.
 - A later step reads a field of an event log as the list of every signed entry's values (zero in the field's unit for
   none), so a template totals it (T2: the units removed, the time out of the fridge).
-- The blocks that use it (intervention, stoppage, time out of refrigeration: TI-28) come with the final library.
+- The blocks that use it: interventions and stoppages (TI-28), time out of refrigeration.
 
 ## Engine change 3: results that come days later (built 16 November 2026)
 - EM plates, biological indicators and bioburden are read 2-7 days after sampling and belong to the batch review. A
@@ -211,8 +211,9 @@ answering) or **ok**.
 ## Engine
 - About 40 calculation and check templates, each a small pure function. No formula language.
 - Step blocks are **data**: a description of their fields, templates, signatures and limits. One engine runs all blocks.
-  The library (`shared/blocks/`) still holds the TrueBatch Tablets steps of the copy; the sterile blocks come from the
-  final injectables library (phase E). A text setting may have a fixed list the author picks from.
+  The library (`shared/blocks/`) holds the 11 blocks the injectables library reuses from TrueBatch Tablets and the
+  sterile blocks of library v1; the tablet steps are not in the product. A text setting may have a fixed list the
+  author picks from.
 - A fixed, short list of units.
 - A master version is stored as one JSON document.
 - The designer is forms and ordered lists.

@@ -55,8 +55,6 @@ export const stepSchema = z.object({
   // F4 by a rule: the step is done only when a header value is within the limit (F0040: the bag premix only for a
   // batch of at most 50 kg); otherwise it is not applicable, with no operator choice.
   onlyIf: z.object({ header: z.enum(HEADER_VALUES), limit: limitSchema }).strict().optional(),
-  // A spray of a liquid made in excess: the amount of liquid to apply per amount charged (F0339: 971 g per 150 g).
-  applyPerCharge: z.object({ liquid: text(40), charge: text(40) }).strict().optional(),
   // Order-critical: this step must come after the step with this key in the same stage (F0318: the drug after the PVP).
   orderAfter: keySchema.optional(),
   flow: flowSchema.default({ kind: 'none' }),

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { BLOCKS, findBlock } from '../shared/blocks/index.js';
 import { blocking, masterChecks } from '../shared/master/checks.js';
 import { masterSchema } from '../shared/master/schema.js';
@@ -8,6 +8,9 @@ import { answerDoc, earlierRefs, neededKind, scaleDoc, stepFrom } from '../web/s
 import { sentence, sentenceText } from '../web/src/designer/sentences.js';
 import { defaultDispensingRooms, SKELETON_LIST, skeletonStages } from '../web/src/designer/skeletons.js';
 import { tablet, unplaced } from './engine-fixture.js';
+
+// The shared test master is built from test-only blocks (test/test-blocks.ts).
+vi.mock('../shared/blocks/index.js', async (original) => (await import('./test-blocks.js')).withTestBlocks(original as never));
 
 // The designer's pure parts: sentences instead of formulas, inputs offered by kind, worked examples and the
 // calculation preview through the engine, skeletons, copying to a new batch size, and the changes view.
@@ -33,13 +36,12 @@ describe('master designer', () => {
       const text = [stepText(d, t, 0), ...b.calcs.map((c) => sentenceText(d, b, t.settings, sentence(b, c)))].join(' ');
       expect(text, `${b.id} v${b.version}`).not.toMatch(/\[object Object\]|undefined|NaN/);
     }
-    const punch = block('punch-die-check');
-    expect(sentenceText(d, punch, {}, sentence(punch, punch.calcs[1]!))).toBe('The punches or dies damaged must be at most 0 units.');
-    // Any other shape written into a block reads in words too.
-    const said = (limit: unknown) => sentenceText(d, punch, {}, sentence(punch, { name: 'x', label: 'x', template: 'C1', args: { value: '$damaged', limit } }));
-    expect(said({ max: 0 })).toBe('The punches or dies damaged must be at most 0.');
-    expect(said({ low: '2', high: '5', unit: 'kg' })).toBe('The punches or dies damaged must be within 2 to 5 kg.');
-    expect(said([{ high: '$toolingCheck', highStrict: true }, { min: 1 }])).toBe('The punches or dies damaged must be less than the punches and dies and at least 1.');
+    // A limit written into a block, in any shape, reads in words too.
+    const rec = block('unit-reconcile');
+    const said = (limit: unknown) => sentenceText(d, rec, {}, sentence(rec, { name: 'x', label: 'x', template: 'C1', args: { value: '$samples', limit } }));
+    expect(said({ max: 0 })).toBe('The samples must be at most 0.');
+    expect(said({ high: '0', unit: 'units' })).toBe('The samples must be at most 0 units.');
+    expect(said({ low: '2', high: '5', unit: 'kg' })).toBe('The samples must be within 2 to 5 kg.');
   });
 
   it('a quantity or limit is offered only from values of a compatible kind', () => {
@@ -92,7 +94,7 @@ describe('master designer', () => {
 
   it('a weigh step added from the library starts with the usual tolerance', () => {
     expect(stepFrom(block('weigh'), []).settings).toEqual({ tolerance: '0.5' });
-    expect(stepFrom(block('sift'), []).settings).toEqual({});
+    expect(stepFrom(block('mix'), []).settings).toEqual({});
   });
 
   it('copy to a new batch size scales typed batch quantities, not limits or quantities per mL', () => {
