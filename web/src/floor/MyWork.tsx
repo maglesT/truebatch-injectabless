@@ -88,6 +88,7 @@ function Badge({ x, now }: { x: WorkBadge; now: number }) {
   switch (x.kind) {
     case 'check': return <span className="chip chip-warn">Waiting for your check</span>;
     case 'resign': return <span className="chip chip-warn">Needs re-sign (input changed)</span>;
+    case 'hold': return <span className="chip chip-warn">QA hold: waiting for your release</span>;
     case 'approve': return <span className="chip chip-info">Ready for production approval</span>;
     case 'due': return <span className={`chip ${left < 5 * 60_000 ? 'chip-warn' : 'chip-info'}`}>{left > 0 ? `${x.title} due in ${timeLeft(left)}` : `${x.title} due now`}</span>;
     case 'late': return <span className="chip chip-bad">{x.timer === 'hold' ? 'Hold time exceeded' : `${x.title} overdue`}</span>;
