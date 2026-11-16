@@ -231,8 +231,8 @@ export function noFurtherChange(previous: Q | ResultValue, current: Q | ResultVa
 
 // ---------------------------------------------------------------- C2 Count of readings
 export interface C2Input {
-  /** The readings recorded (only their number matters), or the count itself as text. */
-  readonly readings: readonly unknown[] | string;
+  /** The readings recorded (only their number matters), or the count itself: as text, or as a counted value (e.g. "4 units"). */
+  readonly readings: readonly unknown[] | string | { readonly value: string; readonly unit?: string };
   readonly required: string;
   /** exactly (default) or at least. */
   readonly mode?: 'exactly' | 'at least';
@@ -241,7 +241,8 @@ export interface C2Input {
 /** C2 Count of readings: the number of readings is what the step asks (e.g. 20 tablets). */
 export function c2Count(i: C2Input): Outcome {
   return run(() => {
-    const n = typeof i.readings === 'string' ? parse(i.readings, 'The count').v : new Dec(i.readings.length);
+    const n = typeof i.readings === 'string' ? parse(i.readings, 'The count').v
+      : Array.isArray(i.readings) ? new Dec(i.readings.length) : parse((i.readings as { value: string }).value, 'The count').v;
     const req = parse(i.required, 'The required count').v;
     if (!n.isInteger() || !req.isInteger() || req.isNegative()) refuse('Counts must be whole numbers');
     const mode = i.mode ?? 'exactly';

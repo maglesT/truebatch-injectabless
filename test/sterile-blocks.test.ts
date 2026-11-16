@@ -95,4 +95,13 @@ describe('an optional reading', () => {
     // Nothing recorded yet: the master check finds no calculation to refuse.
     expect(Object.values(run(doc, {})).filter((r) => !r.ok)).toEqual([]);
   });
+
+  it('against an optional limit the master did not set checks nothing: the reading is kept, its check left out', () => {
+    const doc = one('vehicle', {});
+    const v = findBlock({ id: 'vehicle', version: 1 })!;
+    const values = Object.fromEntries(v.fields.filter((f) => f.kind === 'number').map((f) => [f.name, { value: '25', unit: f.unit ?? '' }]));
+    const r = run(doc, values);
+    expect(Object.values(r).filter((x) => !x.ok)).toEqual([]);
+    expect(Object.keys(r).filter((k) => /Check$/.test(k))).toEqual([]);
+  });
 });
