@@ -23,7 +23,7 @@ async function issueBatch(page: Page): Promise<number> {
       density: { header: 'density' } }, ...periodic },
     { block: { id: 'qa-sample', version: 1 }, settings: { sampleLimit: { low: '20', high: '40', unit: 'units' } } },
     { block: { id: 'seal-check', version: 1 }, settings: { defectLimit: { high: '0', unit: 'units' }, forceUnit: 'N' }, ...periodic },
-    { block: { id: 'terminal-sterilise', version: 1 }, settings: { medium: 'moist heat', lethalityLimit: { low: '15', unit: 'min' } } },
+    { block: { id: 'terminal-sterilise', version: 1 }, settings: { medium: 'moist heat', lethalityLimit: { low: '15', unit: 'F-min' } } },
     { block: { id: 'visual-inspect', version: 1 }, settings: {} },
     { block: { id: 'unit-reconcile', version: 1 }, settings: { theoretical: { header: 'units' }, yieldLimit: pct('95.0', '100.5'), accountabilityLimit: pct('99.0', '100.5') }, checker: true },
   ] }]);

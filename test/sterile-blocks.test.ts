@@ -6,6 +6,7 @@ import { LIBRARY } from '../web/src/designer/model.js';
 import { blockProblems } from '../shared/blocks/format.js';
 import { doneProblems, evaluate, openSteps, parseKey, type StepEvent } from '../shared/engine/index.js';
 import { masterSchema, type MasterDoc } from '../shared/master/schema.js';
+import { masterChecks } from '../shared/master/checks.js';
 import { stepFrom } from '../web/src/designer/model.js';
 import { at, ev } from './engine-fixture.js';
 
@@ -103,5 +104,13 @@ describe('an optional reading', () => {
     const r = run(doc, values);
     expect(Object.values(r).filter((x) => !x.ok)).toEqual([]);
     expect(Object.keys(r).filter((k) => /Check$/.test(k))).toEqual([]);
+  });
+});
+
+describe('a limit of the wrong kind', () => {
+  it('is refused by the master check: a minimum lethality written in minutes, not F-min (found in the first batch run)', () => {
+    const wrong = masterChecks(one('terminal-sterilise', { medium: 'moist heat', lethalityLimit: { low: '15', unit: 'min' } })).filter((p) => /lethality limit is needed/.test(p.message));
+    expect(wrong).toEqual([expect.objectContaining({ level: 'error', path: 'stages[0].steps[0].settings.lethalityLimit' })]);
+    expect(masterChecks(one('terminal-sterilise', { medium: 'moist heat', lethalityLimit: { low: '15', unit: 'F-min' } })).filter((p) => /limit is needed/.test(p.message))).toEqual([]);
   });
 });

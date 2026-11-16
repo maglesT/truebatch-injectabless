@@ -14,7 +14,7 @@ const SYMBOLS = ['', 'units', 'tablets', 'µg', 'mg', 'g', 'kg', 'µL', 'mL', 'L
   '%RH', 'g/kg', 'IU', 'CFU', 'U', 'IU/g', 'IU/mg', 'CFU/g', 'U/mg'];
 export const UNITS = SYMBOLS.filter((s) => findUnit(s)).map((s) => ({ symbol: s, kind: findUnit(s)!.kind }));
 export const unitsOf = (kind?: Kind) => UNITS.filter((u) => !kind || u.kind === kind);
-export const kindOfUnit = (symbol: string | undefined): Kind | undefined => (symbol === undefined ? undefined : findUnit(symbol)?.kind);
+export { kindOfUnit } from '../../../shared/master/kinds.js';
 export const unitLabel = (s: string) => (s === '' ? 'no unit' : s);
 
 /** A new key, unique among the given ones: "weigh", "weigh-2" … */
@@ -33,47 +33,8 @@ export const move = <T,>(list: T[], i: number, by: -1 | 1): T[] => {
   return out;
 };
 
-const PERCENT_RESULT = ['T3', 'T4', 'T5'];
-const CHECKS = /^(C\d|F2)$/;
-
-/** The kind of a field, setting or calculation of a block in a step (undefined when it cannot be told). */
-export function kindOf(block: Block, name: string, settings: Step['settings'] = {}, seen = new Set<string>()): Kind | undefined {
-  if (seen.has(name)) return undefined;
-  seen.add(name);
-  const f = block.fields.find((x) => x.name === name);
-  if (f) {
-    if (f.kind !== 'number') return undefined;
-    const u = f.unit?.startsWith('$') ? settings[f.unit.slice(1)] : f.unit;
-    return typeof u === 'string' ? kindOfUnit(u) : undefined;
-  }
-  const c = block.calcs.find((x) => x.name === name);
-  if (c) {
-    if (CHECKS.test(c.template)) return undefined;
-    if (PERCENT_RESULT.includes(c.template)) return 'fraction';
-    for (const r of refsIn(c.args)) { const k = kindOf(block, r, settings, seen); if (k) return k; }
-    return undefined;
-  }
-  const s = block.settings.find((x) => x.name === name);
-  return s ? neededKind(block, name, settings, seen) : undefined;
-}
-
-/** The kind a setting must have: a quantity is of the kind of the values it is used with; a limit of what it limits. */
-export function neededKind(block: Block, setting: string, settings: Step['settings'] = {}, seen = new Set<string>([setting])): Kind | undefined {
-  const s = block.settings.find((x) => x.name === setting);
-  for (const c of block.calcs) {
-    const refs = refsIn(c.args);
-    if (!refs.includes(setting)) continue;
-    if (s?.kind === 'limit' && PERCENT_RESULT.includes(c.template)) return 'fraction';
-    if (s?.kind === 'limit' && c.template === 'F2') return undefined;
-    if (s?.kind === 'limit' && c.template === 'T13') return 'time';
-    for (const r of refs) {
-      if (r === setting || block.settings.find((x) => x.name === r)?.kind === 'limit') continue;
-      const k = kindOf(block, r, settings, new Set(seen));
-      if (k) return k;
-    }
-  }
-  return undefined;
-}
+export { kindOf, neededKind, CHECKS } from '../../../shared/master/kinds.js';
+import { kindOf, kindOfUnit, CHECKS } from '../../../shared/master/kinds.js';
 
 export interface RefOption { ref: string; label: string; kind: Kind | undefined }
 /** Earlier steps' recorded numbers and worked-out values this step may use (same rules as the master check). */
