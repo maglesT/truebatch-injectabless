@@ -78,4 +78,17 @@ test('TI-28 the filling screen: fill checks, clean-air checks and Add interventi
   await expect(op.locator('.step-title .chip').first()).toHaveText('In progress');
   if (process.env.SHOTS) await op.screenshot({ path: `${process.env.SHOTS}/filling-screen.png`, fullPage: true });
   await op.close();
+
+  // QA's review lists the sterile record by kind, from the batch as recorded (plan 4d).
+  const qa = await browser.newPage();
+  await logIn(qa, 'qa1');
+  await qa.goto(`/#/release/${id}`);
+  const sterile = qa.getByRole('region', { name: 'Sterility assurance' });
+  for (const h of ['Sterilisation and depyrogenation cycles', 'Clean air and microbiology', 'Interventions and stoppages', 'Container closure', 'Inspection', 'Reconciliation of units']) {
+    await expect(sterile.getByRole('heading', { name: h })).toBeVisible();
+  }
+  // A kind the master does not have is not listed; nothing is recorded yet.
+  await expect(sterile.getByRole('heading', { name: 'Sterile filtration and filter tests' })).toHaveCount(0);
+  await expect(sterile.getByText('None recorded.').first()).toBeVisible();
+  await qa.close();
 });
