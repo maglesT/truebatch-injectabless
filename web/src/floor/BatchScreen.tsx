@@ -4,7 +4,7 @@ import { api, type Me } from '../api.js';
 import { SignDialog } from '../components/SignDialog.js';
 import { product } from '../product.js';
 import {
-  batchLink, changed, go, headline, pdfLink, plainClock, plainError, STATE_LABEL, STATUS_CHIP, stepLink, stepOf, stepTitle, timeLeft, tone, useBlocks, words, useServerNow,
+  batchLink, changed, go, headline, pdfLink, plainClock, plainError, stateLabel, STATUS_CHIP, stepLink, stepOf, stepTitle, timeLeft, tone, useBlocks, words, useServerNow,
   type BatchDetail, type Block, type StepRow,
 } from '../api-floor.js';
 import { StepScreen } from './StepScreen.js';
@@ -100,7 +100,7 @@ function Overview({ d, blocks, now, reload }: { d: BatchDetail; blocks: Block[];
       <Alerts d={d} blocks={blocks} now={now} />
       <section className="dash-panel" aria-label={`Stage ${stage.name}`}>
         <div className="panel-head"><h2>{stage.name}</h2><span className="muted">{stage.kind === 'sub-batch' ? `${stage.count} sub-batches · ` : ''}{steps.filter(finished).length} of {steps.length} steps finished</span></div>
-        {d.stages[shown]!.blocked && <p className="notice">{d.stages[shown]!.blocked}</p>}
+        {!d.batch.terminated && d.stages[shown]!.blocked && <p className="notice">{d.stages[shown]!.blocked}</p>}
         {!ended && <FillingPanel d={d} stage={shown} now={now} />}
         <div className="steplist">
           {steps.map((s) => {
@@ -110,8 +110,8 @@ function Overview({ d, blocks, now, reload }: { d: BatchDetail; blocks: Block[];
               <button key={s.id} className={`step-row st-${s.state}`} onClick={() => go(stepLink(d.batch.id, s.id))}>
                 <span className="n">{s.key.step + 1}</span>
                 <span>{title(s)}{(rounds || stage.kind === 'sub-batch') && <small>{stage.kind === 'sub-batch' ? `Sub-batch ${s.key.sub}` : ''}{rounds ? ` Round ${s.key.round}` : ''}</small>}
-                  {s.blocked && <small>{s.blocked}</small>}</span>
-                <span className={`chip ${s.needsResign ? 'chip-warn' : STATE_LABEL[s.state][1]}`}>{s.needsResign ? 'Sign again' : STATE_LABEL[s.state][0]}</span>
+                  {s.blocked && !d.batch.terminated && <small>{s.blocked}</small>}</span>
+                <span className={`chip ${s.needsResign ? 'chip-warn' : stateLabel(s.state, d.batch.terminated)[1]}`}>{s.needsResign ? 'Sign again' : stateLabel(s.state, d.batch.terminated)[0]}</span>
                 <span className="go" aria-hidden="true">›</span>
               </button>
             );
@@ -150,8 +150,8 @@ export function Alerts({ d, blocks, now, only }: { d: BatchDetail; blocks: Block
       text: t.label, sub: t.skipped ? `DEMO: wait skipped, ${plainClock(t.skipped.at)}` : late ? `Ran out ${plainClock(t.at)}: a deviation note is needed` : least ? `Can be ${t.kind === 'duration' ? 'ended' : 'finished'} from ${plainClock(t.at)}` : `Due ${plainClock(t.at)}`,
       step: t.kind === 'hold' ? undefined : prev, at: late || t.skipped || (least && left <= 0) ? undefined : left });
   }
-  // The step screen explains these itself.
-  for (const s of only ? [] : d.steps) {
+  // The step screen explains these itself; a terminated batch has no check or signature still to come.
+  for (const s of only || d.batch.terminated ? [] : d.steps) {
     if (s.state === 'done_awaiting_check') items.push({ tone: 'warn', tag: 'Waiting for check', text: title(s.key), sub: 'A second person checks this step on their own device', step: s.id });
     if (s.inputChanged.length) items.push({ tone: 'warn', tag: 'Input changed', text: title(s.key), sub: 'A value this step used was corrected: sign it again', step: s.id });
   }

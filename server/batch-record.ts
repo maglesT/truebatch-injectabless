@@ -4,7 +4,7 @@
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces.js';
 import { findBlock, type Block } from '../shared/blocks/index.js';
 import { materialLines, type Step } from '../shared/master/schema.js';
-import { batchText, batchView, deviations, fieldLabel, handFields, lateItems, lineQuantity, notYetText, terminatedText, openSteps, PROVIDER_NAME, deviationStatusWords, stepTitle, unitName, type DeviationStatus, type EventKind, type Source, type Stored, type StepView, type Value } from '../shared/engine/index.js';
+import { batchText, batchView, deviations, fieldLabel, handFields, lateItems, lineQuantity, notYetText, cutShort, terminatedText, TERMINATED_STATE, openSteps, PROVIDER_NAME, deviationStatusWords, stepTitle, unitName, type DeviationStatus, type EventKind, type Source, type Stored, type StepView, type Value } from '../shared/engine/index.js';
 import type { LoadedBatch } from './routes/batches.js';
 import { pageFrame, plant, runs } from './pdf.js';
 import { plantText } from '../shared/plant-time.js';
@@ -74,6 +74,8 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
   // A batch QA terminated: said at the top and in the decisions.
   const ended = batchEvents.find((b) => b.payload.terminated);
   const endedText = ended && terminatedText(ended, plant);
+  // What a terminated batch never did is not "yet" to come (owner 16 Nov 2026).
+  const notYet = (what: string) => (ended ? `not ${what} (terminated)` : `not ${what} yet`);
   const content: Content[] = [
     { text: runs(`${record} ${r.batch.batchNo}`), fontSize: 16, bold: true },
     { text: runs(`${h.productCode} · ${h.productName}`), fontSize: 11, margin: [0, 2, 0, 8] },
@@ -93,7 +95,7 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
     return [small(`${l.code} · ${l.name}`), small(l.role), small(l.mg ?? 'q.s.'), small(endOf(q)),
       small(weighed.map((v) => {
         const net = v.results.net;
-        if (!net) return `not weighed yet · ${stepName(v)}`;
+        if (!net) return `${notYet('weighed')} · ${stepName(v)}`;
         return `Lot ${valueText(v.values.lot)}: ${endOf(net)}${v.results.target?.ok ? ` (target ${endOf(v.results.target)})` : ''} · ${stepName(v)}`;
       }).join('\n') || '—')];
   })));
@@ -110,9 +112,9 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
       const st = stepOf(v);
       const block = findBlock(st.block);
       return [
-        { stack: [small(stepName(v), { bold: true }), small(STATE[v.state] ?? v.state, { color: v.state === 'not_applicable' ? '#666666' : undefined })] },
+        { stack: [small(stepName(v), { bold: true }), small((ended && TERMINATED_STATE[v.state]) || (STATE[v.state] ?? v.state), { color: v.state === 'not_applicable' ? '#666666' : undefined })] },
         { stack: block ? valueLines(block, v, who, unitOf(v)) : [] },
-        { stack: block ? resultLines(block, st, v, who) : [] },
+        { stack: block ? resultLines(block, st, v, who, cutShort(ended, v, steps)) : [] },
         { stack: v.events.filter((e) => e.kind !== 'value').map((e) => {
           // Demo installations only (server/demo.ts).
           if (e.kind === 'demo_wait_skipped') return small(`DEMO: wait skipped by ${who(e.person)} at ${plant(e.at)} · ${String(e.payload.label ?? '')}`, { color: RED, bold: true });
@@ -180,21 +182,21 @@ function valueLines(block: Block, v: StepView, who: (id: number | null) => strin
 const sourceText = (s: Source | undefined) => (!s ? '' : s.from === 'hand' ? ` (BY HAND: ${PROVIDER_NAME[s.link]} ${s.state === 'down' ? 'link down' : 'not linked'})` : ` (${plantText(s.shown)})`);
 
 /** The worked calculation lines, with the limits and pass or fail. */
-function resultLines(block: Block, st: Step, v: StepView, who: (id: number | null) => string): Content[] {
+function resultLines(block: Block, st: Step, v: StepView, who: (id: number | null) => string, terminated: boolean): Content[] {
   const label = (name: string) => block.calcs.find((c) => c.name === name)?.label ?? block.settings.find((s) => s.name === name)?.label ?? name;
   const out: Content[] = Object.entries(v.results).flatMap(([name, r]) => {
     if (!r.ok) return [small(`${label(name)}: ${r.message}`, { color: RED })];
     const checks = checksOf(r);
     // A round whose stop check is not reached yet is not out of limits: the rounds go on.
     const notYet = name === v.notYet;
-    const text = (t: string) => plantText(notYet ? notYetText(t) : t);
+    const text = (t: string) => plantText(notYet ? notYetText(t, terminated) : t);
     // A check's worked line may start with its own question ("Packing finished: no", "Line clear after packing: …"):
     // the label is not said twice.
     const shown = text(r.shown);
     return [
       small(shown.toLowerCase().startsWith(label(name).toLowerCase()) ? shown : `${label(name)}: ${shown}`),
       ...checks.filter(([, c]) => c.shown !== r.shown).map(([, c]) => small(text(c.shown), { margin: [8, 0, 0, 0] })),
-      ...checks.map(([, c]) => small(c.pass ? 'PASS' : notYet ? 'NOT YET: the rounds go on' : 'FAIL: out of limits', { bold: true, color: c.pass ? '#1b6e3a' : notYet ? '#666666' : RED, margin: [8, 0, 0, 2] })),
+      ...checks.map(([, c]) => small(c.pass ? 'PASS' : notYet ? (terminated ? 'NOT REACHED: terminated' : 'NOT YET: the rounds go on') : 'FAIL: out of limits', { bold: true, color: c.pass ? '#1b6e3a' : notYet ? '#666666' : RED, margin: [8, 0, 0, 2] })),
     ];
   });
   if (v.inputChanged.length) out.push(small(`Worked out again: an input was corrected later (${v.inputChanged.map((e) => `${who(e.person)}, ${plant(e.at)}`).join('; ')})`, { color: RED }));

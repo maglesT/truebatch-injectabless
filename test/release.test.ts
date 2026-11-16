@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  batchRefusal, batchView, evaluate, notYetText, review,
+  batchRefusal, batchView, cutShort, evaluate, notYetText, openSteps, review,
   type BatchAction, type BatchEvent, type BatchEventKind, type StepEvent,
 } from '../shared/engine/index.js';
 import { at, ev, fail, pass, reading, small } from './engine-fixture.js';
+import { batchRecordDoc } from '../server/batch-record.js';
 
 // The shared test master is built from test-only blocks (test/test-blocks.ts).
 vi.mock('../shared/blocks/index.js', async (original) => (await import('./test-blocks.js')).withTestBlocks(original as never));
@@ -141,5 +142,29 @@ describe('the review list for QA', () => {
     expect(review(d, never, [], at(1000)).outOfLimits.map((o) => o.step)).toEqual(['0.1.0.3']);
     expect(notYetText('2.150 % rounded to 1 decimal = 2.2 %; limit 2.5 to 3.5 %: OUT OF LIMITS (below the lower limit)')).toBe('2.150 % rounded to 1 decimal = 2.2 %; limit 2.5 to 3.5 %: not reached yet, the rounds go on');
     expect(notYetText('Compression finished: no: FAIL')).toBe('Compression finished: no: not yet, the rounds go on');
+    // A terminated batch: the rounds do not go on (owner, 16 Nov 2026).
+    expect(notYetText('limit 2.5 to 3.5 %: OUT OF LIMITS (below the lower limit)', true)).toBe('limit 2.5 to 3.5 %: not reached (terminated)');
+    expect(notYetText('Compression finished: no: FAIL', true)).toBe('Compression finished: no: not reached (terminated)');
+  });
+
+  it('TI-14 a terminated batch: only the last round left unfinished reads "not reached (terminated)"; an earlier round followed by another went on (owner, 16 Nov 2026)', () => {
+    const d = small([{ steps: [{ flow: { kind: 'repeat-until', maxRounds: 3, stop: 'readingCheck' } }] }]);
+    const notPassed = { ...fail, shown: 'pH = 9: FAIL' };
+    // Round 1 did not pass and round 2 followed; round 2 was started and did not pass when QA terminated the batch.
+    const events = [ev('started', '0.1.0.1'), reading('0.1.0.1', { readingCheck: notPassed }), ev('done', '0.1.0.1'), ev('started', '0.1.0.2'), reading('0.1.0.2', { readingCheck: notPassed })];
+    const { steps } = openSteps(d, events, at(1000));
+    expect(steps.map((v) => [v.id, v.notYet, cutShort(true, v, steps), cutShort(false, v, steps)])).toEqual([['0.1.0.1', 'readingCheck', false, false], ['0.1.0.2', 'readingCheck', true, false]]);
+    const record = (batchEvents: BatchEvent[]) => JSON.stringify(batchRecordDoc({ batch: { id: 1, batchNo: 'TI260099', masterVersionId: 1, issuedBy: 1, issuedAt: at(0) }, doc: d,
+      events: events.map((e) => ({ ...e, personName: 'RAMESH' })), batchEvents: batchEvents.map((b) => ({ ...b, personName: 'MEERA' })), now: at(1000), versionNo: 1, issuedByName: 'SUPER', signatures: [] }, 'QA'));
+    const ended = record([be('rejected', { terminated: true, reason: 'The filling line broke down' })]);
+    expect(ended.match(/pH = 9: not yet, the rounds go on/g)).toHaveLength(1);
+    expect(ended.match(/NOT YET: the rounds go on/g)).toHaveLength(1);
+    expect(ended.match(/pH = 9: not reached \(terminated\)/g)).toHaveLength(1);
+    expect(ended.match(/NOT REACHED: terminated/g)).toHaveLength(1);
+    expect(ended.indexOf('the rounds go on')).toBeLessThan(ended.indexOf('not reached (terminated)'));
+    // In production both rounds read as before.
+    const live = record([]);
+    expect(live.match(/NOT YET: the rounds go on/g)).toHaveLength(2);
+    expect(live).not.toContain('terminated');
   });
 });
