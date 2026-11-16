@@ -7,6 +7,7 @@ import { findBlock, type Block } from '../blocks/index.js';
 import { Dec, c1WithinLimits, findUnit, t10Compensating, t11SaltFactor, t2Total, t8BatchScaling, type Q } from '../templates/index.js';
 import { decimalsOf } from '../templates/core.js';
 import { evaluate, headerValue, lineQuantity } from '../engine/values.js';
+import { kindOf, kindOfUnit } from './kinds.js';
 import { materialLines, type Answer, type FormulaLine, type Limit, type MasterDoc, type SettingValue } from './schema.js';
 import { isBalance } from '../engine/picks.js';
 import { sterileChecks } from './sterile-checks.js';
@@ -93,6 +94,15 @@ export function masterChecks(doc: MasterDoc): Problem[] {
         const listed = !bs?.options || (typeof v === 'string' && bs.options.includes(v));
         const why = !bs ? `The block ${block.name} has no setting ${name}` : listed ? settingProblem(doc, si, ti, bs.kind, v) : `${bs.label}: choose one of ${bs.options!.join(', ')}`;
         if (why) error(`${p}.settings.${name}`, why);
+        // A limit of another kind than what it limits (a lethality written in minutes): the designer offers only the
+        // right kinds; a master written otherwise is refused here (found in the first Injectables batch run).
+        else if (bs?.kind === 'limit' && typeof v === 'object' && 'unit' in v) {
+          // Only a plain limit check (C1: one value against this limit) says exactly what kind the limit must be.
+          const c1 = block.calcs.find((c) => c.template === 'C1' && typeof c.args.limit === 'string' && c.args.limit.replace(/^\$|\?$/g, '') === name);
+          const value = c1 && typeof c1.args.value === 'string' ? c1.args.value.replace(/^\$|\?$/g, '') : undefined;
+          const needed = value ? kindOf(block, value, st.settings) : undefined, has = kindOfUnit(v.unit);
+          if (needed && has && needed !== has) error(`${p}.settings.${name}`, `${bs.label}: a ${needed} limit is needed here, not ${has} (${v.unit})`);
+        }
       }
       // A calculation that needs no recorded value is worked out now (e.g. a liquid make-up, T17): a refusal must be fixed.
       const now = evaluate(doc, [], { stage: si, sub: 1, step: ti, round: 1 }, {});
