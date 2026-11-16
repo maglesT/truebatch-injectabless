@@ -435,7 +435,7 @@ export const headspaceGas: Block = {
 
 // 19. 100 % visual inspection (TI-30): rejects by category with their limits; units in = out + rejects + samples.
 export const visualInspect: Block = {
-  id: 'visual-inspect', version: 1, name: '100 % visual inspection', checker: true,
+  id: 'visual-inspect', version: 1, name: '100 % visual inspection', checker: true, needs: 'inspect',
   instruction: 'Inspect every unit (qualified inspector or challenged machine); record the rejects per defect category.',
   fields: [
     yes('qualified', 'Inspector qualified, or machine challenged with the kit'), num('unitsIn', 'Units in', 'units'),

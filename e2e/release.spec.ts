@@ -82,6 +82,7 @@ test('TI-22 release journey: QC approves with its report number, QA reviews, clo
   await expect(qc.page.getByRole('region', { name: 'Review of the record and its audit trail' })).toContainText('DEV-26-021');
   await expect(qc.page.getByRole('button', { name: 'Sign: QC approved' })).toBeDisabled();
   await qc.page.getByLabel('QC report number').fill('QC-26-0107');
+  await qc.page.getByLabel(/EM review of the batch/).fill('EM-26-118, EM-26-119: no excursion');
   await qc.page.getByRole('button', { name: 'Sign: QC approved' }).click();
   await sign(qc.page);
   await expect(qc.page.getByRole('status')).toContainText('QC approval signed');

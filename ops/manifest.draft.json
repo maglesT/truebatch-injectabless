@@ -12,7 +12,9 @@
     {"code": "truebatch_injectables.qc.approve", "label": "QC approval of the results used for release"},
     {"code": "truebatch_injectables.qa.release", "label": "QA review and release of filled, inspected units"},
     {"code": "truebatch_injectables.view", "label": "View batch records and master versions"},
-    {"code": "truebatch_injectables.demo.skip", "label": "Skip a running wait (demo installations only)"}
+    {"code": "truebatch_injectables.demo.skip", "label": "Skip a running wait (demo installations only)"},
+    {"code": "truebatch_injectables.batch.aseptic", "label": "Aseptic operator: record and sign the steps of aseptic stages (granted by QA)"},
+    {"code": "truebatch_injectables.batch.inspect", "label": "Visual inspector: record and sign 100 % visual inspection (granted by QA)"}
   ],
   "signon": { "backchannel_logout": "/backchannel-logout" },
   "publishes": ["batch_fact_v1", "equipment_use_v1", "deviation_note_v1", "material_use_v1"],

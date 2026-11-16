@@ -17,6 +17,9 @@ export const PERMISSIONS = {
   'truebatch_injectables.qa.release': 'QA review and release of filled, inspected units',
   'truebatch_injectables.view': 'View batch records and master versions',
   'truebatch_injectables.demo.skip': 'Skip a running wait (demo installations only)',
+  // Owner's assumption (CHECK-I1): QA grants and removes these under its procedures; no training dates are kept here.
+  'truebatch_injectables.batch.aseptic': 'Aseptic operator: record and sign the steps of aseptic stages (granted by QA)',
+  'truebatch_injectables.batch.inspect': 'Visual inspector: record and sign 100 % visual inspection (granted by QA)',
 } as const;
 export type Permission = keyof typeof PERMISSIONS;
 export const CODES = Object.keys(PERMISSIONS) as Permission[];

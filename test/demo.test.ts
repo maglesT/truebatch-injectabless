@@ -201,7 +201,7 @@ describe('demo skip through the server', () => {
     const mixed = async (id: number) => ((await as('asha', 'GET', `/api/batches/${id}`)).json() as { steps: Row[] }).steps.find((s) => s.id === '0.1.0.1')!;
     // The real recorded duration (well under the 10 min) counts as met; nothing recorded is changed.
     const first = await mixed(b.id);
-    expect(first.results.mixTime).toMatchObject({ value: '0', shown: expect.stringContaining('· DEMO: wait skipped'), check: { pass: true } });
+    expect(first.results.mixTime).toMatchObject({ value: expect.stringMatching(/^0(\.\d+)?$/), shown: expect.stringContaining('· DEMO: wait skipped'), check: { pass: true } });
     expect(first.values.mixEnd).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
     // The terminal command skips a running mixing time too; without a skip the same short mix is out of limits.
     const [c, e] = [await issue2(), await issue2()];

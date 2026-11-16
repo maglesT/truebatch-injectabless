@@ -99,6 +99,8 @@ export interface ActionContext {
   events: readonly StepEvent[];
   flow: 'none' | 'repeat-until' | 'optional-with-reason' | 'qa-hold';
   user: { id: number; permissions: readonly string[] };
+  // TI-23, TI-28, TI-30: the QA-given permission the step needs besides the action's (aseptic operator, visual inspector).
+  needs?: string;
 }
 
 const INVOLVING: EventKind[] = ['started', 'value', 'done', 'corrected', 'not_applicable'];
@@ -109,6 +111,10 @@ export const involved = (events: readonly StepEvent[]) => new Set(events.filter(
 export function refusal(action: Action, c: ActionContext): Refused | null {
   const rule = ACTIONS[action];
   if (!rule.permissions.some((p) => c.user.permissions.includes(p))) return { status: 403, error: 'forbidden', message: 'You do not have the permission for this action.' };
+  if (c.needs && action !== 'check' && action !== 'release-hold' && action !== 'note' && !c.user.permissions.includes(c.needs)) {
+    return { status: 403, error: 'forbidden', message: c.needs.endsWith('.inspect') ? 'Only a visual inspector (a permission QA grants) records and signs the visual inspection.'
+      : 'Only an aseptic operator (a permission QA grants) records and signs the steps of an aseptic stage.' };
+  }
   const signed = c.events.some((e) => e.kind === 'done');
   const wrong = (message: string): Refused => ({ status: 409, error: 'wrong_state', message });
   if (!rule.from.includes(c.state)) return wrong(`Not possible while the step is ${c.state.replaceAll('_', ' ')}.`);
@@ -118,4 +124,10 @@ export function refusal(action: Action, c: ActionContext): Refused | null {
   if (action === 'release-hold' && (c.flow !== 'qa-hold' || c.events.some((e) => e.kind === 'qa_released_hold'))) return wrong('There is no QA hold to release on this step.');
   if (rule.notInvolved && involved(c.events).has(c.user.id)) return { status: 403, error: 'own_work', message: 'You cannot check a step you performed, recorded or corrected.' };
   return null;
+}
+
+/** TI-23, TI-28, TI-30: the QA-given permission a step needs: aseptic operator in an aseptic stage, visual inspector for inspection. */
+export function stepNeeds(stage: { aseptic?: boolean } | undefined, block: { needs?: 'inspect' } | undefined): string | undefined {
+  if (block?.needs === 'inspect') return 'truebatch_injectables.batch.inspect';
+  return stage?.aseptic ? 'truebatch_injectables.batch.aseptic' : undefined;
 }

@@ -32,7 +32,9 @@ test('TI-02 build a master from a skeleton, fix a master-check problem, then che
   await author.getByLabel('Batch size', { exact: true }).fill('100');
   await author.getByLabel('Density').fill('1.02');
   await author.getByLabel('Nominal fill').fill('10.0');
-  await expect(author.locator('.calc-note')).toContainText('Expected units: 10000 units');
+  await author.getByLabel('Fill excess').fill('0.5');
+  await author.getByLabel('Route').selectOption('aseptic');
+  await expect(author.locator('.calc-note')).toContainText('Expected units: 9523 units');
   await author.getByText('Process skeleton: Solution: compounding').click();
   await author.getByRole('button', { name: 'Create draft' }).click();
   await expect(author.getByRole('heading', { name: 'PRD-001 · Examplol 50 mg/mL injection' })).toBeVisible();

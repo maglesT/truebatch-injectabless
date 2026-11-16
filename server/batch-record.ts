@@ -145,7 +145,7 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
   content.push(heading('Release decision'));
   const decisions = batchEvents.filter((b) => b.kind !== 'deviation_closed');
   content.push(decisions.length ? { stack: decisions.map((b) => small(b === ended ? endedText! :
-    `${MEANING[b.kind] ?? b.kind}: ${b.personName}, ${plant(b.at)}${b.payload.reportNo ? ` · QC report ${b.payload.reportNo}` : ''}${b.payload.reason ? ` · reason: ${b.payload.reason}` : ''}`,
+    `${MEANING[b.kind] ?? b.kind}: ${b.personName}, ${plant(b.at)}${b.payload.reportNo ? ` · QC report ${b.payload.reportNo}` : ''}${b.payload.emReview ? ` · EM review: ${b.payload.emReview}` : ''}${b.payload.reason ? ` · reason: ${b.payload.reason}` : ''}`,
     { fontSize: 9, bold: b.kind === 'released' || b.kind === 'rejected', color: b.kind === 'rejected' ? RED : undefined, margin: [0, 0, 0, 2] })) }
     : { text: `No decision yet: the batch is ${view.status}.`, italics: true, fontSize: 9 });
   if (view.status !== 'released' && view.status !== 'rejected') content.push(small(`This copy was made while the batch is ${view.status}: it is not a released record.`, { color: RED, margin: [0, 4, 0, 0] }));

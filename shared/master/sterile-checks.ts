@@ -143,6 +143,34 @@ export function sterileChecks(doc: MasterDoc, ask: Ask, refuse: Refuse): void {
     if (x.t.settings.oxygenUnit === 'mg/L' && hi && hi.gt(9)) refuse(`${x.path}.settings.oxygenLimit`, `A dissolved-oxygen limit of ${hi.toString()} mg/L is above saturation (about 9 mg/L at 20 °C): it can never fail (library check 47)`);
     if (x.t.flow.kind === 'optional-with-reason' && doc.formula.some((l) => ANTIOXIDANT.test(l.name))) refuse(`${x.path}.flow`, 'The nitrogen step cannot be optional in a product with an antioxidant or an oxygen limit (library check 48)');
   }
+  // The sterile rules: the steps a master of this route must have (TI-01 lists them; each rule names its own).
+  const ids = new Set(steps.map((x) => x.id));
+  // They apply to a master that fills product (a fill, form-fill-seal or chamber step).
+  const fills = ['fill', 'ffs-run'].some((id) => ids.has(id));
+  const aseptic = fills && (route === 'aseptic' || route === 'both');
+  const need = (id: string, why: string, rule: string) => { if (!ids.has(id)) refuse('stages', why, rule); };
+  if (aseptic) {
+    if (!doc.stages.some((s) => s.aseptic)) refuse('stages', 'An aseptic master marks its aseptic stages (set-up, filling, closing): only aseptic operators work in them', 'TI-23');
+    for (const [si, s] of doc.stages.entries()) {
+      if (!s.aseptic) continue;
+      const first = s.steps.findIndex((t) => t.block.id !== 'line-clearance');
+      if (s.steps[first]?.block.id !== 'aseptic-ready') refuse(`stages[${si}]`, `The aseptic stage ${s.name} starts with the aseptic set-up (people, the line's media fill, sterilised items, gloves, grade A air)`, 'TI-23');
+      if (s.steps.some((t) => t.block.id === 'fill') && !s.steps.some((t) => t.block.id === 'interventions')) refuse(`stages[${si}]`, `The aseptic filling stage ${s.name} has an interventions and stoppages log`, 'TI-28');
+    }
+    need('filtration', 'An aseptic master has its sterile filtration (with the bioburden sample just before the filter)', 'TI-25');
+    if (steps.filter((x) => x.id === 'filter-test').length < 2) {
+      ask('stages', 'pupsit', 'An aseptic master tests the sterilising filter before use (after sterilisation) and after use. A pre-use test is left out only under the plant\'s risk assessment (Annex 1 8.87): confirm with its reference, or add the pre-use test.', ['pre-use test left out by the risk assessment'], true);
+      need('filter-test', 'The sterilising filter is integrity tested after use', 'TI-25');
+    }
+  }
+  if (fills) need('qa-sample', 'The master takes the sterility and endotoxin samples where the release needs them (each sub-batch or load)', 'TI-26');
+  if (fills && !ids.has('leak-test-100') && !ids.has('seal-check') && !ids.has('headspace-gas')) refuse('stages', 'The master closes and checks the containers (seal check or 100 % container-closure test)', 'TI-29');
+  if (fills) need('visual-inspect', 'Every filled unit is inspected (100 % visual inspection)', 'TI-30');
+  if (ids.has('lyo-cycle') && (!ids.has('lyo-load') || !ids.has('lyo-unload'))) refuse('stages', 'Freeze-drying has its loading and its stoppering and unloading with the cycle', 'TI-31');
+  if (ids.has('incubated-results') && !doc.stages.some((s) => s.startsAfter && s.steps.some((t) => t.block.id === 'incubated-results'))) {
+    refuse('stages', 'Incubated results (EM, BIs, bioburden) are read in a stage that starts after the step that took the samples', 'TI-26');
+  }
+
   // 50 ⛔ a suspension or emulsion filled without content at start, middle and end.
   if (SUSPENSION.test(h.productName) && steps.some((x) => x.id === 'fill') && steps.filter((x) => x.id === 'qa-sample').length < 3) {
     refuse('stages', 'A suspension or emulsion is sampled for content at the start, middle and end of filling (three samples), with stirring on in every fill round (library check 50)');

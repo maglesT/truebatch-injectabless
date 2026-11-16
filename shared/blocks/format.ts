@@ -78,6 +78,8 @@ export const blockSchema = z.object({
   // none is needed, what follows does not wait for it, and when the stage closes no new entry starts. A later step
   // reads a field of all its entries as a list (to total the units removed or the time).
   log: z.boolean().optional(),
+  // TI-30: a step only people with this QA-given permission may record and sign (visual inspection).
+  needs: z.enum(['inspect']).optional(),
   // A new master step from this block starts as a QA hold (the master may change it).
   qaHold: z.boolean().optional(),
   // The name of a step that names a material, "{material}" its name and code: "Issue {material}".

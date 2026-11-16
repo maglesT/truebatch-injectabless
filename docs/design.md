@@ -104,6 +104,25 @@ adding anything, look how TrueBatch Tablets does it and copy that.
   Annex 1 when the product is installed, as part of the plant's validation, and signs that record with name and
   date. On the demo, the demo admin (who holds every right) confirms it in the plant's place.
 
+## Phase E: templates, blocks, master checks and the sterile rules (built 16 November 2026)
+- From the final library (v1, 260 products; v1.1 master checks): units, templates I18-I22 (and T12 offered as I23),
+  setting changes of reused templates (`shared/templates/README.md`), the sterile blocks as data (`shared/blocks/common.ts`,
+  `shared/blocks/special.ts`). A library "block setting" is a pick-list setting of the block; where it changes which
+  fields are needed the block has a variant with its own plain name (sterilising vs clarifying filtration, terminal
+  sterilisation vs heat treatment, leak vs headspace gas test, …), never a conditional field. A variant never counts
+  for another: a clarifying filtration is not the sterile filtration of TI-25, a heat treatment is not terminal
+  sterilisation (TI-24, library check 42).
+- The header names the route and what the label claim is per. The master checks of the library run in the master
+  check (`shared/master/sterile-checks.ts`, each with its library number); the structure the sterile rules need
+  (aseptic set-up, filtration and filter tests, samples, interventions log, closing, inspection, freeze-drying steps)
+  applies to a master that fills product.
+- People (owner's assumption, CHECK-I1): QA grants "aseptic operator" and "visual inspector"; a stage marked aseptic
+  is only for aseptic operators, visual inspection only for visual inspectors. No training dates are kept here.
+- QC's sign at release states that the release tests (sterility, endotoxin, bioburden) comply as in the QC report and
+  records the EM review of the batch (report numbers, the deviation number of each action-limit excursion).
+- A field may be an item's use-by date (engine change 6): refused when past, a deviation note when it passes during
+  the step.
+
 ## Platform
 - Runs on the Medhanta platform. Core provides people, sign-in, permissions, e-signature re-authentication and master
   data. Normal platform sign-in (OIDC through core, one person per browser).

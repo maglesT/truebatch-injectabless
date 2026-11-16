@@ -66,6 +66,8 @@ export const stageSchema = z.object({
   key: keySchema,
   name: text().min(1),
   kind: z.enum(['normal', 'preparation', 'sub-batch']),
+  // TI-23, TI-28: an aseptic stage (set-up, filling and closing in grade A): its steps are only for aseptic operators.
+  aseptic: z.boolean().optional(),
   count: z.number().int().min(2).max(50).optional(),
   roomTypes: z.array(text()).max(20).default([]),
   machineTypes: z.array(text()).max(50).default([]),

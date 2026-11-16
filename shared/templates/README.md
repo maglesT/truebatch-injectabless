@@ -98,6 +98,26 @@ difference. When it is compared with a limit written in °C, the difference unit
 
 F1–F7 and the rest of F8 (step flow) belong to the batch engine and are not here.
 
+## Injectables templates (library v1)
+
+The reused templates keep their Tablets IDs in the code (T1-T26); the library's I-numbers map to them (I1 = T1 … I17 =
+T26, I23 = T12 offered again). New ones carry their library ID.
+
+| ID | Template | Input | Output | Settings | Refuses |
+|---|---|---|---|---|---|
+| I18 | Volume, mass and fill target by density (`fill.ts`) | convert: a volume or mass and the density; q.s.: the final volume (with the density) or weight, and what is in the vessel; fill target: nominal fill, excess (mL or %), density | the mass or volume; the vehicle to add; the target fill volume and net fill weight with its ± limits (alert and action) | unit, decimals; weight tolerance and alert tolerance | a density ≤ 0; a q.s. that would be negative; a final volume without the density (no water default: check 26); a negative excess; an alert band wider than the action band |
+| I19 | Filter integrity test (`filter.ts`) | test (bubble point, diffusion, pressure decay, water intrusion), result, maker's limit, wetting fluid, product factor, test temperature and its range | pass/fail against the maker's limit × the product factor; a pressure decay as a flow = decay × upstream volume ÷ (atmospheric pressure × time) when the limit is a flow | upstream volume, atmospheric pressure, test time; the filter and the master's filter | product- or solvent-wetted without the factor (check 39); a factor on a water test; gauge and absolute mixed (check 40); a filter type or pore size other than the master's. A test temperature outside its range fails (the test is repeated) |
+| I20 | Lethality (`lethality.ts`) | timed temperature readings per probe; Tref (121.1 °C), z (10 °C), cut-in (100 °C), most interval between readings | F per probe (trapezoid rule), the lowest probe's F in F-min | limit on the minimum F (F-min only) | readings out of time order or with a gap above the interval; a minimum F in clock minutes; z ≤ 0 |
+| I21 | Cycle against its recipe (`cycle.ts`) | the recipe's phases (duration limits; parameters with a set point ± band or low/high) and the recorded phases (start, end, min and max of each parameter) | total cycle time; pass only if every phase is there, in order, within its duration, every parameter inside its band | decimals | a recorded phase not in the recipe or twice; end before start; units that do not convert |
+| I22 | Count against its sample basis and limit (`counts.ts`) | sample (air, settle/contact plate, glove print, particles ≥ 0.5/5 µm, bioburden), counts, volume sampled, exposure, grade and state, or the product's limit | the count on its basis (CFU/m³, CFU/plate, CFU/glove, particles/m³, CFU/100 mL) against the clean-air table (`shared/master/clean-air.ts`); grade A any growth is an action | alert limit inside the action limit; several plates of one session summed | a settle plate over 4 h; a master limit looser than the table; a null table value without the master's limit; a raw count without the volume |
+
+Settings added to reused templates (library v1): T4 a limit per part (reject categories); T8 "ratio x measured" (mg/mmol ×
+a lipid amount recorded in the batch); T9 `excess` for powder fills (never an overage); T11 a molar mode (mmol/L × volume ×
+MW of the form weighed, the form required); T13 days, calendar months, end "now" and a validated maximum refused above
+(compared exactly); T18 content per volume (mg/mL, IU/mL … and log10 titres as 10^x) and ethanol % v/v through T26's
+alcohol table, and C5's "U of another product" refusal; T26 by volume (mg/mL, volumes additive), refused for
+organic/water mixtures.
+
 ## Check templates
 
 | ID | Name | Inputs | What it checks | Refusals |

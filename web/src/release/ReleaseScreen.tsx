@@ -32,7 +32,7 @@ interface Review {
   notApplicable: FloorEvent[];
   // Demo installations only: the waits ended at once (server/demo.ts).
   demoSkips: FloorEvent[];
-  batchEvents: { id: number; kind: string; payload: { reportNo?: string; reason?: string; terminated?: boolean }; personName: string; at: string }[];
+  batchEvents: { id: number; kind: string; payload: { reportNo?: string; emReview?: string; reason?: string; terminated?: boolean }; personName: string; at: string }[];
   signatures: { objectType: string; printedName: string; meaning: string; signedAt: string; step: string | null }[];
 }
 type Signing = { meaning: 'qc_approved' | 'released' | 'rejected'; action: 'qc-approve' | 'release' | 'reject' };
@@ -44,6 +44,7 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [reportNo, setReportNo] = useState('');
+  const [emReview, setEmReview] = useState('');
   const [rejectWhy, setRejectWhy] = useState('');
   const [signing, setSigning] = useState<Signing | null>(null);
   const [closing, setClosing] = useState<Review['deviations'][number] | null>(null);
@@ -79,7 +80,7 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
 
   const sign = async ({ proof }: { proof: string }) => {
     if (!signing) return;
-    const extra = signing.action === 'qc-approve' ? { reportNo: reportNo.trim() } : signing.action === 'reject' ? { reason: rejectWhy.trim() } : {};
+    const extra = signing.action === 'qc-approve' ? { reportNo: reportNo.trim(), emReview: emReview.trim() } : signing.action === 'reject' ? { reason: rejectWhy.trim() } : {};
     try {
       await api('POST', `/api/batches/${id}/${signing.action}`, { proof, contentHash: d.batch.contentHash, ...extra });
       setSigning(null);
@@ -151,12 +152,13 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
         {notice && <p className="notice info" role="status">{notice}</p>}
         {r.batchEvents.filter((b) => b.kind !== 'deviation_closed').map((b) => (
           <p key={b.id} className={b.kind === 'rejected' ? 'notice bad' : 'all-good'}><span aria-hidden="true">{b.kind === 'rejected' ? '✕' : '✓'}</span>
-            {b.payload.terminated ? terminatedText(b, plainClock) : <>{MEANING_LABEL[b.kind] ?? b.kind} by {b.personName}, {plainClock(b.at)}{b.payload.reportNo ? ` · QC report ${b.payload.reportNo}` : ''}{b.payload.reason ? ` · ${b.payload.reason}` : ''}</>}</p>))}
+            {b.payload.terminated ? terminatedText(b, plainClock) : <>{MEANING_LABEL[b.kind] ?? b.kind} by {b.personName}, {plainClock(b.at)}{b.payload.reportNo ? ` · QC report ${b.payload.reportNo}` : ''}{b.payload.emReview ? ` · EM review: ${b.payload.emReview}` : ''}{b.payload.reason ? ` · ${b.payload.reason}` : ''}</>}</p>))}
         {qcTurn && (can(me, 'qc.approve') ? (
           <div className="decide">
             <label>QC report number<input value={reportNo} onChange={(e) => setReportNo(e.target.value)} maxLength={60} placeholder="e.g. QC-26-0042" /></label>
-            <p className="why">Your signature means: the QC results used for release meet the specification, as in the QC report.</p>
-            <button className="big primary" disabled={!reportNo.trim()} onClick={() => setSigning({ meaning: 'qc_approved', action: 'qc-approve' })}>Sign: QC approved</button>
+            <label>EM review of the batch (report numbers; the Deviations number of each action-limit excursion, or "no excursion")<input value={emReview} onChange={(e) => setEmReview(e.target.value)} maxLength={500} placeholder="e.g. EM-26-118, EM-26-119: no excursion" /></label>
+            <p className="why">Your signature means: the release tests meet the specification as in the QC report, including sterility (each sub-batch or load), bacterial endotoxins and the bioburden results; and the environmental monitoring of the batch was reviewed, every action-limit excursion with its deviation.</p>
+            <button className="big primary" disabled={!reportNo.trim() || !emReview.trim()} onClick={() => setSigning({ meaning: 'qc_approved', action: 'qc-approve' })}>Sign: QC approved</button>
           </div>
         ) : <p className="notice">QC approval comes first: it needs the QC approval permission.</p>)}
         {qaTurn && (can(me, 'qa.release') ? (<>
@@ -177,7 +179,7 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
       {signing && (
         <SignDialog meaning={signing.meaning} what={`Batch ${d.batch.batchNo} · ${doc.header.productName}`} onCancel={() => setSigning(null)} onSign={sign}>
           <div className="summary-box">
-            {signing.action === 'qc-approve' && <p>QC report <b>{reportNo.trim()}</b></p>}
+            {signing.action === 'qc-approve' && <p>QC report <b>{reportNo.trim()}</b> · EM review <b>{emReview.trim()}</b></p>}
             {signing.action === 'reject' && <p>Reason: <b>{rejectWhy.trim()}</b></p>}
             {signing.action !== 'qc-approve' && <p>This signature also records your review of the batch's audit trail: {count(r.corrections.length, 'correction')}, {count(r.sentBack.length, 'step')} sent back,
               {' '}{count(r.late.length, 'late timer')}, {count(r.outOfLimits.length, 'value')} out of limits, {count(r.deviations.length, 'deviation')}, {count(r.notApplicable.length, 'step')} not applicable.</p>}
