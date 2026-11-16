@@ -142,12 +142,12 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
           <li key={e.id} className="bad"><b>{name(idOf(e))}</b><span>DEMO: wait skipped by {e.personName} at {plainClock(e.at)}</span><small>{String(e.payload.label ?? '')}</small></li>))}</Group>}
         <Group title={`Signatures (${r.signatures.length})`} empty="No signatures.">{r.signatures.map((s, i) => (
           <li key={i} className="sig"><b>{MEANING_LABEL[s.meaning] ?? s.meaning}</b><span>{s.printedName}</span>
-            <small>{plainClock(s.signedAt)} · {s.step ? name(s.step) : s.objectType === 'batch' ? `Batch ${d.batch.batchNo} issued` : product.packing ? 'The packing record' : 'The batch record'}</small></li>))}</Group>
+            <small>{plainClock(s.signedAt)} · {s.step ? name(s.step) : s.objectType === 'batch' ? `Batch ${d.batch.batchNo} issued` : 'The batch record'}</small></li>))}</Group>
       </section>
 
       <section className="dash-panel" aria-label="Decision">
         <div className="panel-head"><h2>{qcTurn ? 'QC approval' : 'QA release'}</h2>
-          <a className="button" href={pdfLink(id)} download>{product.packing ? 'Packing record' : 'Batch record'} (PDF)</a></div>
+          <a className="button" href={pdfLink(id)} download>Batch record (PDF)</a></div>
         {notice && <p className="notice info" role="status">{notice}</p>}
         {r.batchEvents.filter((b) => b.kind !== 'deviation_closed').map((b) => (
           <p key={b.id} className={b.kind === 'rejected' ? 'notice bad' : 'all-good'}><span aria-hidden="true">{b.kind === 'rejected' ? '✕' : '✓'}</span>
@@ -155,7 +155,7 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
         {qcTurn && (can(me, 'qc.approve') ? (
           <div className="decide">
             <label>QC report number<input value={reportNo} onChange={(e) => setReportNo(e.target.value)} maxLength={60} placeholder="e.g. QC-26-0042" /></label>
-            <p className="why">Your signature means: {product.packing ? 'the finished packed product was tested and complies with its specification' : 'the QC results used for release meet the specification'}, as in the QC report.</p>
+            <p className="why">Your signature means: the QC results used for release meet the specification, as in the QC report.</p>
             <button className="big primary" disabled={!reportNo.trim()} onClick={() => setSigning({ meaning: 'qc_approved', action: 'qc-approve' })}>Sign: QC approved</button>
           </div>
         ) : <p className="notice">QC approval comes first: it needs the QC approval permission.</p>)}

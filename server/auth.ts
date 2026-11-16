@@ -6,17 +6,17 @@ import type { SignOn } from './signon.js';
 // Platform PL-01: rights are this product's permission codes from core's token, one code per action. The same list is
 // declared to the platform in ops/manifest.draft.json (test/permissions.test.ts keeps the two equal).
 export const PERMISSIONS = {
-  'truebatch.master.author': 'Write master batch record versions',
-  'truebatch.master.check': 'Check a master batch record version written by another person',
-  'truebatch.master.approve': 'Approve a checked master batch record version (QA)',
-  'truebatch.batch.issue': 'Issue a batch record from an approved master version',
-  'truebatch.batch.operate': 'Record and sign steps of a batch as performed',
-  'truebatch.batch.check': 'Check steps performed by another person (second person)',
-  'truebatch.batch.supervise': 'Production approval of a completed batch record',
-  'truebatch.qc.approve': 'QC approval of the results used for release',
-  'truebatch.qa.release': 'QA review and release of bulk tablets',
-  'truebatch.view': 'View batch records and master versions',
-  'truebatch.demo.skip': 'Skip a running wait (demo installations only)',
+  'truebatch_injectables.master.author': 'Write master batch record versions',
+  'truebatch_injectables.master.check': 'Check a master batch record version written by another person',
+  'truebatch_injectables.master.approve': 'Approve a checked master batch record version (QA)',
+  'truebatch_injectables.batch.issue': 'Issue a batch record from an approved master version',
+  'truebatch_injectables.batch.operate': 'Record and sign steps of a batch as performed',
+  'truebatch_injectables.batch.check': 'Check steps performed by another person (second person)',
+  'truebatch_injectables.batch.supervise': 'Production approval of a completed batch record',
+  'truebatch_injectables.qc.approve': 'QC approval of the results used for release',
+  'truebatch_injectables.qa.release': 'QA review and release of filled, inspected units',
+  'truebatch_injectables.view': 'View batch records and master versions',
+  'truebatch_injectables.demo.skip': 'Skip a running wait (demo installations only)',
 } as const;
 export type Permission = keyof typeof PERMISSIONS;
 export const CODES = Object.keys(PERMISSIONS) as Permission[];

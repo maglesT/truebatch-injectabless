@@ -4,7 +4,7 @@
  */
 import { Dec, type Outcome, type Q, type ResultValue } from '../templates/index.js';
 import { findBlock, type Block, type BlockField } from '../blocks/index.js';
-import type { FormulaLine, Limit, MasterDoc, Pack, SettingValue, Step } from '../master/schema.js';
+import type { FormulaLine, Limit, MasterDoc, SettingValue, Step } from '../master/schema.js';
 import { callTemplate } from './templates.js';
 import { keyId, type StepEvent, type StepKey } from './state.js';
 import type { Source } from './links.js';
@@ -138,12 +138,6 @@ function refValue(doc: MasterDoc, events: readonly StepEvent[], here: StepKey, r
 const tablets = (doc: MasterDoc) => `${doc.header.batchSize} tablets`;
 const perBatch = (mg: string, doc: MasterDoc) => callTemplate('T8', { mode: 'per unit', perUnit: `${mg} mg`, count: tablets(doc), unit: 'kg' });
 
-/** The pack facts a packing block's calculations read as "$pack.name" (shared/blocks/format.ts PACK_FACTS). */
-export function packFacts(p: Pack): Record<string, string> {
-  return Object.fromEntries(Object.entries({ unitsPerPack: `${p.unitsPerPack} tablets`, packsPerCarton: `${p.packsPerCarton} units`, shelfLifeMonths: String(p.shelfLifeMonths),
-    expiryRule: p.expiryRule, type: p.type, destination: p.destination, gtin: p.gtin, mrp: p.mrp }).filter(([, v]) => v !== undefined).map(([k, v]) => [`pack.${k}`, v!]));
-}
-
 /** A header value: as written, or the batch weight (T8: weight per tablet × batch size). */
 export function headerValue(doc: MasterDoc, h: 'batchSize' | 'coreWeight' | 'coatedWeight' | 'coreBatch' | 'coatedBatch'): string | Stored {
   const { coreWeightMg: core, coatedWeightMg: coated } = doc.header;
@@ -219,15 +213,8 @@ export function evaluate(doc: MasterDoc, events: readonly StepEvent[], key: Step
     for (const [k, v] of Object.entries(p.values)) inputs[`prev.${k}`] = v;
     for (const [k, r] of Object.entries(p.results)) if (r.ok) inputs[`prev.${k}`] = asQ(r);
   }
-  // Packing: the master's pack facts, the batch facts recorded at issue (the first step, server/routes/batches.ts),
-  // and a field's values in the earlier rounds of this step (a serial read twice).
+  // A field's values in the earlier rounds of this step.
   const calcs = JSON.stringify(block.calcs);
-  if (doc.pack && calcs.includes('"$pack.')) Object.assign(inputs, packFacts(doc.pack));
-  if (calcs.includes('"$batch.')) {
-    const b = latestValues(events, 0, 1, 0, uses, 1);
-    for (const [k, v] of Object.entries(b.values)) inputs[`batch.${k}`] = v;
-    for (const [k, r] of Object.entries(b.results)) if (r.ok) inputs[`batch.${k}`] = asQ(r);
-  }
   for (const name of new Set([...calcs.matchAll(/"\$earlier\.([a-zA-Z0-9]+)/g)].map((m) => m[1]!))) {
     const seen: string[] = [];
     for (let r = 1; r < key.round; r++) { const v = latestValues(events, key.stage, key.sub, key.step, uses, r).values[name]; if (typeof v === 'string') seen.push(v); }

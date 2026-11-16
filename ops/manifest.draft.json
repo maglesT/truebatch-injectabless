@@ -1,18 +1,18 @@
 {
-  "product": "truebatch",
-  "database": "truebatch",
+  "product": "truebatch_injectables",
+  "database": "truebatch_injectables",
   "permissions": [
-    {"code": "truebatch.master.author", "label": "Write master batch record versions"},
-    {"code": "truebatch.master.check", "label": "Check a master batch record version written by another person"},
-    {"code": "truebatch.master.approve", "label": "Approve a checked master batch record version (QA)"},
-    {"code": "truebatch.batch.issue", "label": "Issue a batch record from an approved master version"},
-    {"code": "truebatch.batch.operate", "label": "Record and sign steps of a batch as performed"},
-    {"code": "truebatch.batch.check", "label": "Check steps performed by another person (second person)"},
-    {"code": "truebatch.batch.supervise", "label": "Production approval of a completed batch record"},
-    {"code": "truebatch.qc.approve", "label": "QC approval of the results used for release"},
-    {"code": "truebatch.qa.release", "label": "QA review and release of bulk tablets"},
-    {"code": "truebatch.view", "label": "View batch records and master versions"},
-    {"code": "truebatch.demo.skip", "label": "Skip a running wait (demo installations only)"}
+    {"code": "truebatch_injectables.master.author", "label": "Write master batch record versions"},
+    {"code": "truebatch_injectables.master.check", "label": "Check a master batch record version written by another person"},
+    {"code": "truebatch_injectables.master.approve", "label": "Approve a checked master batch record version (QA)"},
+    {"code": "truebatch_injectables.batch.issue", "label": "Issue a batch record from an approved master version"},
+    {"code": "truebatch_injectables.batch.operate", "label": "Record and sign steps of a batch as performed"},
+    {"code": "truebatch_injectables.batch.check", "label": "Check steps performed by another person (second person)"},
+    {"code": "truebatch_injectables.batch.supervise", "label": "Production approval of a completed batch record"},
+    {"code": "truebatch_injectables.qc.approve", "label": "QC approval of the results used for release"},
+    {"code": "truebatch_injectables.qa.release", "label": "QA review and release of filled, inspected units"},
+    {"code": "truebatch_injectables.view", "label": "View batch records and master versions"},
+    {"code": "truebatch_injectables.demo.skip", "label": "Skip a running wait (demo installations only)"}
   ],
   "signon": { "backchannel_logout": "/backchannel-logout" },
   "publishes": ["batch_fact_v1", "equipment_use_v1", "deviation_note_v1", "material_use_v1"],
@@ -23,5 +23,5 @@
     "logbook": ["equipment_status_v1"],
     "mms": ["lot_v1", "lot_test_v1"]
   },
-  "source": { "repo": "https://github.com/maglesT/TrueBatch-Tablets", "commit": "<full commit id at bundling>" }
+  "source": { "repo": "https://github.com/maglesT/truebatch-injectabless", "commit": "<full commit id at bundling>" }
 }

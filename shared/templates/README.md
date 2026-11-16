@@ -1,4 +1,4 @@
-# TrueBatch Tablets: calculation and check templates (version 2)
+# TrueBatch Injectables: calculation and check templates (version 2)
 
 Small, pure TypeScript functions. One function per template. No formula language, no parser, no
 expression engine. The master batch record picks a template and its inputs. Underneath there is
@@ -175,7 +175,7 @@ as when it was answered; until then the warning blocks "Send for review" and app
 - **F4 by a rule** (F0040): a step's `onlyIf` (a limit on the batch size or the core batch weight) leaves it out as not
   applicable, with no operator choice. A rule on a value recorded during the batch is not supported.
 - **F6 with a changing interval** (F0030): `everyMinutesLater` (after N minutes from the first round, a round every M
-  minutes; still at most the block's interval, TB-15). A change "as the target nears" (on a value) is not supported.
+  minutes; still at most the block's interval, TI-15). A change "as the target nears" (on a value) is not supported.
 
 ## Decisions taken while building (see also the report)
 

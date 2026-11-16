@@ -26,7 +26,7 @@ master.materials_.push({ itemId: 'm', code: 'MAT-010', name: 'Demolol', version:
 // The designer journey's products, materials, equipment and rooms.
 seedMasterData(master);
 
-const sql = connect(TEST_DATABASE_URL, { role: 'truebatch_app', searchPath: E2E_SCHEMA });
+const sql = connect(TEST_DATABASE_URL, { role: 'truebatch_injectables_app', searchPath: E2E_SCHEMA });
 const app = await buildApp({ sql, signOn: fakeSignOn(), proofKey: TEST_PROOF_KEY, master,
   webRoot: new URL('../dist/web', import.meta.url).pathname, cookieSecure: false });
 await app.listen({ port: E2E_PORT, host: '127.0.0.1' });

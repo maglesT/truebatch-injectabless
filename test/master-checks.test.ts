@@ -5,7 +5,7 @@ import { evaluate } from '../shared/engine/index.js';
 import { blocking, masterChecks } from '../shared/master/checks.js';
 import { masterSchema, type MasterDoc } from '../shared/master/schema.js';
 import { placed, tablet, unplaced } from './engine-fixture.js';
-// The problems, without the rooms a stage must name (TB-11): the fixtures name none.
+// The problems, without the rooms a stage must name (TI-11): the fixtures name none.
 const checks = (d: Parameters<typeof masterChecks>[0]) => unplaced(masterChecks(d));
 
 /** The fixture with one change; the problems that change makes. */
@@ -40,13 +40,13 @@ describe('master checks', () => {
     expect(masterChecks(placed(tablet()))).toEqual([]);
   });
 
-  it('TB-11 a stage that works machines or names a room, with no rooms chosen, is an error; balances alone and the line a packing batch is issued to are not', () => {
-    expect(masterChecks(tablet()).filter((p) => p.rule === 'TB-11').map((p) => `${p.path}: ${p.message}`)).toEqual(['Binder solution', 'Granulation', 'Compression', 'Coating']
+  it('TI-11 a stage that works machines or names a room, with no rooms chosen, is an error; balances alone are not', () => {
+    expect(masterChecks(tablet()).filter((p) => p.rule === 'TI-11').map((p) => `${p.path}: ${p.message}`)).toEqual(['Binder solution', 'Granulation', 'Compression', 'Coating']
       .map((name, i) => `stages[${i}].roomTypes: Stage ${name}: choose the rooms this stage may run in (an area or a room of master data, in the stage settings)`));
     const d = placed(tablet());
     d.stages[0]!.roomTypes = [];
     d.stages[0]!.steps = d.stages[0]!.steps.filter((t) => t.block.id === 'weigh');
-    expect(masterChecks(d).filter((p) => p.rule === 'TB-11')).toEqual([]);
+    expect(masterChecks(d).filter((p) => p.rule === 'TI-11')).toEqual([]);
   });
 
   it('a draft may be incomplete, but its shape is checked', () => {
@@ -54,25 +54,25 @@ describe('master checks', () => {
   });
 
   it.each<[string, (d: MasterDoc) => void, string]>([
-    ['weighing', (d) => { step(d, 'granulation', 'weigh-api').checker = false; }, 'error TB-08 stages[1].steps[0]: A weighing step needs a second-person check'],
-    ['charge-in', (d) => { step(d, 'granulation', 'charge-api').checker = false; }, 'error TB-08 stages[1].steps[2]: A charge-in step needs a second-person check'],
-    ['yield', (d) => { step(d, 'compression', 'yield').checker = false; }, 'error TB-08 stages[2].steps[1]: A yield step needs a second-person check'],
-    ['critical', (d) => { step(d, 'granulation', 'granulate').critical = true; }, 'error TB-08 stages[1].steps[3]: A critical step needs a second-person check'],
-  ])('TB-08 a %s step without a second-person check is an error', (_what, change, want) => {
+    ['weighing', (d) => { step(d, 'granulation', 'weigh-api').checker = false; }, 'error TI-08 stages[1].steps[0]: A weighing step needs a second-person check'],
+    ['charge-in', (d) => { step(d, 'granulation', 'charge-api').checker = false; }, 'error TI-08 stages[1].steps[2]: A charge-in step needs a second-person check'],
+    ['yield', (d) => { step(d, 'compression', 'yield').checker = false; }, 'error TI-08 stages[2].steps[1]: A yield step needs a second-person check'],
+    ['critical', (d) => { step(d, 'granulation', 'granulate').critical = true; }, 'error TI-08 stages[1].steps[3]: A critical step needs a second-person check'],
+  ])('TI-08 a %s step without a second-person check is an error', (_what, change, want) => {
     expect(after(change)).toEqual([want]);
   });
 
-  it('TB-10 a stage worked in a room without a line clearance step is an error; line clearance not first is a warning', () => {
-    expect(after((d) => { d.stages[2]!.roomTypes = ['Compression']; })).toEqual(['error TB-10 stages[2]: Stage Compression is worked in a room but has no line clearance step']);
+  it('TI-10 a stage worked in a room without a line clearance step is an error; line clearance not first is a warning', () => {
+    expect(after((d) => { d.stages[2]!.roomTypes = ['Compression']; })).toEqual(['error TI-10 stages[2]: Stage Compression is worked in a room but has no line clearance step']);
     const clearance = { key: 'line-clearance', block: { id: 'line-clearance', version: 1 }, checker: true, waitForCheck: false, critical: false, settings: {}, flow: { kind: 'none' as const } };
     expect(after((d) => { d.stages[2]!.roomTypes = ['Compression']; d.stages[2]!.steps.unshift(clearance); })).toEqual([]);
     expect(after((d) => { d.stages[2]!.steps.push(clearance); })).toEqual(['warning - stages[2].steps[2]: Line clearance is not the first step of Compression']);
     expect(after((d) => { d.stages[2]!.steps.unshift({ ...clearance, checker: false }); }))
-      .toEqual(['error TB-08 stages[2].steps[0]: A line clearance step needs a second-person check']);
+      .toEqual(['error TI-08 stages[2].steps[0]: A line clearance step needs a second-person check']);
   });
 
-  it('TB-01 an intermediate without a hold time is an error', () => {
-    expect(after((d) => { delete d.stages[1]!.produces!.holdHours; })).toEqual(['error TB-01 stages[1].produces: The intermediate dried granules has no hold time']);
+  it('TI-01 an intermediate without a hold time is an error', () => {
+    expect(after((d) => { delete d.stages[1]!.produces!.holdHours; })).toEqual(['error TI-01 stages[1].produces: The intermediate dried granules has no hold time']);
   });
 
   it('a stage without a yield step is an error (a preparation needs none)', () => {
@@ -84,12 +84,12 @@ describe('master checks', () => {
     expect(after((d) => { d.formula[3]!.mgPerTablet = '80.0'; d.formula[6]!.mgPerTablet = '9.0'; d.header.coatedWeightMg = '259.0'; })).toEqual([]);
   });
 
-  it('TB-13 adjustment settings the templates library refuses are errors (same basis, overage, salt factor)', () => {
+  it('TI-13 adjustment settings the templates library refuses are errors (same basis, overage, salt factor)', () => {
     expect(errors((d) => {
       d.formula[0]!.adjust = { salt: { from: { name: 'base', mw: '383.4' }, to: { name: 'sodium sesquihydrate', mw: '432.4', hydrateOrSolvate: true } }, potency: { basis: 'anhydrous' } };
-    })).toEqual([expect.stringMatching(/^error TB-13 formula\[0\]\.adjust: Same-basis rule \(C5\): the standard quantity already uses the hydrate/)]);
+    })).toEqual([expect.stringMatching(/^error TI-13 formula\[0\]\.adjust: Same-basis rule \(C5\): the standard quantity already uses the hydrate/)]);
     expect(after((d) => { d.formula[0]!.adjust = { potency: { basis: 'as is' } }; }))
-      .toEqual(['error TB-13 formula[0].adjust: Say whether the standard quantity is the anhydrous weight or the hydrate/solvate weight (same-basis rule C5)']);
+      .toEqual(['error TI-13 formula[0].adjust: Say whether the standard quantity is the anhydrous weight or the hydrate/solvate weight (same-basis rule C5)']);
     expect(after((d) => { d.formula[0]!.adjust = { overage: { percent: '5.0', maxPercent: '3.0' } }; }))
       .toEqual(['error - formula[0].adjust: The overage 5.0 % is above the 3.0 % the master allows']);
     expect(errors((d) => { d.formula[0]!.adjust = { salt: { from: { name: 'base', mw: '383.4' }, to: { name: 'hemifumarate', mw: '0' } } }; }))
@@ -102,11 +102,11 @@ describe('master checks', () => {
       .toEqual(['error - stages[1].steps[3].settings.endPointLimit: The lower limit 12.0 is above the upper limit 8.0']);
   });
 
-  it('TB-15 compression checks more than 30 minutes apart, or with no interval, are an error', () => {
+  it('TI-15 compression checks more than 30 minutes apart, or with no interval, are an error', () => {
     expect(after((d) => { step(d, 'compression', 'compress').everyMinutes = 45; }))
-      .toEqual(['error TB-15 stages[2].steps[0].everyMinutes: Periodic checks every 45 min: they must be at least every 30 min']);
+      .toEqual(['error TI-15 stages[2].steps[0].everyMinutes: Periodic checks every 45 min: they must be at least every 30 min']);
     expect(after((d) => { delete step(d, 'compression', 'compress').everyMinutes; }))
-      .toEqual(['error TB-15 stages[2].steps[0].everyMinutes: Compress with periodic checks needs the interval of its periodic checks']);
+      .toEqual(['error TI-15 stages[2].steps[0].everyMinutes: Compress with periodic checks needs the interval of its periodic checks']);
     expect(after((d) => { step(d, 'compression', 'compress').everyMinutes = 30; })).toEqual([]);
   });
 
@@ -166,7 +166,7 @@ describe('calculation checks', () => {
     const mccCompensates = (overage: string) => (d: MasterDoc) => { d.formula[0]!.adjust = { ...d.formula[0]!.adjust, overage: { percent: overage } }; d.formula[4]!.adjust = { compensates: ['api'] }; };
     // 100 000 tablets: 10.000 kg API × 1.20 = 12.000 kg; 2.000 kg more than the 1.750 kg of MCC
     expect(only('error', 'formula[4].adjust.compensates')(mccCompensates('20.0')))
-      .toEqual([expect.stringMatching(/^error TB-13 formula\[4\]\.adjust\.compensates: At the nominal certificate values: Not enough Microcrystalline cellulose to compensate.*-0\.250 kg of Microcrystalline cellulose\. The batch weight cannot be kept$/)]);
+      .toEqual([expect.stringMatching(/^error TI-13 formula\[4\]\.adjust\.compensates: At the nominal certificate values: Not enough Microcrystalline cellulose to compensate.*-0\.250 kg of Microcrystalline cellulose\. The batch weight cannot be kept$/)]);
     expect(only('error', 'formula[4].adjust.compensates')(mccCompensates('10.0'))).toEqual([]);
   });
 

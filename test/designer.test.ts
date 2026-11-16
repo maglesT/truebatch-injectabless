@@ -63,29 +63,29 @@ describe('master designer', () => {
     expect(workedExample(d, 2, 1, { output: { value: '20.000', unit: 'kg' } }).results.yield).toMatchObject({ ok: true, check: { pass: false } });
   });
 
-  it('TB-13 the calculation preview adjusts the API for the lot and compensates the filler', () => {
+  it('TI-13 the calculation preview adjusts the API for the lot and compensates the filler', () => {
     const rows = dispensing(tablet(), { api: { assay: '98.0', lod: '2.0' } });
     expect(rows[0]!.adjusted).toMatchObject({ ok: true, value: expect.stringMatching(/^10\.41232/) });
     expect(rows[1]!.adjusted).toMatchObject({ ok: true, value: expect.stringMatching(/^11\.58767/) });
     expect(rows[2]!.adjusted).toBeUndefined();
   });
 
-  it('TB-10 both process skeletons are valid drafts and start every stage with line clearance; what they leave open is listed by the master check', () => {
+  it('TI-10 both process skeletons are valid drafts and start every stage with line clearance; what they leave open is listed by the master check', () => {
     const header = { productItemId: 'p', productCode: 'P', productName: 'P', batchSize: '100000', coreWeightMg: '250.0', coatedWeightMg: '257.5', dispensingRooms: ['RM-101'] };
     for (const s of SKELETON_LIST) {
       const doc = masterSchema.parse({ header, formula: [], stages: skeletonStages(s.id, header) });
       expect(doc.stages.every((st) => st.steps.every((t) => findBlock(t.block)))).toBe(true);
       expect(masterChecks(doc).every((p) => /not set|no core materials|choose the rooms/.test(p.message))).toBe(true);
     }
-    // TB-11: a master that weighs names its dispensing rooms; a new one starts with the rooms of the Dispensing area
+    // TI-11: a master that weighs names its dispensing rooms; a new one starts with the rooms of the Dispensing area
     // exactly (not the liquids block's "Liquid dispensing" booth, nor an inactive room).
     const bare = masterSchema.parse({ header: { ...header, dispensingRooms: undefined }, formula: [], stages: skeletonStages(SKELETON_LIST[0]!.id, header) });
-    expect(masterChecks(bare).filter((p) => p.path === 'header.dispensingRooms')).toEqual([{ level: 'error', path: 'header.dispensingRooms', rule: 'TB-11',
+    expect(masterChecks(bare).filter((p) => p.path === 'header.dispensingRooms')).toEqual([{ level: 'error', path: 'header.dispensingRooms', rule: 'TI-11',
       message: 'The master weighs but names no dispensing rooms: choose them in the header (rooms of master data)' }]);
     expect(defaultDispensingRooms([{ code: 'RM-101', area: 'Dispensing', active: true }, { code: 'RM-102', area: 'Dispensing', active: false },
       { code: 'RM-301', area: 'Liquid dispensing', active: true }, { code: 'RM-103', area: 'Granulation', active: true }])).toEqual(['RM-101']);
-    // The rooms: the usual areas where every plant has them; a preparation and blending are left for the author (TB-11).
-    const rooms = (id: string) => masterChecks(masterSchema.parse({ header, formula: [], stages: skeletonStages(id, header) })).filter((p) => p.rule === 'TB-11').map((p) => p.message.split(':')[0]);
+    // The rooms: the usual areas where every plant has them; a preparation and blending are left for the author (TI-11).
+    const rooms = (id: string) => masterChecks(masterSchema.parse({ header, formula: [], stages: skeletonStages(id, header) })).filter((p) => p.rule === 'TI-11').map((p) => p.message.split(':')[0]);
     expect(rooms('wet-granulation-film-coated')).toEqual(['Stage Binder solution', 'Stage Blending', 'Stage Coating suspension']);
     expect(skeletonStages('wet-granulation-film-coated', header).map((s) => s.roomTypes.join())).toEqual(['', 'Granulation', '', 'Compression', '', 'Coating']);
     const dc = skeletonStages('direct-compression-uncoated', header);

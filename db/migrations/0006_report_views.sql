@@ -22,7 +22,7 @@ begin
 end $$;
 
 -- One row per batch. Ids are uuids made from TrueBatch's ids (Batchwright's columns are uuids). status: IN_PRODUCTION
--- until production approves the complete record (TB-20), then PRODUCTION_APPROVED, QC_APPROVED, RELEASED or REJECTED;
+-- until production approves the complete record (TI-20), then PRODUCTION_APPROVED, QC_APPROVED, RELEASED or REJECTED;
 -- completed_at is that production approval. strength is not in the master document (null). family_code: the master.
 create view batch_fact_v1 with (security_barrier) as
 select md5('truebatch:batch:' || b.id)::uuid as batch_id, b.batch_no as batch_number, v.doc->'header'->>'productCode' as product_code,

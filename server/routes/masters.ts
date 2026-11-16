@@ -11,7 +11,7 @@ import { masterSchema, type MasterDoc, type MasterState } from '../../shared/mas
 import { isHand, type Source } from '../../shared/engine/links.js';
 import { CHANGE_STEPS, approvedChange, namesProduct } from '../links.js';
 
-// Master versions: the model, the table, the draft routes, and the review and approval workflow (TB-02). A version
+// Master versions: the model, the table, the draft routes, and the review and approval workflow (TI-02). A version
 // leaves draft only through that workflow (or, in tests, the database owner).
 
 export interface VersionRow { id: number; masterId: number; versionNo: number; state: MasterState; doc: MasterDoc; createdBy: number; createdAt: Date }
@@ -37,14 +37,6 @@ async function withMasterData(master: Master, doc: MasterDoc): Promise<MasterDoc
       const m = usableItem(materials, l.materialItemId, 'material');
       return { ...l, code: m.code, name: m.name };
     }),
-    // Packing: the bulk product and every packing material too.
-    ...(doc.pack ? { pack: (() => {
-      const bulk = usableItem(products, doc.pack.bulkItemId, 'bulk product');
-      return { ...doc.pack, bulkCode: bulk.code, bulkName: bulk.name, materials: doc.pack.materials.map((l) => {
-        const m = usableItem(materials, l.materialItemId, 'packing material');
-        return { ...l, code: m.code, name: m.name };
-      }) };
-    })() } : {}),
   };
 }
 
@@ -54,7 +46,7 @@ const invalid = (reply: FastifyReply, issues?: z.ZodIssue[]) =>
 
 export function masterRoutes(app: FastifyInstance, sql: Sql) {
   const anyUser = { preHandler: requirePermission() };
-  const author = { preHandler: requirePermission('truebatch.master.author') };
+  const author = { preHandler: requirePermission('truebatch_injectables.master.author') };
 
   app.get('/api/blocks', anyUser, async () => BLOCKS);
 
@@ -133,14 +125,14 @@ export function masterRoutes(app: FastifyInstance, sql: Sql) {
   reviewRoutes(app, sql);
 }
 
-// ---- Review and approval (TB-02) ----
+// ---- Review and approval (TI-02) ----
 
 export const REVIEW_ACTIONS = {
-  submit: { from: 'draft', to: 'in_review', event: 'submitted', meaning: 'prepared', needs: ['truebatch.master.author'] },
-  pass: { from: 'in_review', to: null, event: 'passed', meaning: 'checked', needs: ['truebatch.master.check'] },
-  return: { from: 'in_review', to: 'draft', event: 'returned', meaning: null, needs: ['truebatch.master.check', 'truebatch.master.approve'] },
-  approve: { from: 'in_review', to: 'approved', event: 'approved', meaning: 'approved', needs: ['truebatch.master.approve'] },
-  'make-effective': { from: 'approved', to: 'effective', event: 'effective', meaning: null, needs: ['truebatch.master.approve'] },
+  submit: { from: 'draft', to: 'in_review', event: 'submitted', meaning: 'prepared', needs: ['truebatch_injectables.master.author'] },
+  pass: { from: 'in_review', to: null, event: 'passed', meaning: 'checked', needs: ['truebatch_injectables.master.check'] },
+  return: { from: 'in_review', to: 'draft', event: 'returned', meaning: null, needs: ['truebatch_injectables.master.check', 'truebatch_injectables.master.approve'] },
+  approve: { from: 'in_review', to: 'approved', event: 'approved', meaning: 'approved', needs: ['truebatch_injectables.master.approve'] },
+  'make-effective': { from: 'approved', to: 'effective', event: 'effective', meaning: null, needs: ['truebatch_injectables.master.approve'] },
 } as const satisfies Record<string, { from: MasterState; to: MasterState | null; event: string; meaning: Meaning | null; needs: Permission[] }>;
 export type ReviewAction = keyof typeof REVIEW_ACTIONS;
 const REVIEW_NAMES = Object.keys(REVIEW_ACTIONS) as ReviewAction[];
@@ -186,9 +178,9 @@ export function reviewRefusal(action: ReviewAction, l: Loaded, user: SessionUser
     return no(409, 'no_changes', `This version is the same as version ${l.previous.versionNo}: change what the new version is for, then send it for review.`);
   }
   if (action === 'submit' || action === 'approve') {
-    // TB-01, and the calculation checks: errors, and warnings that need an answer and have none.
+    // TI-01, and the calculation checks: errors, and warnings that need an answer and have none.
     const open = masterChecks(l.v.doc).filter(blocking);
-    if (open.length) return no(409, 'master_has_errors', `The master check shows ${open.length} problem${open.length === 1 ? '' : 's'} to fix or answer first (TB-01).`);
+    if (open.length) return no(409, 'master_has_errors', `The master check shows ${open.length} problem${open.length === 1 ? '' : 's'} to fix or answer first (TI-01).`);
   }
   if (action === 'pass') {
     if (author) return no(403, 'author_cannot_check', 'The person who wrote this version cannot check it: a second person checks it.');
@@ -199,7 +191,7 @@ export function reviewRefusal(action: ReviewAction, l: Loaded, user: SessionUser
     if (author || passed.person === user.id) return no(403, 'author_cannot_approve', 'QA approval is by a person who neither wrote nor checked this version.');
   }
   if (action === 'make-effective') {
-    // TB-02: a change control number typed by hand at approval (QMS absent or down) is confirmed by a second person.
+    // TI-02: a change control number typed by hand at approval (QMS absent or down) is confirmed by a second person.
     const approved = l.events.filter((e) => e.kind === 'approved').at(-1);
     if (isHand(approved?.payload.source?.changeControl) && approved!.person === user.id) {
       return no(403, 'same_person', 'The change control number was typed by hand at approval: another person makes the version effective, after checking the number and its QA approval in QMS or its paper record.');
@@ -209,7 +201,7 @@ export function reviewRefusal(action: ReviewAction, l: Loaded, user: SessionUser
 }
 
 /**
- * TB-02: while QMS answers, the change control must be one of its change controls, approved by QA (CHANGE_STEPS);
+ * TI-02: while QMS answers, the change control must be one of its change controls, approved by QA (CHANGE_STEPS);
  * its title and approval are kept with the approval (PL-07). Otherwise the number is typed by hand.
  */
 async function changeControlSource(app: FastifyInstance, number: string, product?: MasterDoc['header']): Promise<Source> {
@@ -237,7 +229,7 @@ const reviewBodies = {
 
 function reviewRoutes(app: FastifyInstance, sql: Sql) {
   const anyUser = { preHandler: requirePermission() };
-  const reviewer = { preHandler: requirePermission('truebatch.master.author', 'truebatch.master.check', 'truebatch.master.approve') };
+  const reviewer = { preHandler: requirePermission('truebatch_injectables.master.author', 'truebatch_injectables.master.check', 'truebatch_injectables.master.approve') };
 
   // What a reviewer sees: the events (who did what, when), the comments, the previous version for the changes view,
   // the hash a signer signs, and the actions open to this person (with why the others are not).
@@ -306,7 +298,7 @@ function reviewRoutes(app: FastifyInstance, sql: Sql) {
             insert into master_events (version_id, kind, payload, person_id) values (${id}, ${rule.event}, ${tx.json(payload)}, ${user.id}) returning id::int`;
           const retired: number[] = [];
           if (action === 'make-effective') {
-            // TB-02: one effective version; the previous one is retired.
+            // TI-02: one effective version; the previous one is retired.
             for (const r of await tx<{ id: number }[]>`update master_versions set state = 'retired' where master_id = ${l.v.masterId} and state = 'effective' returning id::int`) {
               await tx`insert into master_events (version_id, kind, payload, person_id) values (${r.id}, 'retired', ${tx.json({ by: id })}, ${user.id})`;
               retired.push(r.id);

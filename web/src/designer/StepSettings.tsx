@@ -70,7 +70,7 @@ export function StepSettings({ doc, si, ti, onChange }: { doc: MasterDoc; si: nu
         <h3>Signatures</h3>
         <p className="muted small">The operator who performs the step signs it.</p>
         <label className="check"><input type="checkbox" checked={step.checker} onChange={(e) => onChange({ ...step, checker: e.target.checked })} />A second person checks it (checker)</label>
-        {block.gmp && <p className="muted small">A {block.gmp} step always needs a second-person check (TB-08).</p>}
+        {block.gmp && <p className="muted small">A {block.gmp} step always needs a second-person check (TI-08).</p>}
         <label className="check"><input type="checkbox" checked={step.critical} onChange={(e) => onChange({ ...step, critical: e.target.checked })} />Critical step</label>
       </div>
 

@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { findBlock } from '../shared/blocks/index.js';
 import { dispensingRooms, machineRefusal, untypedNote } from '../shared/engine/picks.js';
-import { SKELETON_LIST, packingStages, skeletonStages } from '../web/src/designer/skeletons.js';
-import { pack } from './packing-fixture.js';
+import { SKELETON_LIST, skeletonStages } from '../web/src/designer/skeletons.js';
 
 // The equipment and instrument types of the demo master data (owner's list, 15 Nov 2026), with a few real types that
 // share a word with them and must not be offered (filter press, air compressor, dry heat steriliser, case packer).
@@ -12,22 +11,20 @@ const TYPES = ['Balance', 'Analytical balance', 'Micro balance', 'IPC balance', 
 const MACHINES = TYPES.map((type, i) => ({ code: `EQ-${i}`, type, room: null }));
 const BALANCES = ['Balance', 'IPC balance', 'Platform balance'];
 const BLENDERS = ['Bin blender', 'Blender'];
-const LINES = ['Blister packer', 'Strip packer', 'High speed blister line', 'Cold forming machine'];
 const OFFERS: Record<string, string[]> = {
   'weigh.balance': BALANCES, 'lubricate.balance': BALANCES, 'lubricate.machine': BLENDERS, 'blend-uniformity.machine': BLENDERS,
   'dry-mix.machine': [...BLENDERS, 'Rapid mixer granulator'], 'granulate.machine': ['Rapid mixer granulator'], 'dry.machine': ['Fluid bed dryer'],
   'compress.machine': ['Tablet compression machine', 'Tablet press'], 'spray-coat.machine': ['Auto coater'], 'sift.machine': ['Sifter'],
   'sieve.machine': ['Sifter', 'Multimill'], 'binder-solution.machine': ['Manufacturing vessel'], 'coating-suspension.machine': ['Manufacturing vessel'],
   'charge.machine': [...BLENDERS, 'Rapid mixer granulator', 'Fluid bed dryer', 'Manufacturing vessel'], 'friability.machine': ['Friabilator'], 'disintegration.machine': ['Disintegration tester'],
-  'bulk-issue.line': LINES, 'pack-clearance.line': LINES, 'pack-clearance-after.line': LINES,
 };
 
 describe('machine pickers on the demo master-data types', () => {
   const header = { productItemId: 'p', productCode: 'P', productName: 'P', batchSize: '100000', coreWeightMg: '250.0' };
   // The types alone: here every stage allows any room (the rooms are tested below).
-  const stages = [...SKELETON_LIST.flatMap((s) => skeletonStages(s.id, header)), ...packingStages(pack())].map((s) => ({ ...s, roomTypes: [] }));
+  const stages = [...SKELETON_LIST.flatMap((s) => skeletonStages(s.id, header))].map((s) => ({ ...s, roomTypes: [] }));
 
-  it('TB-11 every machine field of the skeletons and the packing skeleton offers the machines of its kind, never a QC lab balance', () => {
+  it('TI-11 every machine field of the skeletons offers the machines of its kind, never a QC lab balance', () => {
     const seen = new Set<string>();
     for (const stage of stages) for (const st of stage.steps) {
       for (const f of findBlock(st.block)!.fields.filter((x) => x.kind === 'machine')) {
@@ -39,7 +36,7 @@ describe('machine pickers on the demo master-data types', () => {
     expect([...seen].sort()).toEqual(Object.keys(OFFERS).sort());
   });
 
-  it('TB-11 an analytical balance is refused on the floor with the reason', () => {
+  it('TI-11 an analytical balance is refused on the floor with the reason', () => {
     const stage = stages[0]!;
     const balance = findBlock({ id: 'weigh', version: 1 })!.fields.find((f) => f.name === 'balance')!;
     expect(machineRefusal(stage, balance, { code: 'QC-BAL-1', type: 'Analytical balance', room: null }, [])).toBe('QC-BAL-1 is not a balance (master data: Analytical balance)');
@@ -55,7 +52,7 @@ describe('machine pickers on the demo master-data types', () => {
     .map(([code, room]) => ({ code: code!, type: 'Balance', room }));
   const field = (block: string, name: string) => findBlock({ id: block, version: 1 })!.fields.find((f) => f.name === name)!;
 
-  it('TB-11 a balance is offered in the master\'s dispensing rooms, with those of the stage\'s rooms; INL-BAL-01 of the liquids block is not; never a QC or laboratory balance', () => {
+  it('TI-11 a balance is offered in the master\'s dispensing rooms, with those of the stage\'s rooms; INL-BAL-01 of the liquids block is not; never a QC or laboratory balance', () => {
     const stage = { ...stages[0]!, roomTypes: ['Granulation', 'Coating'], machineTypes: ['Granulator', 'Coater'] };
     const offered = (block: string, s = stage, dispensing = ['RM-101']) => BALS.filter((b) => !machineRefusal(s, field(block, 'balance'), b, ROOMS, dispensing)).map((b) => b.code);
     expect(offered('weigh')).toEqual(['IN-BAL-03', 'IN-BAL-04']);
@@ -70,13 +67,13 @@ describe('machine pickers on the demo master-data types', () => {
     expect(dispensingRooms({ header: { ...old.header, dispensingRooms: ['RM-102'] } }, ROOMS)).toEqual(['RM-102']);
   });
 
-  it('TB-11 a packing line is offered only standing in a room the stage allows; one with no type is named in the note', () => {
-    const stage = { ...stages[0]!, roomTypes: ['Packing'] };
-    const line = field('pack-clearance', 'line');
-    const lines = [{ code: 'EQ-BLS-01', type: 'Blister packer', room: 'RM-108' }, { code: 'EQ-X', type: 'Blister packer', room: 'RM-107' },
-      { code: 'CFORM-01', type: 'Blister packer', room: null }, { code: 'CFORM-BL-01', type: null, room: 'RM-108' }];
-    expect(lines.map((m) => machineRefusal(stage, line, m, ROOMS))).toEqual([null, 'EQ-X stands in RM-107, not in a room this stage allows (Packing)',
-      'CFORM-01 stands in no room in master data, so it is not in a room this stage allows (Packing)', 'CFORM-BL-01 has no type in master data, so it is not offered as a packing line']);
-    expect(untypedNote(line, lines)).toBe('Not offered, because master data gives no type: CFORM-BL-01. Engineering sets the type (and the room) in master data.');
+  it('TI-11 a machine is offered only standing in a room the stage allows; one with no type is named in the note', () => {
+    const stage = { ...stages[0]!, roomTypes: ['Granulation'] };
+    const sifter = field('sift', 'machine');
+    const items = [{ code: 'EQ-S-01', type: 'Sifter', room: 'RM-103' }, { code: 'EQ-X', type: 'Sifter', room: 'RM-107' },
+      { code: 'SF-01', type: 'Sifter', room: null }, { code: 'SF-02', type: null, room: 'RM-103' }];
+    expect(items.map((m) => machineRefusal(stage, sifter, m, ROOMS))).toEqual([null, 'EQ-X stands in RM-107, not in a room this stage allows (Granulation)',
+      'SF-01 stands in no room in master data, so it is not in a room this stage allows (Granulation)', expect.stringContaining('SF-02 has no type in master data')]);
+    expect(untypedNote(sifter, items)).toBe('Not offered, because master data gives no type: SF-02. Engineering sets the type (and the room) in master data.');
   });
 });

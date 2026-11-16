@@ -7,7 +7,7 @@ import { logIn } from './helpers.js';
 
 // The floor screens, one stage of a small fixture master: a pH check (second-person check) and the stage yield.
 
-/** Writes the fixture master through the API, makes it effective (the database owner does it, as in the server tests) and issues a batch on the master records screen (TB-03). */
+/** Writes the fixture master through the API, makes it effective (the database owner does it, as in the server tests) and issues a batch on the master records screen (TI-03). */
 async function issueBatch(page: Page): Promise<{ id: number; batchNo: string }> {
   await logIn(page, 'iss1');
   const doc = small([{ name: 'Blending', steps: [{ checker: true },
@@ -35,7 +35,7 @@ async function sign(page: Page) {
   await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 
-test('TB-14 floor journey: start, a value out of limits needs a deviation note, done, checked by a second person on their own device, stage yield on My work', async ({ browser }) => {
+test('TI-14 floor journey: start, a value out of limits needs a deviation note, done, checked by a second person on their own device, stage yield on My work', async ({ browser }) => {
   const setup = await browser.newContext();
   const batch = await issueBatch(await setup.newPage());
   await setup.close();
@@ -102,7 +102,7 @@ test('TB-14 floor journey: start, a value out of limits needs a deviation note, 
   await expect(chk.getByRole('region', { name: 'Waiting for your check' })).toContainText('Stage yield');
   await expect(chk.getByRole('region', { name: 'Waiting for your check' })).toContainText(batch.batchNo);
 
-  // TB-06: a correction keeps the old value struck through; the new value and the reason are not struck.
+  // TI-06: a correction keeps the old value struck through; the new value and the reason are not struck.
   await op.getByRole('button', { name: `← Batch ${batch.batchNo}` }).click();
   await op.getByRole('button', { name: /^1 Check a value against limits: pH/ }).click();
   await op.getByRole('button', { name: 'Correct', exact: true }).click();

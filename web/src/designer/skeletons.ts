@@ -1,14 +1,14 @@
 // Process skeletons a new master may start from: the usual stages and steps of a process, as data. Settings that
 // depend on the product (which material a step weighs, its limits) are left for the author; the master check lists
 // them. Tablet-weight limits start at ± 5 % of the header's core weight. Every stage is worked in a room, so each
-// starts with line clearance (TB-10). A later stage's yield is on the actual input of the stage (the previous stage's
+// starts with line clearance (TI-10). A later stage's yield is on the actual input of the stage (the previous stage's
 // output), the coating gain on the batch's actual core mean weight, and the granulation end point is checked by a
 // second person. A stage starts with the rooms it usually runs in, by the usual area names; a stage whose rooms
 // differ from plant to plant (a binder or coating suspension, blending) is left for the author: the master check
-// asks for its rooms (TB-11).
+// asks for its rooms (TI-11).
 import { findBlock } from '../../../shared/blocks/index.js';
 import { Dec } from '../../../shared/templates/index.js';
-import type { MasterDoc, Pack, SettingValue, Stage, Step } from '../../../shared/master/schema.js';
+import type { MasterDoc, SettingValue, Stage, Step } from '../../../shared/master/schema.js';
 import { stepFrom } from './model.js';
 
 type Header = MasterDoc['header'];
@@ -21,7 +21,7 @@ const yieldStep = (theoretical: SettingValue): StepPlan => ({ block: 'stage-yiel
 const weighStep = (key: string): StepPlan => ({ block: 'weigh', key });
 const compressStep: StepPlan = { block: 'compress', settings: (h) => ({
   meanLimit: { low: pct(h, h.coreWeightMg, '-5'), high: pct(h, h.coreWeightMg, '5'), unit: 'mg' }, weightBand: '5.0', weightOuterBand: '10.0' }) };
-// TB-16: the tooling is checked before and after compression; friability and disintegration are tested on the cores;
+// TI-16: the tooling is checked before and after compression; friability and disintegration are tested on the cores;
 // the tablets are reconciled at the end.
 const tooling = (key: string, name: string): StepPlan => ({ block: 'punch-die-check', key, name });
 const reconcile: StepPlan = { block: 'tablet-reconciliation', key: 'yield', settings: () => ({ theoretical: { header: 'batchSize' },
@@ -63,7 +63,7 @@ const SKELETONS: { id: string; name: string; text: string; stages: StagePlan[] }
 ];
 export const SKELETON_LIST = SKELETONS.map(({ id, name, text }) => ({ id, name, text }));
 
-/** The dispensing rooms a new tablet master starts with (TB-11): the active rooms whose area is exactly "Dispensing". */
+/** The dispensing rooms a new tablet master starts with (TI-11): the active rooms whose area is exactly "Dispensing". */
 export const defaultDispensingRooms = (rooms: readonly { code: string; area: string | null; active: boolean }[]) =>
   rooms.filter((r) => r.active && r.area === 'Dispensing').map((r) => r.code);
 
@@ -84,48 +84,3 @@ export function skeletonStages(id: string, h: Header): Stage[] {
   }));
 }
 
-// TrueBatch Tablets Packing: the packing record for a pack and its materials. Issue to the line (the bulk tablets and
-// each packing material); packing (line clearance, set-up, the camera and serial numbers when serialisation is
-// checked, then the periodic checks alongside the line); and the end (finished goods and tablets, every printed
-// material, the serial numbers, destruction of coded leftovers, line clearance after). Limits that depend on the
-// product (sealing temperature, vacuum) are left for the author; the master check lists them.
-const packStep = (block: string, key?: string, settings: Record<string, SettingValue> = {}): Step => {
-  const b = findBlock({ id: block, version: 1 })!;
-  return { ...stepFrom(b, []), ...(key ? { key } : {}), settings, ...(b.stop ? { flow: { kind: 'repeat-until' as const, maxRounds: 100 } } : {}) };
-};
-const issueStep = (m: Pack['materials'][number]) => packStep('pack-material-issue', `issue-${m.key}`, { material: { formula: m.key }, unit: m.unit });
-const reconcileStep = (m: Pack['materials'][number]) => packStep('printed-reconciliation', `reconcile-${m.key}`, { material: { formula: m.key }, unit: m.unit, issued: { ref: `issue/issue-${m.key}/issued` } });
-const packStage = (key: string, name: string, role: string, steps: Step[], roomTypes: string[] = []): Stage => ({ key, name, kind: 'normal', roomTypes, machineTypes: [], role, uses: [], steps });
-
-export function packingStages(pack: Pack): Stage[] {
-  const blister = pack.type !== 'bottle';
-  const serial = pack.serialisation;
-  return [
-    packStage('issue', 'Issue to the line', 'Warehouse officer', [packStep('bulk-issue', 'bulk'), ...pack.materials.map(issueStep)]),
-    packStage('packing', 'Packing', 'Packing operator', [packStep('pack-clearance', 'clearance'), packStep('line-setup', 'setup'),
-      ...(serial ? [packStep('vision-challenge', 'camera'), packStep('serial-received', 'serials')] : []), packStep('coding-check', 'coding'),
-      ...(blister ? [packStep('forming-check', 'forming'), packStep('leak-test', 'leak', { vacuumUnit: 'mbar', level: 'S-2', aql: '0.65' })] : []),
-      packStep('online-inspection', 'inspection'), packStep('carton-check', 'cartons'), ...(serial ? [packStep('serial-sample', 'serial-sample')] : [])], ['Packing']),
-    packStage('end', 'Reconciliation and line clearance', 'Packing supervisor', [
-      packStep('finished-goods', 'finished', { meanWeight: { header: 'coreWeight' }, yieldLimit: { low: '98.0', high: '100.5', unit: '%' }, accountabilityLimit: { low: '99.5', high: '100.5', unit: '%' } }),
-      ...pack.materials.filter((m) => m.printed).map(reconcileStep),
-      ...(serial ? [packStep('serial-reconciliation', 'serial-reconciliation', { received: { ref: 'packing/serials/received' } })] : []),
-      packStep('destruction'), packStep('pack-clearance-after', 'clearance-after')], ['Packing']),
-  ];
-}
-
-/** Adds the issue and reconciliation steps of packing materials that have none (to the first and last stages). */
-export function withMaterialSteps(doc: MasterDoc): MasterDoc {
-  const p = doc.pack;
-  const first = doc.stages[0];
-  const last = doc.stages.at(-1);
-  if (!p || !first || !last) return doc;
-  const names = (s: Stage, block: string) => s.steps.filter((t) => t.block.id === block).map((t) => (t.settings.material as { formula?: string } | undefined)?.formula);
-  const issue = p.materials.filter((m) => !names(first, 'pack-material-issue').includes(m.key)).map(issueStep);
-  const recon = p.materials.filter((m) => m.printed && !names(last, 'printed-reconciliation').includes(m.key)).map(reconcileStep);
-  const at = Math.max(0, last.steps.findIndex((t) => t.block.id === 'destruction' || t.block.id === 'pack-clearance-after'));
-  const stages = doc.stages.map((s, i) => ({ ...s, steps: [...s.steps] }));
-  stages[0]!.steps.push(...issue);
-  stages.at(-1)!.steps.splice(at, 0, ...recon);
-  return { ...doc, stages };
-}

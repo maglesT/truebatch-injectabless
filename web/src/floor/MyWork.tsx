@@ -4,7 +4,7 @@ import { batchLink, go, plainError, STATE_LABEL, stepLink, timeLeft, useServerNo
 import './floor.css';
 
 // "My work": the batches in production the person may act on, the checks waiting for them (never their own work,
-// TB-08), the next periodic check, timers that ran over and steps to sign again. Refreshed every 30 s.
+// TI-08), the next periodic check, timers that ran over and steps to sign again. Refreshed every 30 s.
 export function MyWork({ me }: { me: Me }) {
   const [rows, setRows] = useState<WorkItem[] | null>(null);
   const [error, setError] = useState('');

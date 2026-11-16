@@ -1,4 +1,4 @@
-/** TrueBatch Tablets calculation and check templates, version 2 (with the packing templates T27, C8 and C9). */
+/** TrueBatch Injectables calculation and check templates, version 2. */
 export { Dec, type Q, type Outcome, type Done, type Refusal, type ResultValue } from './core.js';
 export { checkLimit, roundHalfUp, writtenDecimals, type Check, type Limit, type Level } from './rounding.js';
 export { convert, findUnit, type Kind, type Unit } from './units.js';
@@ -15,4 +15,3 @@ export { t17LiquidMakeUp } from './liquid.js';
 export { t22SieveAnalysis, t22MixPsd, t23CompactStrength, t24SpecificEnergy, t25AbsoluteHumidity } from './physical.js';
 export { c6StagedTest } from './staged.js';
 export { c7SamplingPlan, codeLetter, plan } from './sampling.js';
-export { t27Expiry, c8PrintedData, c9SerialCodes, expiryMonth, printedMonth, gs1 } from './packing.js';

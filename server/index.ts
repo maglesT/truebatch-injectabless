@@ -1,5 +1,5 @@
-// TrueBatch Tablets (packing/server/index.ts starts TrueBatch Tablets Packing).
+// TrueBatch Injectables.
 import { start } from './start.js';
-import { TABLETS } from './product.js';
+import { INJECTABLES } from './product.js';
 
-await start(TABLETS);
+await start(INJECTABLES);

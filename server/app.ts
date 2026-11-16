@@ -15,7 +15,7 @@ import { demoRoutes } from './demo.js';
 import type { SignOn } from './signon.js';
 import { ConnectionOff, NotUsable, type Master } from './master.js';
 import { links as noLinks, type Links } from './links.js';
-import { TABLETS, productSignOn, type Product } from './product.js';
+import { INJECTABLES, type Product } from './product.js';
 
 export const VERSION = '0.1.0';
 
@@ -34,18 +34,17 @@ export interface AppOptions {
   webRoot?: string;
   // Secure flag on the session cookie; off only for plain-HTTP development.
   cookieSecure?: boolean;
-  // The fixed start of every batch number (TB-03).
+  // The fixed start of every batch number (TI-03).
   batchPrefix?: string;
-  // Which product this server is: TrueBatch Tablets (default) or TrueBatch Tablets Packing (server/product.ts).
+  // The product (server/product.ts).
   product?: Product;
   // A demo installation (TRUEBATCH_DEMO=1, server/demo.ts): the screens say DEMO and waits may be skipped.
   demo?: boolean;
 }
 
-export async function buildApp({ sql, signOn: core, master, links = noLinks(), proofKey = randomBytes(32), logger = false, webRoot, cookieSecure = true, product = TABLETS,
+export async function buildApp({ sql, signOn, master, links = noLinks(), proofKey = randomBytes(32), logger = false, webRoot, cookieSecure = true, product = INJECTABLES,
   batchPrefix = product.batchPrefix, demo = false }: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({ logger, trustProxy: true });
-  const signOn = productSignOn(core, product);
   app.decorate('product', product);
   app.decorate('cookieSecure', cookieSecure);
   app.decorate('proofKey', proofKey);

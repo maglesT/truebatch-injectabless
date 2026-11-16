@@ -28,7 +28,7 @@ function settingsText(doc: BatchDetail['master']['doc'], block: Block, st: Step,
   return block.settings.flatMap((s): [string, string][] => {
     const v = st.settings[s.name];
     const m = v && typeof v === 'object' && 'formula' in v ? materialLines(doc).find((l) => l.key === v.formula) : undefined;
-    const what = m && `${m.code} · ${m.name}${'perPack' in m ? ` (${m.kind}, ${m.perPack} ${m.unit} per pack)` : ''}`;
+    const what = m && `${m.code} · ${m.name}`;
     if (m && s.kind === 'quantity' && 'mgPerTablet' in m && typeof v === 'object' && 'formula' in v) {
       // Worked out by the server once a value is recorded; before that, the batch quantity (an adjusted one needs the lot).
       const r = row.results[s.name] ?? (v.adjusted ? undefined : lineQuantity(doc, [], row.key, m, false, {}));
@@ -44,7 +44,7 @@ function settingsText(doc: BatchDetail['master']['doc'], block: Block, st: Step,
 
 // The step screen: the instruction, only the fields the block needs, the results worked out by the server with their
 // worked line, and the actions open to this person. A step waiting for its check shows what was recorded to the
-// checker, on their own device (TB-08).
+// checker, on their own device (TI-08).
 export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: BatchDetail; blocks: Block[]; row: StepRow; now: number; reload: (b?: boolean) => Promise<void> }) {
   const doc = d.master.doc;
   const st = stepOf(doc, row.key);
@@ -334,7 +334,7 @@ function Summary({ row, block }: { row: StepRow; block: Block }) {
   );
 }
 
-// TB-06: the original value stays, crossed out, with who changed it, when and why.
+// TI-06: the original value stays, crossed out, with who changed it, when and why.
 function Replaced({ h, field, names, label }: { h: History | null; field: string; names: Map<number | null, string | null>; label?: string }) {
   const list = h?.replaced.filter((r) => r.field === field) ?? [];
   return <>{list.map((r, i) => (

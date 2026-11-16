@@ -126,7 +126,7 @@ export const headerSchema = z.object({
   dieAreaMm2: decimal.optional(),
   // Other strengths compressed from the same blend at their own core weight (F0225, F0366).
   otherStrengths: z.array(z.object({ name: text().min(1), labelClaim: text(40), coreWeightMg: decimal }).strict()).max(10).optional(),
-  // TB-11: the rooms of master data (codes) where this product's materials are weighed; a balance is offered there or
+  // TI-11: the rooms of master data (codes) where this product's materials are weighed; a balance is offered there or
   // in a room the stage allows (shared/engine/picks.ts). A version made before this setting has none.
   dispensingRooms: z.array(text()).max(20).optional(),
 }).strict();
@@ -135,53 +135,11 @@ export const headerSchema = z.object({
 // as answered: when the warning reads differently (the item changed), it needs a new answer.
 export const answerSchema = z.object({ about: text(1000), choice: text().min(1), reason: text(1000) }).strict();
 
-// TrueBatch Tablets Packing (TB-P1): a packing master is per product, pack type and size, and destination. Its header
-// names the finished pack product, the standard packing batch in tablets (batchSize) and the theoretical weight of one
-// bulk tablet (coreWeightMg, for counts by weight); `pack` holds the rest. Its formula is empty: the packing materials
-// are `pack.materials`, and a step setting { formula: key } names one of them.
-export const PACK_TYPES = ['blister', 'strip', 'bottle'] as const;
-export const PACK_MATERIAL_KINDS = ['foil', 'forming film', 'carton', 'leaflet', 'label', 'shipper', 'bottle', 'closure', 'desiccant', 'other'] as const;
-export const DESTINATIONS = ['India domestic', 'Export'] as const;
-export const packMaterialSchema = z.object({
-  key: keySchema,
-  materialItemId: z.string().min(1).max(100),
-  code: text(),
-  name: text(),
-  kind: z.enum(PACK_MATERIAL_KINDS),
-  // Printed (artwork): issued only by its step with a second person, reconciled to zero (TB-P4, TB-P6).
-  printed: z.boolean(),
-  // Coded on the line with the batch number, dates and MRP (TB-P5, TB-P9); leftovers are destroyed.
-  coded: z.boolean(),
-  perPack: decimal,
-  unit: z.enum(['units', 'm', 'g']),
-}).strict();
-export const packSchema = z.object({
-  bulkItemId: z.string().min(1).max(100),
-  bulkCode: text(),
-  bulkName: text(),
-  type: z.enum(PACK_TYPES),
-  // Tablets in one blister, strip or bottle, and packs in one carton.
-  unitsPerPack: z.number().int().min(1).max(10_000),
-  packsPerCarton: z.number().int().min(1).max(1000),
-  // The approved shelf life (TB-P8): the expiry is worked out from it, never typed.
-  shelfLifeMonths: z.number().int().min(1).max(120),
-  // "month before": expiry = month of manufacture + shelf life − 1 (use before the end of that month).
-  expiryRule: z.enum(['month before', 'same month']).default('month before'),
-  destination: z.enum(DESTINATIONS),
-  // Maximum retail price per pack in rupees (India domestic, TB-P9).
-  mrp: decimal.optional(),
-  // The pack's GTIN, for checking the codes of the customer's serialisation system.
-  gtin: z.string().regex(/^\d{14}$/, '14 digits').optional(),
-  serialisation: z.boolean().default(false),
-  materials: z.array(packMaterialSchema).max(50),
-}).strict();
-
 export const masterSchema = z.object({
   header: headerSchema,
   formula: z.array(lineSchema).max(100),
   stages: z.array(stageSchema).max(50),
   answers: z.record(z.string().max(120), answerSchema).optional(),
-  pack: packSchema.optional(),
 }).strict();
 
 export type MasterDoc = z.infer<typeof masterSchema>;
@@ -191,11 +149,9 @@ export type FormulaLine = z.infer<typeof lineSchema>;
 export type SettingValue = z.infer<typeof settingValueSchema>;
 export type Limit = z.infer<typeof limitSchema>;
 export type Answer = z.infer<typeof answerSchema>;
-export type Pack = z.infer<typeof packSchema>;
-export type PackMaterial = z.infer<typeof packMaterialSchema>;
 
-/** Every material a step may name: the formula lines, or a packing master's packing materials. */
-export const materialLines = (doc: MasterDoc): (FormulaLine | PackMaterial)[] => [...doc.formula, ...(doc.pack?.materials ?? [])];
+/** Every material a step may name: the formula lines. */
+export const materialLines = (doc: MasterDoc): FormulaLine[] => doc.formula;
 
 export const MASTER_STATES = ['draft', 'in_review', 'approved', 'effective', 'retired'] as const;
 export type MasterState = (typeof MASTER_STATES)[number];

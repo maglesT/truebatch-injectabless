@@ -5,7 +5,7 @@ import { doneProblems, evaluate, openSteps, parseKey, type StepEvent, type Value
 import { masterChecks } from '../shared/master/checks.js';
 import type { MasterDoc } from '../shared/master/schema.js';
 import { at, ev, small, unplaced } from './engine-fixture.js';
-// The problems, without the rooms a stage must name (TB-11): the fixtures name none.
+// The problems, without the rooms a stage must name (TI-11): the fixtures name none.
 const checks = (d: Parameters<typeof masterChecks>[0]) => unplaced(masterChecks(d));
 
 // The standard tablet blocks: each is a description that the format accepts and that a small master can use without
@@ -126,7 +126,7 @@ describe('the engine runs the new blocks like any other', () => {
     expect(steps.map((s) => s.state)).toEqual(['checked', 'checked', 'done', 'checked', 'checked', 'checked', 'checked', 'checked', 'checked']);
   });
 
-  it('TB-16 punches and dies: a damaged punch after use fails the check, so the step needs a deviation note', () => {
+  it('TI-16 punches and dies: a damaged punch after use fails the check, so the step needs a deviation note', () => {
     const after = { ...intact, upperPunches: 'no', damaged: { value: '1', unit: 'units' } };
     const r = evaluate(doc, [], parseKey('2.1.3.1')!, after);
     expect(r.toolingCheck).toMatchObject({ ok: true, check: { pass: false } });

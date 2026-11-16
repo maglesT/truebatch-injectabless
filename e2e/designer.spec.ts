@@ -2,7 +2,7 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
 import { logIn } from './helpers.js';
 
 // The master designer: a small master built from a skeleton, a master-check problem found and fixed, then the review
-// and approval workflow with three people, each in their own browser (TB-02).
+// and approval workflow with three people, each in their own browser (TI-02).
 
 async function as(browser: Browser, who: string, viewport?: { width: number; height: number }): Promise<Page> {
   const page = await (await browser.newContext(viewport ? { viewport } : {})).newPage();
@@ -23,7 +23,7 @@ async function sign(page: Page) {
   await expect(dialog).toBeHidden();
 }
 
-test('TB-02 build a master from a skeleton, fix a master-check problem, then check, approve and (another QA person) make it effective', async ({ browser }) => {
+test('TI-02 build a master from a skeleton, fix a master-check problem, then check, approve and (another QA person) make it effective', async ({ browser }) => {
   const author = await as(browser, 'author1');
   await author.getByRole('button', { name: 'New master' }).click();
   await author.getByLabel('Product').fill('PRD-001');
@@ -43,7 +43,7 @@ test('TB-02 build a master from a skeleton, fix a master-check problem, then che
   await author.getByLabel('Role of Examplol').selectOption('api');
   await expect(author.locator('.total.ok')).toContainText('equals the theoretical core weight');
 
-  // The process: 2 stages, each starting with line clearance (TB-10); the dry-mix step of blending is removed, leaving 4.
+  // The process: 2 stages, each starting with line clearance (TI-10); the dry-mix step of blending is removed, leaving 4.
   await author.getByRole('button', { name: 'Process', exact: true }).click();
   await expect(author.locator('.steps-col .olist li').first()).toContainText('Line clearance');
   // Remove and move are there without selecting the step first.
@@ -74,7 +74,7 @@ test('TB-02 build a master from a skeleton, fix a master-check problem, then che
   await author.getByLabel('Hardness limits: highest').fill('120');
   await author.getByLabel('Thickness limits: lowest').fill('3.8');
   await author.getByLabel('Thickness limits: highest').fill('4.2');
-  // TB-11: blending names no rooms in the skeleton; the check opens its stage settings, where the rooms are picked.
+  // TI-11: blending names no rooms in the skeleton; the check opens its stage settings, where the rooms are picked.
   await check.getByRole('button', { name: /Stage Blending: choose the rooms/ }).click();
   await author.getByLabel('Add to rooms this stage may run in (an area, or a room)').selectOption('Blending');
   await expect(check).toContainText('No problems');

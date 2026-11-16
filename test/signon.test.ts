@@ -26,14 +26,14 @@ describe('sign-on through core', () => {
   });
 
   it('PL-01: /login sends the browser to core with PKCE; sign-on opens a session with the permissions from core and is audited', async () => {
-    const id = await seedUser(t.owner, uniq('op'), ['truebatch.batch.operate']);
+    const id = await seedUser(t.owner, uniq('op'), ['truebatch_injectables.batch.operate']);
     const username = `op${n}`;
     const start = await t.app.inject({ method: 'GET', url: `/login?login_hint=${username}` });
     expect(start.statusCode).toBe(302);
     const { res, cookie } = await login(t.app, username);
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toBe('/');
-    expect((await call(t.app, cookie, 'GET', '/api/me')).json()).toEqual({ id, username, fullName: username.toUpperCase(), permissions: ['truebatch.batch.operate'] });
+    expect((await call(t.app, cookie, 'GET', '/api/me')).json()).toEqual({ id, username, fullName: username.toUpperCase(), permissions: ['truebatch_injectables.batch.operate'] });
     expect(await auditRows('login', id)).toHaveLength(1);
   });
 
@@ -51,25 +51,25 @@ describe('sign-on through core', () => {
     const id = await seedUser(t.owner, uniq('nobody'), []);
     const { res, cookie } = await login(t.app, `nobody${n}`);
     expect(res.statusCode).toBe(403);
-    expect(res.body).toContain('no right to use TrueBatch Tablets');
+    expect(res.body).toContain('no right to use TrueBatch Injectables');
     expect(cookie).toBe('');
     expect(await auditRows('login.failed', id)).toHaveLength(1);
   });
 
   it('PL-01: permissions come from core only; codes of another product or unknown codes give no right', async () => {
-    await seedUser(t.owner, uniq('op'), ['truebatch.view']);
-    directory.get(`op${n}`)!.permissions.push('logbook.audit.read', 'truebatch.unknown');
+    await seedUser(t.owner, uniq('op'), ['truebatch_injectables.view']);
+    directory.get(`op${n}`)!.permissions.push('logbook.audit.read', 'truebatch_injectables.unknown');
     const { cookie } = await login(t.app, `op${n}`);
-    expect((await call(t.app, cookie, 'GET', '/api/me')).json().permissions).toEqual(['truebatch.view']);
+    expect((await call(t.app, cookie, 'GET', '/api/me')).json().permissions).toEqual(['truebatch_injectables.view']);
   });
 
   it('PL-01: each action checks its own permission code, whatever else the person holds', async () => {
     // A guarded action of the shape every TrueBatch route uses (no domain routes exist yet).
     const app = await buildApp({ sql: t.sql, signOn: fakeSignOn(), proofKey: TEST_PROOF_KEY, master: fakeMaster(), webRoot: '/nonexistent' });
-    app.post('/api/test/release', { preHandler: requirePermission('truebatch.qa.release') }, async () => ({ ok: true }));
-    await seedUser(t.owner, uniq('op'), ['truebatch.batch.operate', 'truebatch.batch.check', 'truebatch.batch.supervise', 'truebatch.qc.approve']);
+    app.post('/api/test/release', { preHandler: requirePermission('truebatch_injectables.qa.release') }, async () => ({ ok: true }));
+    await seedUser(t.owner, uniq('op'), ['truebatch_injectables.batch.operate', 'truebatch_injectables.batch.check', 'truebatch_injectables.batch.supervise', 'truebatch_injectables.qc.approve']);
     const op = (await login(app, `op${n}`)).cookie;
-    await seedUser(t.owner, uniq('qa'), ['truebatch.qa.release']);
+    await seedUser(t.owner, uniq('qa'), ['truebatch_injectables.qa.release']);
     const qa = (await login(app, `qa${n}`)).cookie;
     expect((await call(app, op, 'POST', '/api/test/release')).statusCode).toBe(403);
     expect((await call(app, qa, 'POST', '/api/test/release')).statusCode).toBe(200);
@@ -78,7 +78,7 @@ describe('sign-on through core', () => {
   });
 
   it('PL-01: a sign-in this browser did not start is refused (no login CSRF)', async () => {
-    await seedUser(t.owner, uniq('qa'), ['truebatch.qa.release']);
+    await seedUser(t.owner, uniq('qa'), ['truebatch_injectables.qa.release']);
     const made = await t.app.inject({ method: 'GET', url: `/cb?code=qa${n}&state=made-up` });
     expect(made.statusCode).toBe(400);
     // Someone else's started sign-in, sent to this browser (which holds no matching sign-in cookie).
@@ -89,13 +89,13 @@ describe('sign-on through core', () => {
   });
 
   it(`PL-01: a revoked permission or a deactivated person is out within ${POLICY.roleCheckMinutes} minutes (renewal through core)`, async () => {
-    await seedUser(t.owner, uniq('sup'), ['truebatch.batch.supervise', 'truebatch.view']);
+    await seedUser(t.owner, uniq('sup'), ['truebatch_injectables.batch.supervise', 'truebatch_injectables.view']);
     const username = `sup${n}`;
     const { cookie } = await login(t.app, username);
-    directory.get(username)!.permissions = ['truebatch.view'];
-    expect((await call(t.app, cookie, 'GET', '/api/me')).json().permissions).toContain('truebatch.batch.supervise');
+    directory.get(username)!.permissions = ['truebatch_injectables.view'];
+    expect((await call(t.app, cookie, 'GET', '/api/me')).json().permissions).toContain('truebatch_injectables.batch.supervise');
     await t.owner`update sessions set checked_at = now() - interval '6 minutes' where id = ${sid(cookie)}`;
-    expect((await call(t.app, cookie, 'GET', '/api/me')).json().permissions).toEqual(['truebatch.view']);
+    expect((await call(t.app, cookie, 'GET', '/api/me')).json().permissions).toEqual(['truebatch_injectables.view']);
 
     directory.get(username)!.active = false;
     await t.owner`update sessions set checked_at = now() - interval '6 minutes' where id = ${sid(cookie)}`;
@@ -104,7 +104,7 @@ describe('sign-on through core', () => {
   });
 
   it('PL-05: /sign asks core for the signed-in person\'s password again and hands the sign window a signing proof', async () => {
-    await seedUser(t.owner, uniq('op'), ['truebatch.batch.operate']);
+    await seedUser(t.owner, uniq('op'), ['truebatch_injectables.batch.operate']);
     const { cookie } = await login(t.app, `op${n}`);
     expect((await t.app.inject({ method: 'GET', url: '/sign?meanings=performed' })).statusCode).toBe(401);
     expect((await t.app.inject({ method: 'GET', url: '/sign?meanings=anything', headers: { cookie } })).statusCode).toBe(400);
@@ -121,7 +121,7 @@ describe('sign-on through core', () => {
   });
 
   it('PL-05: a signature is refused when core did not ask for the password again after it started (auth_time)', async () => {
-    await seedUser(t.owner, uniq('op'), ['truebatch.batch.operate']);
+    await seedUser(t.owner, uniq('op'), ['truebatch_injectables.batch.operate']);
     const { cookie } = await login(t.app, `op${n}`);
     const start = await t.app.inject({ method: 'GET', url: '/sign?meanings=performed', headers: { cookie } });
     const pending = start.cookies.find((c) => c.name === 'signon')!;
@@ -133,14 +133,14 @@ describe('sign-on through core', () => {
   });
 
   it(`PL-01: a session expires after ${POLICY.sessionIdleMinutes} idle minutes`, async () => {
-    await seedUser(t.owner, uniq('op'), ['truebatch.view']);
+    await seedUser(t.owner, uniq('op'), ['truebatch_injectables.view']);
     const { cookie } = await login(t.app, `op${n}`);
     await t.owner`update sessions set last_seen_at = now() - interval '16 minutes' where id = ${sid(cookie)}`;
     expect((await call(t.app, cookie, 'GET', '/api/me')).statusCode).toBe(401);
   });
 
   it('PL-01: logout ends the session and sends the browser to end the core session too (one person per browser)', async () => {
-    await seedUser(t.owner, uniq('op'), ['truebatch.view']);
+    await seedUser(t.owner, uniq('op'), ['truebatch_injectables.view']);
     const { cookie } = await login(t.app, `op${n}`);
     const out = await call(t.app, cookie, 'POST', '/api/logout');
     expect(out.json().logoutUrl).toBe(`/?signed-out=id-op${n}`);
@@ -148,7 +148,7 @@ describe('sign-on through core', () => {
   });
 
   it('PL-01: logout after the session went idle still ends the core session', async () => {
-    await seedUser(t.owner, uniq('op'), ['truebatch.view']);
+    await seedUser(t.owner, uniq('op'), ['truebatch_injectables.view']);
     const idle = (await login(t.app, `op${n}`)).cookie;
     await t.owner`update sessions set last_seen_at = now() - interval '16 minutes' where id = ${sid(idle)}`;
     expect((await call(t.app, idle, 'POST', '/api/logout')).json().logoutUrl).toBe(`/?signed-out=id-op${n}`);
@@ -161,7 +161,7 @@ describe('sign-on through core', () => {
   });
 
   it('PL-01: session ids are stored only as hashes', async () => {
-    await seedUser(t.owner, uniq('op'), ['truebatch.view']);
+    await seedUser(t.owner, uniq('op'), ['truebatch_injectables.view']);
     const { cookie } = await login(t.app, `op${n}`);
     const raw = cookie.slice(4);
     expect(await t.owner`select 1 from sessions where id = ${raw}`).toHaveLength(0);
@@ -169,7 +169,7 @@ describe('sign-on through core', () => {
   });
 
   it('PL-01: background polling does not keep an idle session alive', async () => {
-    await seedUser(t.owner, uniq('qa'), ['truebatch.qa.release']);
+    await seedUser(t.owner, uniq('qa'), ['truebatch_injectables.qa.release']);
     const { cookie } = await login(t.app, `qa${n}`);
     await t.owner`update sessions set last_seen_at = now() - interval '14 minutes' where id = ${sid(cookie)}`;
     const bg = await t.app.inject({ method: 'GET', url: '/api/me', headers: { cookie, 'x-background-poll': '1' } });
@@ -179,7 +179,7 @@ describe('sign-on through core', () => {
   });
 
   it('PL-01: the application database role cannot rename a person or delete one', async () => {
-    const id = await seedUser(t.owner, uniq('op'), ['truebatch.view']);
+    const id = await seedUser(t.owner, uniq('op'), ['truebatch_injectables.view']);
     await expect(t.sql`update users set username = 'renamed' where id = ${id}`).rejects.toThrow(/permission denied/);
     await expect(t.sql`update users set employee_id = gen_random_uuid() where id = ${id}`).rejects.toThrow(/permission denied/);
     await expect(t.sql`delete from users where id = ${id}`).rejects.toThrow(/permission denied/);

@@ -72,7 +72,7 @@ async function sign(page: Page) {
   await expect(page.getByRole('dialog')).toHaveCount(0);
 }
 
-test('TB-22 release journey: QC approves with its report number, QA reviews, closes the deviation, releases, and the batch record PDF downloads', async ({ browser }) => {
+test('TI-22 release journey: QC approves with its report number, QA reviews, closes the deviation, releases, and the batch record PDF downloads', async ({ browser }) => {
   const batch = await productionApprovedBatch(browser);
 
   // QC: the To review tab lists the batch; QC signs with the QC report number.
@@ -126,7 +126,7 @@ test('TB-22 release journey: QC approves with its report number, QA reviews, clo
   await qa.ctx.close();
 });
 
-test('TB-21 QA terminates a batch still in production from the To review list: a reason, a signature; the batch screen says who, when and why', async ({ browser }) => {
+test('TI-21 QA terminates a batch still in production from the To review list: a reason, a signature; the batch screen says who, when and why', async ({ browser }) => {
   const batch = await issuedBatch(browser);
   const qa = await person(browser, 'qa1');
   await qa.page.getByRole('button', { name: 'To review' }).click();

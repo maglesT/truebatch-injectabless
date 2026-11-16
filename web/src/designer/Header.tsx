@@ -6,9 +6,7 @@ import { createMaster, getVersion, STATE_LABEL, type MasterData, type MasterRow,
 import { masterSchema, type MasterDoc } from '../../../shared/master/schema.js';
 import { batchWeight } from './example.js';
 import { scaleDoc } from './model.js';
-import { defaultDispensingRooms, packingStages, SKELETON_LIST, skeletonStages } from './skeletons.js';
-import { NEW_PACK, PackFields } from './Pack.js';
-import { product } from '../product.js';
+import { defaultDispensingRooms, SKELETON_LIST, skeletonStages } from './skeletons.js';
 import { ChipSet, Decimal, Picker } from './ui.js';
 
 type Header = MasterDoc['header'];
@@ -46,7 +44,7 @@ export function HeaderFields({ header, onChange, products, rooms }: { header: He
           onChange={(v) => onChange(v ? { ...header, dieAreaMm2: v } : (({ dieAreaMm2: _, ...h }) => h)(header))} /></label>
         <div className="calc-note">{core?.ok ? <>Theoretical core batch weight: <b>{core.shown}</b></> : <span className="muted">The core batch weight shows once the batch size and core weight are set.</span>}</div>
       </div>
-      {/* TB-11: a balance is offered in these rooms or in a room the stage allows. */}
+      {/* TI-11: a balance is offered in these rooms or in a room the stage allows. */}
       <ChipSet label="Dispensing rooms (where the materials are weighed)" values={header.dispensingRooms ?? []} options={rooms.filter((r) => r.active).map((r) => r.code)}
         onChange={(dispensingRooms) => onChange({ ...header, dispensingRooms })} empty="None chosen yet: choose the rooms of master data where the materials are weighed" />
       <OtherStrengths header={header} onChange={onChange} />
@@ -82,12 +80,10 @@ export function NewMaster({ md, masters, copyOf, onCreated, onCancel }: {
   md: MasterData; masters: MasterRow[]; copyOf?: MasterRow; onCreated: (id: number) => void; onCancel: () => void;
 }) {
   // A tablet master starts with the rooms of the Dispensing area as its dispensing rooms (a copy: those it names).
-  const [header, setHeader] = useState<Header>({ ...(product.packing ? {} : { dispensingRooms: defaultDispensingRooms(md.rooms) }),
+  const [header, setHeader] = useState<Header>({ dispensingRooms: defaultDispensingRooms(md.rooms),
     ...(copyOf?.header ?? { productItemId: '', productCode: '', productName: '', batchSize: '', coreWeightMg: '' }) });
-  const skeletons = product.packing ? [{ id: 'packing', name: 'Packing record', text: 'Issue to the line, packing with the checks alongside the line, reconciliation and line clearance after, for this pack.' }] : SKELETON_LIST;
+  const skeletons = SKELETON_LIST;
   const [start, setStart] = useState<Start>(copyOf ? { kind: 'copy', versionId: copyOf.id } : { kind: 'skeleton', id: skeletons[0]!.id });
-  // A packing master: the pack (TB-P1), copied with the master it is copied from.
-  const [pack, setPack] = useState(product.packing ? NEW_PACK : undefined);
   const [source, setSource] = useState<MasterDoc | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -95,7 +91,6 @@ export function NewMaster({ md, masters, copyOf, onCreated, onCancel }: {
     if (start.kind !== 'copy') return setSource(null);
     void getVersion(start.versionId).then((v) => {
       setSource(v.doc);
-      if (v.doc.pack) setPack(v.doc.pack);
       setHeader((h) => ({ ...h, coreWeightMg: h.coreWeightMg || v.doc.header.coreWeightMg, batchSize: h.batchSize || v.doc.header.batchSize,
         ...(v.doc.header.coatedWeightMg && !h.coatedWeightMg ? { coatedWeightMg: v.doc.header.coatedWeightMg } : {}) }));
     });
@@ -104,12 +99,11 @@ export function NewMaster({ md, masters, copyOf, onCreated, onCancel }: {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
-    let doc: MasterDoc = { header, formula: [], stages: [], ...(pack ? { pack } : {}) };
-    if (start.kind === 'skeleton') doc.stages = pack ? packingStages(pack) : skeletonStages(start.id, header);
-    if (start.kind === 'copy' && source) doc = { ...scaleDoc(source, header.batchSize), header, ...(pack ? { pack } : {}) };
+    let doc: MasterDoc = { header, formula: [], stages: [] };
+    if (start.kind === 'skeleton') doc.stages = skeletonStages(start.id, header);
+    if (start.kind === 'copy' && source) doc = { ...scaleDoc(source, header.batchSize), header };
     const parsed = masterSchema.safeParse(doc);
     if (!header.productItemId) return setError('Pick the product.');
-    if (pack && !pack.bulkItemId) return setError('Pick the bulk product.');
     if (!parsed.success) return setError(parsed.error.issues.map((i) => `${i.path.at(-1) === 'batchSize' ? 'Batch size' : i.path.at(-1) === 'coreWeightMg' ? 'Core weight' : i.path.join('.')}: ${i.message}`).join('; '));
     setBusy(true);
     try {
@@ -124,8 +118,7 @@ export function NewMaster({ md, masters, copyOf, onCreated, onCancel }: {
     <div className="overlay" role="dialog" aria-modal="true" aria-label={copyOf ? 'Copy a master' : 'New master'}>
       <form className="card dialog wide" onSubmit={submit}>
         <h2>{copyOf ? `Copy ${copyOf.header.productCode} version ${copyOf.versionNo}` : 'New master'}</h2>
-        {pack ? <PackFields header={header} pack={pack} products={md.products} onChange={(h, p) => { setHeader(h); setPack(p); }} />
-          : <HeaderFields header={header} onChange={setHeader} products={md.products} rooms={md.rooms} />}
+        <HeaderFields header={header} onChange={setHeader} products={md.products} rooms={md.rooms} />
         <fieldset className="checklist">
           <legend>Start from</legend>
           {skeletons.map((s) => (

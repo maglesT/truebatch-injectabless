@@ -8,12 +8,9 @@ import { MEANINGS, makeProof } from '../server/signatures.js';
 import { ConnectionOff, type Master, type MasterEquipment, type MasterMaterial, type MasterProduct, type MasterRoom } from '../server/master.js';
 import type { Permission } from '../server/auth.js';
 import type { Links } from '../server/links.js';
-import { ownCodes, TABLETS, type Product } from '../server/product.js';
-import { PACKING_APP_ROLE, PACKING_PLAN } from '../packing/migrate.js';
-import { PACKING } from '../packing/product.js';
 
 export const TEST_DATABASE_URL =
-  process.env.TEST_DATABASE_URL ?? 'postgres://truebatch_owner:dev@localhost:5432/truebatch_test';
+  process.env.TEST_DATABASE_URL ?? 'postgres://truebatch_injectables_owner:dev@localhost:5432/truebatch_injectables_test';
 
 export interface TestDb {
   // Owner connection: migrations and test setup only.
@@ -24,15 +21,13 @@ export interface TestDb {
   close: () => Promise<void>;
 }
 
-// A fresh schema per test file keeps files independent when Vitest runs them in parallel. TrueBatch Tablets Packing's
-// database has its own migrations and app role (packing/migrate.ts).
-export async function freshDb(product: Product = TABLETS): Promise<TestDb> {
-  const packing = product.id !== TABLETS.id;
+// A fresh schema per test file keeps files independent when Vitest runs them in parallel.
+export async function freshDb(): Promise<TestDb> {
   const schema = `t_${process.pid}_${Math.random().toString(36).slice(2, 8)}`;
   const owner = connect(TEST_DATABASE_URL, { searchPath: schema });
   await owner.unsafe(`create schema ${schema}`);
-  await migrate(owner, packing ? PACKING_PLAN : undefined);
-  const sql = connect(TEST_DATABASE_URL, { role: packing ? PACKING_APP_ROLE : 'truebatch_app', searchPath: schema });
+  await migrate(owner);
+  const sql = connect(TEST_DATABASE_URL, { role: 'truebatch_injectables_app', searchPath: schema });
   return {
     owner,
     sql,
@@ -99,17 +94,15 @@ export function fakeSignOn(people = directory): SignOn {
 export const TEST_PROOF_KEY = Buffer.alloc(32, 7);
 export function proofFor(username: string, at?: number, meanings: string[] = [...MEANINGS]): string {
   const p = directory.get(username);
-  // As /cb makes it: a packing person's own codes read as the app's (server/product.ts).
-  const permissions = (p?.permissions ?? []).flatMap((c) => (c.startsWith('truebatch_packing.') ? ownCodes(PACKING, [c]) : [c]));
-  return makeProof(TEST_PROOF_KEY, { sub: p?.sub ?? '00000000-0000-0000-0000-000000000000', permissions }, meanings, at);
+  return makeProof(TEST_PROOF_KEY, { sub: p?.sub ?? '00000000-0000-0000-0000-000000000000', permissions: p?.permissions ?? [] }, meanings, at);
 }
 
 // withLinks: the links to the other products (test/links.test.ts); without, every link is absent.
-export async function freshApp(withLinks?: (db: TestDb) => Promise<Links>, product: Product = TABLETS, demo = false): Promise<TestApp> {
-  const db = await freshDb(product);
+export async function freshApp(withLinks?: (db: TestDb) => Promise<Links>, demo = false): Promise<TestApp> {
+  const db = await freshDb();
   const master = fakeMaster();
   const links = withLinks ? await withLinks(db) : undefined;
-  const app = await buildApp({ sql: db.sql, signOn: fakeSignOn(), proofKey: TEST_PROOF_KEY, master, links, webRoot: '/nonexistent', product, demo });
+  const app = await buildApp({ sql: db.sql, signOn: fakeSignOn(), proofKey: TEST_PROOF_KEY, master, links, webRoot: '/nonexistent', demo });
   return {
     ...db,
     app,
@@ -122,7 +115,7 @@ export async function freshApp(withLinks?: (db: TestDb) => Promise<Links>, produ
 }
 
 // Seeds a person as core knows them (directory), with their TrueBatch permissions, and their id-map row.
-export async function seedUser(owner: Sql, username: string, permissions: readonly (Permission | `truebatch_packing.${string}`)[]): Promise<number> {
+export async function seedUser(owner: Sql, username: string, permissions: readonly Permission[]): Promise<number> {
   const sub = randomUUID();
   directory.set(username, { sub, name: username.toUpperCase(), permissions: [...permissions], active: true });
   const [u] = await owner<{ id: number }[]>`

@@ -37,8 +37,8 @@ beforeAll(async () => {
         read_at timestamptz default now(), data_as_of timestamptz default now(), stock numeric, unit text);
       create table ${S.mms}.lot_test_v1 (lot_number text, report_ref text, test text, specification text, result text, value numeric, unit text, basis text,
         tested_at timestamptz, read_at timestamptz default now(), data_as_of timestamptz default now());
-      grant usage on schema ${S.dv}, ${S.qms}, ${S.lb}, ${S.mms} to truebatch_app;
-      grant select on all tables in schema ${S.dv}, ${S.qms}, ${S.lb}, ${S.mms} to truebatch_app;
+      grant usage on schema ${S.dv}, ${S.qms}, ${S.lb}, ${S.mms} to truebatch_injectables_app;
+      grant select on all tables in schema ${S.dv}, ${S.qms}, ${S.lb}, ${S.mms} to truebatch_injectables_app;
       insert into ${S.qms}.change_v1 (number, status, title, products, qa_approved_at) values
         ('CC-2026-0001', 'implementation', 'New supplier of lactose', 'PRD-001', now()), ('CC-2026-0002', 'qa', 'Press speed', null, null),
         ('CC-2026-0003', 'rejected', 'Drop the coating', null, now()),
@@ -63,7 +63,7 @@ beforeAll(async () => {
       insert into ${S.mms}.lot_test_v1 (lot_number, report_ref, test, result, value, unit, basis) values
         ('API-OK', 'QC-26-101', 'Assay', '99.1 %', 99.1, '%', 'dried'), ('API-OK', 'QC-26-101', 'LOD', '0.4 %', 0.4, '%', 'as is'),
         ('API-OK', 'QC-26-101', 'Identity', 'complies', null, null, null), ('API-ASIS', 'QC-26-102', 'Assay', '98.0 %', 98.0, '%', 'as is');`);
-    provider = connect(TEST_DATABASE_URL, { role: 'truebatch_app', link: true });
+    provider = connect(TEST_DATABASE_URL, { role: 'truebatch_injectables_app', link: true });
     return links({ deviations: provider, qms: provider, logbook: provider, mms: provider }, { deviations: S.dv, qms: S.qms, logbook: S.lb, mms: S.mms });
   });
   t.master.products_.push({ ...item('prd-1', 'PRD-001', 'Examplol 100 mg film-coated tablets'), strength: '100 mg', dosageForm: 'tablet' },
@@ -75,9 +75,9 @@ beforeAll(async () => {
     { ...item('eq-rmg', 'RMG-01', 'Granulator'), kind: 'equipment', type: 'granulator', room: 'GRN-01' });
   t.master.rooms_.push({ ...item('rm-1', 'GRN-01', 'Granulation room 1'), area: 'granulation', grade: 'D' });
   const people = {
-    author: ['truebatch.master.author'], checker: ['truebatch.master.check'], quality: ['truebatch.master.approve'], quality2: ['truebatch.master.approve'],
-    issuer: ['truebatch.batch.issue'], asha: ['truebatch.batch.operate', 'truebatch.batch.check'], ravi: ['truebatch.batch.check'],
-    meera: ['truebatch.qa.release'], mona: ['truebatch.qa.release', 'truebatch.batch.operate'],
+    author: ['truebatch_injectables.master.author'], checker: ['truebatch_injectables.master.check'], quality: ['truebatch_injectables.master.approve'], quality2: ['truebatch_injectables.master.approve'],
+    issuer: ['truebatch_injectables.batch.issue'], asha: ['truebatch_injectables.batch.operate', 'truebatch_injectables.batch.check'], ravi: ['truebatch_injectables.batch.check'],
+    meera: ['truebatch_injectables.qa.release'], mona: ['truebatch_injectables.qa.release', 'truebatch_injectables.batch.operate'],
   } as const;
   for (const [name, perms] of Object.entries(people)) {
     ids[name] = await seedUser(t.owner, name, [...perms]);
@@ -91,8 +91,8 @@ afterAll(async () => {
 });
 
 const as = (who: string, method: 'GET' | 'POST', url: string, body?: object) => call(t.app, cookies[who]!, method, url, body);
-const cut = (schema: string) => t.owner.unsafe(`revoke select on all tables in schema ${schema} from truebatch_app`);
-const restore = (schema: string) => t.owner.unsafe(`grant select on all tables in schema ${schema} to truebatch_app`);
+const cut = (schema: string) => t.owner.unsafe(`revoke select on all tables in schema ${schema} from truebatch_injectables_app`);
+const restore = (schema: string) => t.owner.unsafe(`grant select on all tables in schema ${schema} to truebatch_injectables_app`);
 async function issue(doc: ReturnType<typeof small>) {
   const res = await as('author', 'POST', '/api/masters', { doc });
   expect(res.statusCode).toBe(200);
@@ -137,7 +137,7 @@ describe('the link client: absent, down (refused or not answering) and ok', () =
     }
     const gone = links({ deviations: provider, qms: provider, logbook: provider, mms: provider }, { deviations: 'nope', qms: 'nope', logbook: 'nope', mms: 'nope' });
     expect((await Promise.all(reads(gone))).map((r) => r.state)).toEqual(['down', 'down', 'down', 'down']);
-    const nowhere = connect('postgres://truebatch_app:x@127.0.0.1:1/x', { link: true });
+    const nowhere = connect('postgres://truebatch_injectables_app:x@127.0.0.1:1/x', { link: true });
     expect((await Promise.all(reads(links({ deviations: nowhere, qms: nowhere, logbook: nowhere, mms: nowhere })))).map((r) => r.state)).toEqual(['down', 'down', 'down', 'down']);
     await nowhere.end();
   });
@@ -156,14 +156,14 @@ describe('the labels people saw', () => {
   });
 });
 
-describe('TB-11 Logbook: equipment and rooms fit for use', () => {
+describe('TI-11 Logbook: equipment and rooms fit for use', () => {
   let b: { id: number; batchNo: string };
   beforeAll(async () => {
     b = await issue(small([{ machineTypes: ['stirrer'], steps: [{ block: { id: 'line-clearance', version: 1 }, checker: true, settings: {} },
       { block: { id: 'mix', version: 1 }, settings: {} }, yieldStep] }]));
   });
 
-  it('TB-10 line clearance: the room\'s cleaning facts are pulled from the Logbook and cannot be typed over', async () => {
+  it('TI-10 line clearance: the room\'s cleaning facts are pulled from the Logbook and cannot be typed over', async () => {
     await act('asha', b.id, '0.1.0.1', 'start');
     expect((await record(b.id, '0.1.0.1', { room: 'rm-1' })).statusCode).toBe(200);
     const s = await stepOf(b.id, '0.1.0.1');
@@ -176,7 +176,7 @@ describe('TB-11 Logbook: equipment and rooms fit for use', () => {
     expect((await sign('asha', b.id, '0.1.0.1', 'done')).statusCode).toBe(200);
   });
 
-  it('TB-11 while the Logbook answers, the machine and room pickers offer only what it has and name the rest; absent or down, every one', async () => {
+  it('TI-11 while the Logbook answers, the machine and room pickers offer only what it has and name the rest; absent or down, every one', async () => {
     const read = async () => (await as('asha', 'GET', '/api/logbook/items')).json() as { link: string; items: string[] };
     const r = await read();
     expect(r.link).toBe('ok');
@@ -194,14 +194,14 @@ describe('TB-11 Logbook: equipment and rooms fit for use', () => {
     expect((await call(t.app, '', 'GET', '/api/logbook/items')).statusCode).toBe(401);
   });
 
-  it('TB-11 a machine the Logbook says is not fit for use is refused with the Logbook\'s reasons; one in use by another batch too', async () => {
+  it('TI-11 a machine the Logbook says is not fit for use is refused with the Logbook\'s reasons; one in use by another batch too', async () => {
     await act('asha', b.id, '0.1.1.1', 'start');
     expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str2' }))).toEqual(['STR-02 is not fit for use (Logbook): Dirty: clean and verify before the next use; Calibration overdue.']);
     expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str3' }))).toEqual(['STR-03 is in use by batch XB26001 (Logbook).']);
     expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str5' }))).toEqual(['STR-05 is not in the Logbook, so it cannot be used.']);
   });
 
-  it('TB-11 a machine fit for use is pulled with its status: no label questions, no extra check', async () => {
+  it('TI-11 a machine fit for use is pulled with its status: no label questions, no extra check', async () => {
     expect((await record(b.id, '0.1.1.1', { machine: 'eq-str', speed: '300' })).statusCode).toBe(200);
     const s = await stepOf(b.id, '0.1.1.1');
     expect(s.source.machine).toMatchObject({ from: 'logbook', shown: 'STR-01: clean; Use allowed under exception EXC-7' });
@@ -210,7 +210,7 @@ describe('TB-11 Logbook: equipment and rooms fit for use', () => {
     expect((await stepOf(b.id, '0.1.1.1')).state).toBe('done');
   });
 
-  it('TB-11 Logbook down or its status too old: the label questions, answered yes, and a second-person check', async () => {
+  it('TI-11 Logbook down or its status too old: the label questions, answered yes, and a second-person check', async () => {
     const c = await issue(small([{ machineTypes: ['stirrer'], steps: [{ block: { id: 'mix', version: 1 }, settings: {} }, yieldStep] }]));
     await act('asha', c.id, '0.1.0.1', 'start');
     expect((await record(c.id, '0.1.0.1', { machine: 'eq-str4', speed: '300' })).statusCode).toBe(200);
@@ -234,7 +234,7 @@ describe('TB-11 Logbook: equipment and rooms fit for use', () => {
   });
 });
 
-describe('TB-12 MMS: only released, in-date lots of the material; certificate values pulled', () => {
+describe('TI-12 MMS: only released, in-date lots of the material; certificate values pulled', () => {
   let b: { id: number; batchNo: string };
   const granulation = () => {
     const d = tablet();
@@ -254,11 +254,11 @@ describe('TB-12 MMS: only released, in-date lots of the material; certificate va
     ['API-EXP', 'Lot API-EXP expired on 31 Jan 2020.'],
     ['API-RT', 'Lot API-RT is past its retest date 30 Jun 2021.'],
     ['API-ASIS', "MMS gives the assay of lot API-ASIS on the as is basis; the master's line is on the dried basis."],
-  ])('TB-12 lot %s is refused: %s', async (lot, why) => {
+  ])('TI-12 lot %s is refused: %s', async (lot, why) => {
     expect(await problems(record(b.id, '0.1.0.1', { lot }))).toContain(why);
   });
 
-  it('TB-13 a released lot brings its assay and LOD from MMS (pull only): they cannot be typed', async () => {
+  it('TI-13 a released lot brings its assay and LOD from MMS (pull only): they cannot be typed', async () => {
     expect(await problems(record(b.id, '0.1.0.1', { assay: '99.0' }))).toEqual(['Assay (certificate): record the lot first']);
     expect((await record(b.id, '0.1.0.1', { lot: 'API-OK', balance: 'eq-bal', gross: '11.000', tare: '0.850' })).statusCode).toBe(200);
     const s = await stepOf(b.id, '0.1.0.1');
@@ -277,7 +277,7 @@ describe('TB-12 MMS: only released, in-date lots of the material; certificate va
     expect(r.lots.map((l) => l.lotNumber)).toEqual(['API-ASIS', 'API-OK']);
   });
 
-  it('TB-12 MMS down: the lot is typed with its label status and date, refused when expired or not released, and checked', async () => {
+  it('TI-12 MMS down: the lot is typed with its label status and date, refused when expired or not released, and checked', async () => {
     expect((await sign('asha', b.id, '0.1.0.1', 'done')).statusCode).toBe(200);
     await act('asha', b.id, '0.1.1.1', 'start');
     await cut(S.mms);
@@ -296,7 +296,7 @@ describe('TB-12 MMS: only released, in-date lots of the material; certificate va
     expect(r.hand).toMatchObject([{ field: 'lot', link: 'mms' }]);
   });
 
-  it('TB-11 a balance is shared by the batches weighing on it: it is no use in equipment_use_v1, so the next weighing on it is not refused', async () => {
+  it('TI-11 a balance is shared by the batches weighing on it: it is no use in equipment_use_v1, so the next weighing on it is not refused', async () => {
     const uses = async (code: string) => (await t.owner.unsafe(`select batch_number from ${t.schema}_report.equipment_use_v1 where equipment_code = $1`, [code])).map((r) => r.batch_number);
     // The weighing above was signed on BAL-01; the charge's mixer is a use of the batch.
     expect(await uses('BAL-01')).toEqual([]);
@@ -309,17 +309,17 @@ describe('TB-12 MMS: only released, in-date lots of the material; certificate va
     expect(await uses('BAL-01')).toEqual([]);
   });
 
-  it('TB-12 a weighing takes no more of a lot than MMS shows available: its stock less what TrueBatch Tablets already dispensed (signed) from it', async () => {
+  it('TI-12 a weighing takes no more of a lot than MMS shows available: its stock less what TrueBatch Injectables already dispensed (signed) from it', async () => {
     // API-OK: 25 kg in MMS; 10.150 kg dispensed above (signed done); the other batch's weighing is not signed yet.
     const third = await issue(granulation());
     await act('asha', third.id, '0.1.0.1', 'start');
     expect(await problems(record(third.id, '0.1.0.1', { lot: 'API-OK', balance: 'eq-bal', gross: '16.000', tare: '0.850' }))).toEqual([
-      'Lot API-OK has 14.85 kg available in MMS (25 kg in stock less 10.15 kg already used in TrueBatch Tablets): 15.15 kg cannot be taken from it. Take at most 14.85 kg, or another lot.']);
+      'Lot API-OK has 14.85 kg available in MMS (25 kg in stock less 10.15 kg already used in TrueBatch Injectables): 15.15 kg cannot be taken from it. Take at most 14.85 kg, or another lot.']);
     expect((await record(third.id, '0.1.0.1', { lot: 'API-OK', balance: 'eq-bal', gross: '15.000', tare: '0.850' })).statusCode).toBe(200);
   });
 });
 
-describe('TB-21 Deviations: the deviation number and its status come from the Deviations system', () => {
+describe('TI-21 Deviations: the deviation number and its status come from the Deviations system', () => {
   let b: { id: number; batchNo: string };
   const devs = async () => ((await as('meera', 'GET', `/api/batches/${b.id}`)).json() as { batch: { deviations: { reference: string; open: boolean; status?: string }[]; deviationsLink: string } }).batch;
   beforeAll(async () => {
@@ -338,7 +338,7 @@ describe('TB-21 Deviations: the deviation number and its status come from the De
     expect((await act('asha', b.id, '0.1.0.1', 'note', { text: 'pH 7.4', reference: 'DEV-26-0001' })).statusCode).toBe(200);
   });
 
-  it('TB-21 its status is Deviations\' while the link answers: QA cannot close it by hand, and an unlinked deviation is shown', async () => {
+  it('TI-21 its status is Deviations\' while the link answers: QA cannot close it by hand, and an unlinked deviation is shown', async () => {
     expect(await devs()).toMatchObject({ deviationsLink: 'ok', deviations: [{ reference: 'DEV-26-0001', open: true, status: 'investigation' }] });
     const note = ((await as('meera', 'GET', `/api/batches/${b.id}/review`)).json() as { deviations: { note: number }[]; unlinked: { number: string }[] });
     expect(note.unlinked.map((d) => d.number)).toEqual(['DEV-26-0099']);
@@ -348,19 +348,19 @@ describe('TB-21 Deviations: the deviation number and its status come from the De
     expect(await devs()).toMatchObject({ deviations: [{ reference: 'DEV-26-0001', open: false, status: 'closed' }] });
   });
 
-  it('TB-21 release is blocked until Deviations has the deviation closed (the server passes the statuses in)', () => {
+  it('TI-21 release is blocked until Deviations has the deviation closed (the server passes the statuses in)', () => {
     const doc = small([{ steps: [{ checker: true }] }]);
     const events = [ev('started', '0.1.0.1', { min: 1 }), ev('done', '0.1.0.1', { min: 2 }), ev('checked', '0.1.0.1', { person: 2, min: 3 }),
       ev('note', '0.1.0.1', { min: 4, payload: { text: 'pH', reference: 'DEV-26-001' } })];
     const approved: BatchEvent[] = [{ id: 1, kind: 'production_approved', payload: {}, person: 3, at: at(5) }, { id: 2, kind: 'qc_approved', payload: { reportNo: 'QC-1' }, person: 4, at: at(6) }];
-    const qa = { id: 9, permissions: ['truebatch.qa.release'] };
+    const qa = { id: 9, permissions: ['truebatch_injectables.qa.release'] };
     const release = (status: string) => batchRefusal('release', batchView(doc, events, approved, at(10), new Map([['DEV-26-001', { status, closedAt: null }]])), qa)?.problems ?? null;
     expect(release('investigation')).toEqual(['Deviation DEV-26-001 (Stage 0 › Check a value against limits: pH) is still open in the Deviations system (under investigation): it is closed there first']);
     expect(release('closed')).toBeNull();
     expect(release('rejected')).toBeNull();
   });
 
-  it('TB-21 Deviations down: the number is typed, and a QA person other than the one who typed it closes it by hand', async () => {
+  it('TI-21 Deviations down: the number is typed, and a QA person other than the one who typed it closes it by hand', async () => {
     await cut(S.dv);
     try {
       expect((await act('mona', b.id, '0.1.0.1', 'note', { text: 'Second pH reading', reference: 'DEV-PAPER-7' })).statusCode).toBe(200);
@@ -377,7 +377,7 @@ describe('TB-21 Deviations: the deviation number and its status come from the De
   });
 });
 
-describe('TB-02 QMS: a new master version needs a QA-approved change control', () => {
+describe('TI-02 QMS: a new master version needs a QA-approved change control', () => {
   const draft = async () => {
     const { id } = (await as('author', 'POST', '/api/masters', { doc: placed(tablet()) })).json() as { id: number };
     const hash = async (who: string) => ((await as(who, 'GET', `/api/master-versions/${id}/review`)).json() as { contentHash: string }).contentHash;
@@ -388,7 +388,7 @@ describe('TB-02 QMS: a new master version needs a QA-approved change control', (
     return { id, review };
   };
 
-  it('TB-02 the change control must be in QMS and approved by QA; its title and approval are kept', async () => {
+  it('TI-02 the change control must be in QMS and approved by QA; its title and approval are kept', async () => {
     const { id, review } = await draft();
     expect((await review('quality', 'approve', { changeControl: 'CC-404' })).json()).toMatchObject({ error: 'unknown_change_control' });
     expect((await review('quality', 'approve', { changeControl: 'CC-2026-0002' })).json())
@@ -404,7 +404,7 @@ describe('TB-02 QMS: a new master version needs a QA-approved change control', (
     expect(picks.changes.map((c) => c.number)).toEqual(['CC-2026-0005', 'CC-2026-0004', 'CC-2026-0001']);
   });
 
-  it('TB-02 only a change control naming the master\'s product is offered and accepted; one naming no product is taken with a warning', async () => {
+  it('TI-02 only a change control naming the master\'s product is offered and accepted; one naming no product is taken with a warning', async () => {
     const { id, review } = await draft();
     const picks = (await as('quality', 'GET', `/api/change-controls?version=${id}`)).json() as { changes: { number: string; names: string }[] };
     expect(picks.changes.map((c) => [c.number, c.names])).toEqual([['CC-2026-0005', 'none'], ['CC-2026-0001', 'yes']]);
@@ -418,7 +418,7 @@ describe('TB-02 QMS: a new master version needs a QA-approved change control', (
     expect([c('fg-atv20, FG-ATV40'), c('ATORVASTATIN CALCIUM TABLETS 20 MG'), c('FG-ATV200'), c(' '), c(null)].map((x) => namesProduct(x, prd))).toEqual(['yes', 'yes', 'no', 'none', 'none']);
   });
 
-  it('TB-02 QMS down: the number is typed, and another person makes the version effective', async () => {
+  it('TI-02 QMS down: the number is typed, and another person makes the version effective', async () => {
     const { id, review } = await draft();
     await cut(S.qms);
     try {

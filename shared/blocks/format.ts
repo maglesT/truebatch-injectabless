@@ -14,8 +14,7 @@ import { TEMPLATES } from '../engine/templates.js';
 
 const name = z.string().regex(/^[a-z][a-zA-Z0-9]{0,39}$/);
 
-// bulk: a bulk tablet batch of TrueBatch Tablets (packing; pulled from its batch_fact_v1, server/pull.ts).
-export const FIELD_KINDS = ['number', 'text', 'yes-no', 'choice', 'timer', 'lot', 'machine', 'room', 'bulk'] as const;
+export const FIELD_KINDS = ['number', 'text', 'yes-no', 'choice', 'timer', 'lot', 'machine', 'room'] as const;
 export const fieldSchema = z.object({
   name,
   label: z.string().min(1),
@@ -34,8 +33,6 @@ export const fieldSchema = z.object({
   types: z.array(z.string().regex(/^[a-z][a-z ]*$/)).optional(),
   notTypes: z.array(z.string().regex(/^[a-z][a-z ]*$/)).optional(),
 }).strict();
-// A packing line: master data's blister and strip packers, forming machines and bottle lines' tablet counters.
-export const PACKING_LINE = ['blister', 'strip pack', 'forming', 'tablet counter', 'packing line'];
 
 export const SETTING_KINDS = ['quantity', 'limit', 'number', 'text', 'material'] as const;
 export const settingSchema = z.object({
@@ -59,7 +56,7 @@ export const blockSchema = z.object({
   version: z.number().int().min(1),
   name: z.string().min(1),
   instruction: z.string().min(1),
-  // TB-08: weighing, charge-in, yield and line clearance always need a second-person check.
+  // TI-08: weighing, charge-in, yield and line clearance always need a second-person check.
   gmp: z.enum(['weighing', 'charge-in', 'yield', 'line-clearance']).optional(),
   // Default signatures: the performer always signs; a second person checks when true.
   checker: z.boolean(),
@@ -68,14 +65,10 @@ export const blockSchema = z.object({
   calcs: z.array(calcSchema),
   // For repeat-until: the calculation whose check stops the rounds (the master step may name another).
   stop: name.optional(),
-  // Rounds every N minutes (periodic in-process checks); the master may not set more than maxMinutes (TB-15).
+  // Rounds every N minutes (periodic in-process checks); the master may not set more than maxMinutes (TI-15).
   // alongside: the steps after it open once its first round is done, and its rounds go on beside them; the stage
-  // closes only when its stop check passes (packing: the periodic checks of a running line).
+  // closes only when its stop check passes.
   periodic: z.object({ maxMinutes: z.number().int().positive(), alongside: z.boolean().optional() }).strict().optional(),
-  // Packing: the fields recorded when the batch is issued, as the first step of the record (TB-P2, TB-P7).
-  atIssue: z.array(name).min(1).optional(),
-  // A block of TrueBatch Tablets Packing (a packing master uses these and the general ones; a tablet master never).
-  packing: z.boolean().optional(),
   // A new master step from this block starts as a QA hold (the master may change it).
   qaHold: z.boolean().optional(),
   // The name of a step that names a material, "{material}" its name and code: "Issue {material}".
@@ -86,10 +79,7 @@ export type BlockField = z.infer<typeof fieldSchema>;
 export type BlockSetting = z.infer<typeof settingSchema>;
 export type Block = z.infer<typeof blockSchema>;
 
-// Packing: "$pack.name" is the master's pack fact, "$batch.name" a batch fact recorded at issue, "$earlier.name" this
-// field in the earlier rounds of the step (shared/engine/values.ts).
-export const PACK_FACTS = ['unitsPerPack', 'packsPerCarton', 'shelfLifeMonths', 'expiryRule', 'type', 'destination', 'gtin', 'mrp'];
-export const BATCH_FACTS = ['line', 'bulk', 'mfgDate', 'tablets', 'packs'];
+// "$earlier.name" is this field in the earlier rounds of the step (shared/engine/values.ts).
 
 /** The names inside "$name" strings of calculation arguments ("$name?" optional, "$prev.name" the previous round). */
 export function refsIn(x: unknown): string[] {
@@ -116,8 +106,7 @@ export function blockProblems(b: Block): string[] {
     if (f.kind === 'choice' && !f.options?.length) p.push(`field ${f.name}: a choice needs options`);
   }
   for (const s of b.settings) if (s.options && (s.kind !== 'text' || !s.options.length)) p.push(`setting ${s.name}: only a text setting has a list`);
-  const known = new Set([...b.fields.map((f) => f.name), ...b.settings.map((s) => s.name), ...PACK_FACTS.map((x) => `pack.${x}`), ...BATCH_FACTS.map((x) => `batch.${x}`)]);
-  for (const f of b.atIssue ?? []) if (!b.fields.some((x) => x.name === f)) p.push(`atIssue: no field ${f}`);
+  const known = new Set([...b.fields.map((f) => f.name), ...b.settings.map((s) => s.name)]);
   for (const c of b.calcs) {
     if (!(c.template in TEMPLATES)) p.push(`calculation ${c.name}: unknown template ${c.template}`);
     for (const r of refsIn(c.args)) if (!known.has(r)) p.push(`calculation ${c.name}: "$${r}" is not a field, setting or earlier calculation`);

@@ -1,12 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import type { MasterEquipment, MasterRoom } from './master.js';
 import type { Block, BlockField } from '../shared/blocks/index.js';
-import { materialLines, type FormulaLine, type MasterDoc, type PackMaterial, type Step } from '../shared/master/schema.js';
+import { materialLines, type FormulaLine, type MasterDoc, type Step } from '../shared/master/schema.js';
 import { CERTIFICATE, PROVIDER_NAME, clauses, type Provider, type Source, type Value } from '../shared/engine/index.js';
 import { LOT_USABLE } from './links.js';
 import { plantDate } from '../shared/plant-time.js';
 
-// What a link gives a step value at write time (owner 15 Nov 2026, TB-11, TB-12): the value as read now, or a
+// What a link gives a step value at write time (owner 15 Nov 2026, TI-11, TI-12): the value as read now, or a
 // refusal in plain words; when the link is absent or down, the value is typed by hand (its questions in
 // shared/engine/links.ts). Nothing read is kept but what the record keeps (PL-07).
 
@@ -16,12 +16,12 @@ const hand = (link: Provider, state: 'absent' | 'down'): Pulled => ({ source: { 
 const refused = (...problems: string[]): Pulled => ({ source: { from: 'hand', link: 'mms', state: 'absent' }, values: {}, sources: {}, problems });
 
 /** The formula line (or packing material) a step works on (its setting that names one). */
-export function lineOf(doc: MasterDoc, st: Step): FormulaLine | PackMaterial | undefined {
+export function lineOf(doc: MasterDoc, st: Step): FormulaLine | undefined {
   const s = Object.values(st.settings).find((v): v is { formula: string } => typeof v === 'object' && 'formula' in v);
   return s && materialLines(doc).find((l) => l.key === s.formula);
 }
 
-/** TB-11: a machine or room the Logbook says is fit for use, and not in use by another batch. Line clearance: its facts. */
+/** TI-11: a machine or room the Logbook says is fit for use, and not in use by another batch. Line clearance: its facts. */
 export async function pullItem(app: FastifyInstance, block: Block, f: BlockField, item: MasterEquipment | MasterRoom, batchNo: string): Promise<Pulled> {
   const r = await app.links.logbook.status(item.itemId);
   if (r.state !== 'ok' || r.value === 'stale') return hand('logbook', r.state === 'absent' ? 'absent' : 'down');
@@ -48,7 +48,7 @@ export const stateWords = (state: string) => state.replace(/_/g, ' ').replace(/\
 const LOT_WORDS: Record<string, string> = { quarantine: 'in quarantine', quarantined: 'in quarantine', under_test: 'under test', on_hold: 'on hold' };
 const plantDay = (now: Date, tz: string) => now.toLocaleDateString('en-CA', { timeZone: tz });
 
-/** TB-12: a lot MMS has, of this step's material, released and in date; its certificate numbers come with it (TB-13). */
+/** TI-12: a lot MMS has, of this step's material, released and in date; its certificate numbers come with it (TI-13). */
 export async function pullLot(app: FastifyInstance, doc: MasterDoc, st: Step, block: Block, lot: string, was: Record<string, Value>, now: Date, tz: string): Promise<Pulled> {
   const r = await app.links.mms.lot(lot);
   if (r.state !== 'ok') return hand('mms', r.state);
@@ -79,33 +79,6 @@ export async function pullLot(app: FastifyInstance, doc: MasterDoc, st: Step, bl
     out.sources[name] = { from: 'mms', asOf: l.dataAsOf, shown: `${test} ${t.value} %${t.basis ? ` (${t.basis})` : ''}, report ${t.reportRef ?? l.qcReportRef ?? '—'}` };
   }
   return out;
-}
-
-/**
- * Packing: a bulk batch TrueBatch Tablets has RELEASED, of this pack's bulk product; its date of manufacture (the date
- * its first processing step started, batch_fact_v1.manufactured_on) comes with it.
- */
-export async function pullBulk(app: FastifyInstance, doc: MasterDoc, block: Block, batchNo: string): Promise<Pulled> {
-  const r = await app.links.truebatch.batch(batchNo);
-  if (r.state !== 'ok') return hand('truebatch', r.state);
-  const b = r.value;
-  if (!b) return refused(`Bulk batch ${batchNo} is not in TrueBatch Tablets.`);
-  const problems: string[] = [];
-  if (doc.pack && b.productCode !== doc.pack.bulkCode) problems.push(`Bulk batch ${batchNo} is ${b.productCode ?? 'another product'} in TrueBatch Tablets, not ${doc.pack.bulkCode} ${doc.pack.bulkName}.`);
-  if (!b.released) problems.push(`Bulk batch ${batchNo} is ${b.status.toLowerCase().replaceAll('_', ' ')} in TrueBatch Tablets: only a released bulk batch may be packed.`);
-  if (!b.mfgDate) problems.push(`Bulk batch ${batchNo} has no date of manufacture in TrueBatch Tablets (no processing step started).`);
-  const source: Source = { from: 'truebatch', asOf: b.dataAsOf, shown: `TrueBatch Tablets batch ${batchNo}: ${b.status}, ${b.productCode ?? '—'}, manufactured ${b.mfgDate ?? '—'}` };
-  const out: Pulled = { source, values: {}, sources: {}, problems };
-  if (b.mfgDate && block.fields.some((x) => x.name === 'mfgDate')) { out.values.mfgDate = b.mfgDate; out.sources.mfgDate = source; }
-  return out;
-}
-
-/** Packing: a date of manufacture typed from the bulk labels (no TrueBatch Tablets link): a real date, never in the future. */
-export function mfgDateProblem(f: BlockField, v: string, now: Date, tz: string): string | null {
-  const d = new Date(`${v}T00:00:00Z`);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== v) return `${f.label}: give a date, e.g. 2026-11-15.`;
-  if (v > plantDay(now, tz)) return `The date of manufacture ${plantDate(v)} is in the future: give the date on the bulk labels.`;
-  return null;
 }
 
 /** The answer to a hand question: yes to every label question, a date in date for the lot. */

@@ -1,4 +1,4 @@
--- Published views, as people and the other products read them (owner, 15 Nov 2026, from the run of batch TB260003).
+-- Published views, as people and the other products read them (owner, 15 Nov 2026, from the run of batch TI260003).
 --
 -- batch_fact_v1: family_code is the master version as its number ("1", not "master-2"); product_name (the master's
 -- product name, copied from master data when the master was written, PL-07) and master_version are added at the END

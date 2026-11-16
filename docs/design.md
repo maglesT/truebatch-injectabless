@@ -1,10 +1,10 @@
-# TrueBatch Tablets: design decisions
+# TrueBatch Injectables: design decisions
 
 Owner decisions of 15 November 2026. Built the Logbook way (the platform Logbook is the model for structure, patterns
 and size), not the Batchwright way.
 
 ## Product
-- **One product per dosage form.** TrueBatch Tablets covers manufacturing, from dispensing to QA release of bulk
+- **One product per dosage form.** TrueBatch Injectables covers manufacturing, from dispensing to QA release of bulk
   tablets. Packing is a separate product, "TrueBatch Tablets Packing", in this repository on the same engine
   (`docs/packing-design.md`).
 
@@ -70,7 +70,7 @@ answering) or **ok**.
   open use of the batch then (machines and rooms dirty, no longer in use). Screens, review and PDF say "Terminated by
   … at …: reason".
 - **Where machines are**: a stage that works machines or names a room chooses the rooms it may run in (master check,
-  TB-11); the floor is offered the machines of the field's type standing in those rooms. A balance is offered where
+  TI-11); the floor is offered the machines of the field's type standing in those rooms. A balance is offered where
   the weighing is done: in one of the master's **dispensing rooms** (header, picked from master data's rooms; a new
   tablet master starts with the rooms whose area is exactly "Dispensing"; a master that weighs and names none is ⛔),
   or in a room the stage allows, never in a QC or laboratory area (`shared/engine/picks.ts`, the same rule on the

@@ -66,7 +66,7 @@ export function BatchHeader({ d }: { d: BatchDetail }) {
       </div>
       <span className="bh-side">
         <span className={`chip ${STATUS_CHIP[d.batch.status] ?? ''}`}>{d.batch.status}</span>
-        <a className="button" href={pdfLink(d.batch.id)} download>{product.packing ? 'Packing record' : 'Batch record'} (PDF)</a>
+        <a className="button" href={pdfLink(d.batch.id)} download>Batch record (PDF)</a>
       </span>
     </section>
   );
@@ -164,7 +164,7 @@ export function Alerts({ d, blocks, now, only }: { d: BatchDetail; blocks: Block
   );
 }
 
-// TB-20: production signs only a complete record. The list of what is still open comes from the server; step ids are
+// TI-20: production signs only a complete record. The list of what is still open comes from the server; step ids are
 // shown as the step's name.
 function Approval({ d, blocks, reload }: { d: BatchDetail; blocks: Block[]; reload: (b?: boolean) => Promise<void> }) {
   const [signing, setSigning] = useState(false);
@@ -214,7 +214,7 @@ function Approval({ d, blocks, reload }: { d: BatchDetail; blocks: Block[]; relo
           <button className="big primary" onClick={() => setSigning(true)}>Sign: production approved</button></div>}
       </section>
       {signing && (
-        <SignDialog meaning="production_approved" what={`Batch ${d.batch.batchNo} · ${doc.header.productName}: the ${product.packing ? 'packing' : 'batch'} record is complete.`} onCancel={() => setSigning(false)} onSign={sign}>
+        <SignDialog meaning="production_approved" what={`Batch ${d.batch.batchNo} · ${doc.header.productName}: the batch record is complete.`} onCancel={() => setSigning(false)} onSign={sign}>
           <div className="summary-box"><p>{d.stages.length} stages closed · {d.steps.length} steps · {d.batch.deviations.length} deviation notes ({d.batch.deviations.filter((x) => x.open).length} open)</p></div>
         </SignDialog>
       )}
