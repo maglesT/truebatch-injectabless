@@ -61,6 +61,9 @@ export function describeMaster(doc: MasterDoc): Section[] {
     ] },
     { key: 'formula', title: 'Formula', lines: doc.formula.map((l) => ({ key: l.key,
       text: `${l.name} (${l.code}), ${ROLE[l.role]}: ${l.mg === undefined ? 'to volume (q.s.)' : `${l.mg} mg per ${h.batchUnit === 'units' ? 'unit' : 'mL'}`}${l.labelClaim ? ` (label claim ${l.labelClaim})` : ''}${l.batchQuantity ? ` (batch quantity written as ${l.batchQuantity})` : ''}${adjustText(doc, l)}.` })) },
+    // Engine change 5: the time limits (TI-17), only when there are some.
+    ...(doc.timeLimits?.length ? [{ key: 'time-limits', title: 'Time limits', lines: doc.timeLimits.map((l) => ({ key: l.key,
+      text: `${l.name}: at most ${l.hours} h from the ${l.from.at} of ${l.from.step.replace('/', ' › ')} to the ${l.to.at} of ${l.to.step.replace('/', ' › ')}; an overrun needs a deviation note.` })) }] : []),
     ...doc.stages.map((s, i) => ({ key: `stage:${s.key}`, title: `Stage ${i + 1}: ${s.name}`, lines: [
       { key: 'about', text: stageText(doc, s) },
       ...s.steps.map((t, j) => ({ key: t.key, text: stepText(doc, t, j) })),

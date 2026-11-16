@@ -4,10 +4,41 @@ import { useState } from 'react';
 import type { MasterData } from '../api-designer.js';
 import { findBlock } from '../../../shared/blocks/index.js';
 import { stepTitle } from '../../../shared/engine/batch.js';
-import type { MasterDoc, Stage, Step } from '../../../shared/master/schema.js';
-import { move, newStage, searchBlocks, stepFrom, type Place } from './model.js';
+import type { MasterDoc, Stage, Step, TimeLimit } from '../../../shared/master/schema.js';
+import { move, newKey, newStage, searchBlocks, stepFrom, type Place } from './model.js';
 import { StepSettings } from './StepSettings.js';
 import { ChipSet, Order } from './ui.js';
+
+/** Engine change 5: the master's time limits, from a step's start or end to another's, at most N hours (TI-17). */
+function TimeLimits({ doc, onChange }: { doc: MasterDoc; onChange: (d: MasterDoc) => void }) {
+  const list = doc.timeLimits ?? [];
+  const put = (timeLimits: TimeLimit[]) => onChange(timeLimits.length ? { ...doc, timeLimits } : (({ timeLimits: _, ...d }) => d)(doc));
+  const set = (i: number, l: TimeLimit) => put(list.map((x, j) => (j === i ? l : x)));
+  const steps = doc.stages.flatMap((s) => s.steps.map((t) => ({ ref: `${s.key}/${t.key}`, label: `${s.name} › ${stepTitle(doc, t)}` })));
+  const point = (i: number, l: TimeLimit, which: 'from' | 'to') => (
+    <>
+      <select aria-label={`${l.name || 'Time limit'}: ${which} step`} value={l[which].step} onChange={(e) => set(i, { ...l, [which]: { ...l[which], step: e.target.value } })}>
+        <option value="">(choose a step)</option>{steps.map((x) => <option key={x.ref} value={x.ref}>{x.label}</option>)}</select>
+      <select aria-label={`${l.name || 'Time limit'}: ${which} start or end`} value={l[which].at} onChange={(e) => set(i, { ...l, [which]: { ...l[which], at: e.target.value as 'start' } })}>
+        <option value="start">its start</option><option value="end">its end</option></select>
+    </>
+  );
+  return (
+    <div className="card">
+      <div className="d-section-head"><h2>Time limits</h2><span className="muted small">From one step's start or end to another's, at most so many hours; an overrun needs a deviation note.</span></div>
+      {list.map((l, i) => (
+        <div className="form-grid" key={l.key}>
+          <label>Name<input aria-label={`Time limit ${i + 1} name`} value={l.name} placeholder="e.g. Start of compounding to filtration" onChange={(e) => set(i, { ...l, name: e.target.value })} /></label>
+          <label>From{point(i, l, 'from')}</label>
+          <label>To{point(i, l, 'to')}</label>
+          <label>At most (hours)<input type="number" min={0.1} step="any" aria-label={`Time limit ${i + 1} hours`} value={l.hours} onChange={(e) => set(i, { ...l, hours: Number(e.target.value) || 1 })} /></label>
+          <button type="button" className="link" onClick={() => put(list.filter((_, j) => j !== i))}>Remove</button>
+        </div>
+      ))}
+      <button type="button" onClick={() => put([...list, { key: newKey('time limit', list.map((x) => x.key)), name: '', from: { step: '', at: 'start' }, to: { step: '', at: 'end' }, hours: 8 }])}>+ Add a time limit</button>
+    </div>
+  );
+}
 
 const KIND_LABEL: Record<Stage['kind'], string> = { normal: 'Stage', preparation: 'Preparation', 'sub-batch': 'Sub-batches' };
 // Rows that select an item are not buttons, so a read-only (disabled) form can still be browsed.
@@ -40,7 +71,7 @@ export function Process({ doc, onChange, md, place, onPlace, editable }: {
   // Rooms are allowed by their area, or one by one by their code (not every room of an area in every block).
   const areas = [...[...new Set(md.rooms.filter((r) => r.active && r.area).map((r) => r.area!))].sort(), ...md.rooms.filter((r) => r.active).map((r) => r.code).sort()];
 
-  return (
+  return (<>
     <div className="process">
       <div className="card col stages-col">
         <div className="d-section-head"><h2>Stages</h2></div>
@@ -100,6 +131,8 @@ export function Process({ doc, onChange, md, place, onPlace, editable }: {
         ) : null}
       </div>
     </div>
+    <TimeLimits doc={doc} onChange={onChange} />
+  </>
   );
 }
 

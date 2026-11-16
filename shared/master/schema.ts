@@ -143,6 +143,12 @@ export const headerSchema = z.object({
   dispensingRooms: z.array(text()).max(20).optional(),
 }).strict();
 
+// Engine change 5: a time limit from step X (its start or end) to step Y (its start or end), at most N hours (TI-17:
+// start of compounding → filtration, sterilisation → filling, total aseptic time …). Run on the hold-time timer.
+// A draft may leave a step empty (the master check asks for it).
+const pointSchema = z.object({ step: z.string().regex(/^([a-z0-9-]+\/[a-z0-9-]+)?$/, 'stage/step'), at: z.enum(['start', 'end']) }).strict();
+export const timeLimitSchema = z.object({ key: keySchema, name: text(), from: pointSchema, to: pointSchema, hours: z.number().positive().max(100_000) }).strict();
+
 // The author's answer to a calculation warning (checks.ts), keyed by the warning and its item. `about` is the warning
 // as answered: when the warning reads differently (the item changed), it needs a new answer.
 export const answerSchema = z.object({ about: text(1000), choice: text().min(1), reason: text(1000) }).strict();
@@ -152,6 +158,7 @@ export const masterSchema = z.object({
   formula: z.array(lineSchema).max(100),
   stages: z.array(stageSchema).max(50),
   answers: z.record(z.string().max(120), answerSchema).optional(),
+  timeLimits: z.array(timeLimitSchema).max(50).optional(),
 }).strict();
 
 export type MasterDoc = z.infer<typeof masterSchema>;
@@ -161,6 +168,7 @@ export type FormulaLine = z.infer<typeof lineSchema>;
 export type SettingValue = z.infer<typeof settingValueSchema>;
 export type Limit = z.infer<typeof limitSchema>;
 export type Answer = z.infer<typeof answerSchema>;
+export type TimeLimit = z.infer<typeof timeLimitSchema>;
 
 /** Every material a step may name: the formula lines. */
 export const materialLines = (doc: MasterDoc): FormulaLine[] => doc.formula;
