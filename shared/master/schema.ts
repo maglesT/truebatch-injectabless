@@ -73,6 +73,9 @@ export const stageSchema = z.object({
   produces: z.object({ name: text().min(1), holdHours: z.number().positive().max(100_000).optional() }).strict().optional(),
   // Stages whose intermediate this stage uses (preparations must be closed first; their hold time ends here).
   uses: z.array(keySchema).max(20).default([]),
+  // Engine change 3: results that come days later (EM plates, BIs, bioburden). A preparation stage that starts after
+  // this earlier step ("stage/step") is done, runs beside the stages after it and must close before production signs.
+  startsAfter: z.string().regex(/^[a-z0-9-]+\/[a-z0-9-]+$/, 'stage/step').optional(),
   steps: z.array(stepSchema).max(200),
 }).strict();
 

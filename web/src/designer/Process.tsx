@@ -114,6 +114,12 @@ function StageForm({ doc, si, stage, onChange, roles, machineTypes, areas }: {
       <div className="form-grid">
         <label>Kind<select value={stage.kind} onChange={(e) => { const kind = e.target.value as Stage['kind']; const { count: _, ...rest } = stage; onChange(kind === 'sub-batch' ? { ...rest, kind, count: stage.count ?? 2 } : { ...rest, kind }); }}>
           <option value="normal">Normal stage</option><option value="preparation">Preparation (e.g. binder solution)</option><option value="sub-batch">Sub-batches (done several times)</option></select></label>
+        {/* Engine change 3: results that come later (EM plates, BIs, bioburden) start after an earlier step and close before production signs. */}
+        {stage.kind === 'preparation' && <label>Starts after (results that come later)
+          <select value={stage.startsAfter ?? ''} onChange={(e) => { const { startsAfter: _, ...rest } = stage; onChange(e.target.value ? { ...rest, startsAfter: e.target.value } : rest); }}>
+            <option value="">(any time: a preparation another stage uses)</option>
+            {doc.stages.slice(0, si).flatMap((x) => x.steps.map((t) => <option key={`${x.key}/${t.key}`} value={`${x.key}/${t.key}`}>{x.name} › {t.name ?? t.key}</option>))}
+          </select></label>}
         {stage.kind === 'sub-batch' && <label>Number of sub-batches<input type="number" min={2} max={50} value={stage.count ?? 2} onChange={(e) => onChange({ ...stage, count: Number(e.target.value) })} /></label>}
         <label>Responsible role<input list="roles" value={stage.role} onChange={(e) => onChange({ ...stage, role: e.target.value })} /></label>
         <datalist id="roles">{roles.map((r) => <option key={r} value={r} />)}</datalist>

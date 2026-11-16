@@ -173,6 +173,15 @@ export function openSteps(doc: MasterDoc, events: readonly StepEvent[], now: Dat
       const pi = doc.stages.findIndex((p) => p.key === u);
       if (doc.stages[pi]?.kind === 'preparation' && !stages[pi]?.closed) why.push(`Waits for the preparation ${doc.stages[pi]!.name} to close`);
     }
+    // Engine change 3: a stage of results that come later opens once the step it starts after is done (every copy).
+    if (s.startsAfter) {
+      const [sk, tk] = s.startsAfter.split('/') as [string, string];
+      const pi = doc.stages.findIndex((x) => x.key === sk);
+      const ti = doc.stages[pi]?.steps.findIndex((t) => t.key === tk) ?? -1;
+      const st = doc.stages[pi]?.steps[ti];
+      const views = steps.filter((v) => v.key.stage === pi && v.key.step === ti && (v.events.length > 0 || !findBlock(st!.block)?.log));
+      if (!st || !views.length || !views.every((v) => finished(v, st.waitForCheck))) why.push(`Starts after “${st ? stepTitle(doc, st) : s.startsAfter}”`);
+    }
     const mine = events.filter((e) => e.stage === si);
     for (const h of holds) {
       if (h.key.stage === si && h.state === 'late' && !earliest(mine, 'started') && !noteAfter(mine, h.at)) why.push(`${h.label} ran out: a deviation note is needed`);

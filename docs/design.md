@@ -57,6 +57,13 @@ adding anything, look how TrueBatch Tablets does it and copy that.
   none), so a template totals it (T2: the units removed, the time out of the fridge).
 - The blocks that use it (intervention, stoppage, time out of refrigeration: TI-28) come with the final library.
 
+## Engine change 3: results that come days later (built 16 November 2026)
+- EM plates, biological indicators and bioburden are read 2-7 days after sampling and belong to the batch review. A
+  **preparation stage** (Tablets' parallel stages) may name the step it **starts after** ("stage/step", an earlier
+  step): it opens once that step is done in every copy, runs beside the stages after it (nothing waits for it), and,
+  like every stage, must be closed before production signs (TI-20).
+- The master check: only a preparation starts after a step, the step is of an earlier stage, and no stage uses it.
+
 ## Platform
 - Runs on the Medhanta platform. Core provides people, sign-in, permissions, e-signature re-authentication and master
   data. Normal platform sign-in (OIDC through core, one person per browser).
