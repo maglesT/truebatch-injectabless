@@ -108,7 +108,7 @@ export function StepSettings({ doc, si, ti, onChange }: { doc: MasterDoc; si: nu
           <label>Only when the batch volume is at most (L)<Decimal label="Only when the batch volume is at most (L)" placeholder="always" value={step.onlyIf?.limit.high}
             onChange={(v) => opt('onlyIf', v ? { header: 'batchVolume', limit: { high: v, unit: 'L' } } : undefined)} /></label>
           <label>Order-critical: must come after<select value={step.orderAfter ?? ''} onChange={(e) => opt('orderAfter', e.target.value || undefined)}>
-            <option value="">(not order-critical)</option>{doc.stages[si]!.steps.filter((t) => t.key !== step.key).map((t) => <option key={t.key} value={t.key}>{t.key}</option>)}</select></label>
+            <option value="">(not order-critical)</option>{doc.stages[si]!.steps.map((t, j) => t.key !== step.key && <option key={t.key} value={t.key}>{j + 1}. {stepTitle(doc, t)}</option>)}</select></label>
         </div>
       </details>
     </div>
