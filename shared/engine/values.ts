@@ -131,7 +131,16 @@ function refValue(doc: MasterDoc, events: readonly StepEvent[], here: StepKey, r
   const si = doc.stages.findIndex((s) => s.key === sk);
   const ti = doc.stages[si]?.steps.findIndex((t) => t.key === tk) ?? -1;
   if (ti < 0) return undefined;
-  const c = latestValues(events, si, si === here.stage ? here.sub : 1, ti, uses);
+  const sub = si === here.stage ? here.sub : 1;
+  // Engine change 2: a field of an event log is the list of its entries' values (zero in the field's unit for none).
+  const block = findBlock(doc.stages[si]!.steps[ti]!.block);
+  if (block?.log) {
+    const rounds = [...new Set(events.filter((e) => e.stage === si && e.sub === sub && e.step === ti && e.kind === 'done').map((e) => e.round))].sort((a, b) => a - b);
+    const list = rounds.map((r) => latestValues(events, si, sub, ti, uses, r).values[name]).filter((v) => v !== undefined).flat();
+    const unit = block.fields.find((f) => f.name === name)?.unit;
+    return list.length ? list : unit && !unit.startsWith('$') ? [{ value: '0', unit }] : undefined;
+  }
+  const c = latestValues(events, si, sub, ti, uses);
   return name in c.values ? c.values[name] : c.results[name] ? asQ(c.results[name]) : undefined;
 }
 

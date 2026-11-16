@@ -47,6 +47,16 @@ adding anything, look how TrueBatch Tablets does it and copy that.
   weights, coating lines, tooling, other strengths from one blend, processing aids, herbal lines).
 - No new mechanism: the header is a different shape of the same master document (as Packing had its own header).
 
+## Engine change 2: an event log beside a stage (built 16 November 2026)
+- A block may be an **event log** (`log: true`): interventions, stoppages, time out of the fridge. Its entries are
+  rounds of one master step that the operator adds at any time while the stage runs, each recorded and signed like a
+  step (the "rounds alongside a step" of Tablets, without a timer and without a stop check).
+- None is needed: the step after it does not wait for it, and an empty log does not hold the stage. An entry under way
+  holds the stage until it is signed. Once the stage is closed no new entry starts.
+- A later step reads a field of an event log as the list of every signed entry's values (zero in the field's unit for
+  none), so a template totals it (T2: the units removed, the time out of the fridge).
+- The blocks that use it (intervention, stoppage, time out of refrigeration: TI-28) come with the final library.
+
 ## Platform
 - Runs on the Medhanta platform. Core provides people, sign-in, permissions, e-signature re-authentication and master
   data. Normal platform sign-in (OIDC through core, one person per browser).
