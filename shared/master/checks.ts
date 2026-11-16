@@ -9,6 +9,7 @@ import { decimalsOf } from '../templates/core.js';
 import { evaluate, headerValue, lineQuantity } from '../engine/values.js';
 import { materialLines, type Answer, type FormulaLine, type Limit, type MasterDoc, type SettingValue } from './schema.js';
 import { isBalance } from '../engine/picks.js';
+import { sterileChecks } from './sterile-checks.js';
 
 /** A warning the author answers: one of the options, with a reason when `needsReason`. */
 export interface Question { key: string; options: string[]; needsReason: boolean; answer?: Answer }
@@ -169,6 +170,7 @@ function formulaChecks(doc: MasterDoc, out: Problem[], error: (path: string, mes
   });
   formulaSums(doc, error);
   calculationChecks(doc, out);
+  sterileChecks(doc, (path, key, message, options, needsReason = false) => askOf(doc, out, path, key, message, options, needsReason), error);
 }
 
 const nominal = (l: FormulaLine) => (l.adjust?.content?.resultType === 'percent of theoretical' ? SAMPLE.assay : l.adjust?.content?.nominalContent ?? SAMPLE.assay);
@@ -211,16 +213,21 @@ const WET = /\b(wet|cake|damp|solvent-wet)\b/i;
 const SIZE = /\b(d\s?\(?0?\.?[159]0?\)?|d10|d50|d90|dv\d+|particle size|surface area|polymorph|crystal form)\b/i;
 const RATIO = /\d+(\.\d+)?\s*(:\s*\d+(\.\d+)?|%(\s*w\/w)?)/;
 
+/** A warning the author answers; its answer counts while the warning reads the same as when it was answered. */
+function askOf(doc: MasterDoc, out: Problem[], path: string, key: string, message: string, options: string[], needsReason = false): string | undefined {
+  const a = doc.answers?.[key];
+  const ok = a && a.about === message && options.includes(a.choice) && (!needsReason || a.reason.trim() !== '');
+  out.push({ level: 'warning', path, message, question: { key, options, needsReason, ...(ok ? { answer: a } : {}) } });
+  return ok ? a.choice : undefined;
+}
+
 function calculationChecks(doc: MasterDoc, out: Problem[]): void {
-  const ask = (path: string, key: string, message: string, options: string[], needsReason = false) => {
-    const a = doc.answers?.[key];
-    const ok = a && a.about === message && options.includes(a.choice) && (!needsReason || a.reason.trim() !== '');
-    out.push({ level: 'warning', path, message, question: { key, options, needsReason, ...(ok ? { answer: a } : {}) } });
-    return ok ? a.choice : undefined;
-  };
+  const ask = (path: string, key: string, message: string, options: string[], needsReason = false) => askOf(doc, out, path, key, message, options, needsReason);
   const refuse = (path: string, message: string) => out.push({ level: 'error', path, message });
   const apis = doc.formula.filter((l) => l.role === 'api');
   const per = doc.header.batchUnit === 'units' ? 'unit' : 'mL';
+  // A claim per container is checked against mg/mL × the nominal fill (sterile check 14), not per mL.
+  const perMl = doc.header.claimPer !== 'container (filled content)';
   // (d) the API adjusted for potency at dispensing, then set again from an in-process granule or blend assay
   const atDispensing = apis.find((l) => l.adjust?.potency || (l.adjust?.content && l.adjust.content.contentSource !== 'in-process result'));
   doc.formula.forEach((l, i) => {
@@ -230,9 +237,9 @@ function calculationChecks(doc: MasterDoc, out: Problem[]): void {
       const formulaForm = salt?.from.name || l.name;
       const other = salt ? salt.to.name || 'the dispensed form' : 'the base, acid or element';
       const basis = ask(`formula[${i}]`, `label-basis/${l.key}`, `Label claim for this master's market: is the strength of ${l.name} stated as ${formulaForm} or as ${other}? The formula gives ${l.mg ?? 'q.s.'} mg of ${formulaForm} per ${per}.`, [`as ${formulaForm}`, `as ${other}`]);
-      if (l.labelClaim && l.mg) labelClaim(`formula[${i}].labelClaim`, l, l.labelClaim, new Dec(l.mg), basis, l.name);
+      if (l.labelClaim && l.mg && perMl) labelClaim(`formula[${i}].labelClaim`, l, l.labelClaim, new Dec(l.mg), basis, l.name);
     } else if (l.role === 'api') {
-      if (l.labelClaim && l.mg) labelClaim(`formula[${i}].labelClaim`, l, l.labelClaim, new Dec(l.mg), `as ${l.name}`, l.name);
+      if (l.labelClaim && l.mg && perMl) labelClaim(`formula[${i}].labelClaim`, l, l.labelClaim, new Dec(l.mg), `as ${l.name}`, l.name);
     }
     // A solvent-wet API weighed as if dry (F0204: about 23 % too little); answered, or corrected with the lot's solvent.
     const corrected = l.adjust?.potency?.basis === 'dried' || l.adjust?.potency?.basis === 'anhydrous and solvent-free' || l.adjust?.content?.formulaQuantityIs === 'wet';

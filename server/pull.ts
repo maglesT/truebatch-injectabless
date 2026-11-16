@@ -91,7 +91,7 @@ export function handProblem(f: BlockField, v: string, now: Date, tz: string): st
   if (f.name.endsWith('.expiry')) {
     const d = new Date(`${v}T00:00:00Z`);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== v) return `${f.label}: give a date, e.g. 2026-11-15.`;
-    if (v < plantDay(now, tz)) return `The lot expired or passed its retest date on ${plantDate(v)}: it may not be used.`;
+    if (v < plantDay(now, tz)) return f.useBy ? `${f.label}: ${plantDate(v)} has passed: the item may not be used (re-sterilise or replace it).` : `The lot expired or passed its retest date on ${plantDate(v)}: it may not be used.`;
   }
   return null;
 }

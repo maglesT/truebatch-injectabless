@@ -15,7 +15,7 @@ import { blocking, masterChecks } from '../../shared/master/checks.js';
 import type { MasterDoc } from '../../shared/master/schema.js';
 import { Dec } from '../../shared/templates/index.js';
 import {
-  ACTIONS, BATCH_ACTIONS, CERTIFICATE, LINK_OF, MATERIAL_USE, batchRefusal, inLotUnit, issuedLots, returnProblems, returnsOf, usedQuantity, usesOfLot, stepLabel, stepPlace, stepTitle, handFields, isHand, batchView, doneProblems, evaluate, lateItems, openSteps, parseKey, readValue, refusal, review, stepFields, timers,
+  ACTIONS, BATCH_ACTIONS, CERTIFICATE, LINK_OF, MATERIAL_USE, batchRefusal, inLotUnit, issuedLots, returnProblems, returnsOf, usedQuantity, usesOfLot, stepLabel, stepPlace, stepTitle, handFields, isHand, batchView, doneProblems, evaluate, lateItems, openSteps, parseKey, readValue, refusal, review, stepFields, stepNeeds, timers,
   type Action, type BatchAction, type BatchEvent, type DeviationStatus, type LinkState, type Source, type StageView, type Stored, type StepEvent, type StepKey, type StepView, type Timer, type Value,
 } from '../../shared/engine/index.js';
 
@@ -146,7 +146,8 @@ async function readValues(app: FastifyInstance, doc: MasterDoc, key: StepKey, ra
     const setting = f.unit?.startsWith('$') ? step.settings[f.unit.slice(1)] : f.unit;
     const v = readValue(f, x, typeof setting === 'string' ? setting : '');
     if (typeof v === 'object' && !Array.isArray(v) && 'error' in v) { problems.push(v.error); continue; }
-    const no = typeof v !== 'string' ? null : name.includes('.') ? handProblem(f, v, now, PLANT_TZ) : null;
+    // Engine change 6: an item past its use-by date is refused when recorded.
+    const no = typeof v !== 'string' ? null : name.includes('.') || f.useBy ? handProblem({ ...f, name: f.useBy ? `${f.name}.expiry` : f.name }, v, now, PLANT_TZ) : null;
     if (no) problems.push(no);
     else out[name] = v as Value;
   }
@@ -169,7 +170,9 @@ const BODIES: Record<Action, z.ZodTypeAny> = {
 };
 const BATCH_BODIES: Record<BatchAction, z.ZodTypeAny> = {
   'production-approve': signBody,
-  'qc-approve': signBody.extend({ reportNo: z.string().trim().min(1).max(60) }),
+  // TI-21, TI-26, TI-27: the QC report(s) of the release tests (sterility, endotoxin, bioburden) and the EM review of the
+  // batch's processing window: its report numbers, and the Deviations number of every action-limit excursion.
+  'qc-approve': signBody.extend({ reportNo: z.string().trim().min(1).max(60), emReview: z.string().trim().min(1).max(500) }),
   release: signBody,
   reject: signBody.extend({ reason }),
   // Per lot the batch used: how much went back to stores unused (stock.ts issuedLots, returnProblems).
@@ -181,7 +184,8 @@ const LAST_EVENTS = 5;
 const NAMES = Object.keys(ACTIONS) as Action[];
 const BATCH_NAMES = Object.keys(BATCH_ACTIONS) as BatchAction[];
 const flowOf = (doc: MasterDoc, k: StepKey) => doc.stages[k.stage]!.steps[k.step]!.flow.kind;
-const context = (doc: MasterDoc, v: StepView, user: SessionUser) => ({ state: v.state, events: v.events, flow: flowOf(doc, v.key), user });
+const context = (doc: MasterDoc, v: StepView, user: SessionUser) => ({ state: v.state, events: v.events, flow: flowOf(doc, v.key), user,
+  needs: stepNeeds(doc.stages[v.key.stage], findBlock(doc.stages[v.key.stage]!.steps[v.key.step]!.block)) });
 
 /** "My work": what in this batch waits for the person, and where the batch stands. Null when nothing does. */
 function myWork(l: LoadedBatch, user: SessionUser) {
@@ -445,7 +449,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
       const id = parseId(req.params.id);
       const body = BATCH_BODIES[action].safeParse(req.body);
       if (id === null || !body.success) return reply.code(400).send({ error: 'invalid', problems: body.error?.issues.map((i) => `${i.path.join('.')}: ${i.message}`) ?? [] });
-      const b = body.data as { proof?: string; contentHash?: string; reportNo?: string; reason?: string; note?: number; returns?: { lot: string; value: string; unit: string }[] };
+      const b = body.data as { proof?: string; contentHash?: string; reportNo?: string; emReview?: string; reason?: string; note?: number; returns?: { lot: string; value: string; unit: string }[] };
       const user = req.user!;
       try {
         const signer = rule.meaning ? await authenticateSigner(sql, app.proofKey, user, { proof: b.proof! }, { objectType: 'batch', objectId: id, meaning: rule.meaning }) : null;
@@ -461,7 +465,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
           const wrong = returnProblems(issued, b.returns ?? []);
           if (wrong.length) throw new StepError(400, 'invalid_values', wrong);
           const returns = issued.map((x) => ({ ...x, value: b.returns!.find((r) => r.lot.toLowerCase() === x.lot.toLowerCase() && r.unit === x.unit)!.value }));
-          const payload = { ...(action === 'terminate' ? { terminated: true } : {}), ...(returns.length ? { returns } : {}), ...(b.reportNo ? { reportNo: b.reportNo } : {}), ...(b.reason ? { reason: b.reason } : {}), ...(b.note ? { note: b.note } : {}) };
+          const payload = { ...(action === 'terminate' ? { terminated: true } : {}), ...(returns.length ? { returns } : {}), ...(b.reportNo ? { reportNo: b.reportNo } : {}), ...(b.emReview ? { emReview: b.emReview } : {}), ...(b.reason ? { reason: b.reason } : {}), ...(b.note ? { note: b.note } : {}) };
           const [ev] = await tx<{ id: number }[]>`
             insert into batch_events (batch_id, kind, payload, person_id) values (${id}, ${rule.event}, ${tx.json(payload)}, ${user.id}) returning id::int`;
           if (signer && rule.meaning) {

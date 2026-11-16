@@ -360,10 +360,11 @@ describe('production approval, QC approval and QA release', () => {
     expect((await as('asha', 'GET', '/api/batches/to-review')).statusCode).toBe(403);
   });
 
-  it('TI-21 QC approves with its report number; QA releases only once the linked deviations are closed', async () => {
+  it('TI-21 QC approves with its report number and the EM review (TI-27); QA releases only once the linked deviations are closed', async () => {
     expect((await batchSign('quinn', 'qc-approve')).statusCode).toBe(400);
+    expect((await batchSign('quinn', 'qc-approve', { reportNo: 'QC-26-0042' })).statusCode).toBe(400);
     expect((await batchSign('meera', 'release')).json()).toMatchObject({ problems: ['Not possible while the batch is production approved.'] });
-    expect((await batchSign('quinn', 'qc-approve', { reportNo: 'QC-26-0042' })).statusCode).toBe(200);
+    expect((await batchSign('quinn', 'qc-approve', { reportNo: 'QC-26-0042', emReview: 'EM-26-118: no action-limit excursion' })).statusCode).toBe(200);
     expect([await toReview('quinn'), await toReview('meera')]).toMatchObject([[], [{ waiting: 'QA', openDeviations: 1 }]]);
     expect((await batchSign('meera', 'reject', {})).statusCode).toBe(400);
     expect((await batchSign('meera', 'release')).json()).toMatchObject({ error: 'not_ready', problems: ['Deviation DEV-26-010 (Stage 0 › Check a value against limits: pH) is open'] });

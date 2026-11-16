@@ -97,8 +97,8 @@ describe('master checks', () => {
     })).toEqual([expect.stringMatching(/^error TI-13 formula\[0\]\.adjust: Same-basis rule \(C5\): the standard quantity already uses the hydrate/)]);
     expect(after((d) => { d.formula[0]!.adjust = { potency: { basis: 'as is' } }; }))
       .toEqual(['error TI-13 formula[0].adjust: Say whether the standard quantity is the anhydrous weight or the hydrate/solvate weight (same-basis rule C5)']);
-    expect(after((d) => { d.formula[0]!.adjust = { overage: { percent: '5.0', maxPercent: '3.0' } }; }))
-      .toEqual(['error - formula[0].adjust: The overage 5.0 % is above the 3.0 % the master allows']);
+    expect(after((d) => { d.formula[0]!.adjust = { overage: { percent: '7.0', maxPercent: '3.0' } }; }))
+      .toEqual(['error - formula[0].adjust: The overage 7.0 % is above the 3.0 % the master allows']);
     expect(errors((d) => { d.formula[0]!.adjust = { salt: { from: { name: 'base', mw: '383.4' }, to: { name: 'hemifumarate', mw: '0' } } }; }))
       .toEqual(['error - formula[0].adjust: Molecular weights must be more than zero']);
     expect(after((d) => { d.formula[1]!.adjust = { compensates: ['nothing'] }; })).toEqual(['error - formula[1].adjust.compensates: No other formula line nothing to compensate']);

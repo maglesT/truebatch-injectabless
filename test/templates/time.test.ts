@@ -87,3 +87,59 @@ describe('F8 diversion window (calculation only, formulation 50)', () => {
     expect(refused(f8DiversionWindow(i))).toMatch(msg);
   });
 });
+
+describe('T13 (I11) days, calendar months, "now", validated maximum', () => {
+  it('T13: bulk hold in days: 2026-11-01 08:00 to 2026-11-16 20:00 = 15.50 d', () => {
+    const r = ok(t13Duration({ mode: 'duration', start: '2026-11-01 08:00', end: '2026-11-16 20:00', unit: 'd' }));
+    expect(r.value.toFixed(2)).toBe('15.50');
+    expect(r.unit).toBe('d');
+  });
+
+  it('T13: end "now" is the step\'s own time: 2026-11-15 22:00 to now (2026-11-16 10:00) = 12 h', () => {
+    const r = ok(t13Duration({ mode: 'duration', start: '2026-11-15 22:00', end: 'now', now: '2026-11-16 10:00', unit: 'h' }));
+    expect(r.value.toString()).toBe('12');
+    expect(r.shown).toContain('now (2026-11-16 10:00)');
+  });
+
+  it('T13: calendar months (media fill validity): 2026-05-10 to 2026-11-16 = 6 months + 6 d = 6.20 months', () => {
+    // 6 whole months to 2026-11-10; 6 d of the 30 days to 2026-12-10 = 0.2 month
+    const r = ok(t13Duration({ mode: 'duration', start: '2026-05-10 08:00', end: '2026-11-16 08:00', unit: 'months' }));
+    expect(r.value.toFixed(2)).toBe('6.20');
+    expect(r.unit).toBe('months');
+    expect(r.shown).toContain('6 calendar months + 6.00 d');
+    expect(r.shown).toContain('last day of a shorter month');
+  });
+
+  it('T13: month ends: 31 Jan + 1 month is 28 Feb (exactly 1.00); 1 Mar is 1 + 1/31 month', () => {
+    expect(ok(t13Duration({ mode: 'duration', start: '2026-01-31 08:00', end: '2026-02-28 08:00', unit: 'months' })).value.toString()).toBe('1');
+    // the month after 28 Feb runs to 31 Mar (31 days): 1 day = 1/31
+    expect(ok(t13Duration({ mode: 'duration', start: '2026-01-31 08:00', end: '2026-03-01 08:00', unit: 'months' })).value.toFixed(4)).toBe('1.0323');
+  });
+
+  it('T13: validated maximum: APS valid 6 months; 6.20 months is refused although it would round to "6"; 5.97 months is fine', () => {
+    expect(refused(t13Duration({ mode: 'duration', start: '2026-05-10 08:00', end: 'now', now: '2026-11-16 08:00', unit: 'months', validatedMax: '6 months' }))).toMatch(/6.20 months.*above the validated maximum 6 months/);
+    // 2026-05-10 to 2026-11-09: 5 months + 30 of the 31 days to 2026-11-10 = 5.9677
+    expect(ok(t13Duration({ mode: 'duration', start: '2026-05-10 08:00', end: '2026-11-09 08:00', unit: 'months', validatedMax: '6 months' })).value.toFixed(4)).toBe('5.9677');
+  });
+
+  it('T13: bulk hold of 50 h against a validated maximum of 48 h is refused (no rounding); 24 h is fine', () => {
+    expect(refused(t13Duration({ mode: 'duration', start: '2026-11-14 08:00', end: '2026-11-16 10:00', unit: 'h', validatedMax: '48 h' }))).toMatch(/above the validated maximum 48 h/);
+    expect(refused(t13Duration({ mode: 'duration', start: '2026-11-14 08:00', end: '2026-11-16 08:01', unit: 'h', validatedMax: '2 d' }))).toMatch(/above the validated maximum 2 d/);
+  });
+
+  it('T13: a hold limit inside the validated maximum is used as it is', () => {
+    const r = ok(t13Duration({ mode: 'duration', start: '2026-11-15 08:00', end: '2026-11-16 06:00', unit: 'h', limit: { high: '24', unit: 'h' }, validatedMax: '48 h' }));
+    expect(r.check?.pass).toBe(true);
+  });
+
+  it.each([
+    [{ mode: 'duration' as const, start: '2026-11-15 08:00', end: '2026-11-16 06:00', unit: 'h', limit: { high: '72', unit: 'h' }, validatedMax: '48 h' }, /above the validated maximum 48 h/],
+    [{ mode: 'duration' as const, start: '2026-11-15 08:00', end: '2026-11-16 06:00', unit: 'd', limit: { high: '5', unit: 'd' }, validatedMax: '72 h' }, /above the validated maximum/],
+    [{ mode: 'duration' as const, start: '2026-01-01 08:00', end: '2026-11-16 06:00', unit: 'months', limit: { high: '5', unit: 'd' }, validatedMax: '6 months' }, /both be in calendar months/],
+    [{ mode: 'duration' as const, start: '2026-11-15 08:00', end: 'now' }, /step's own time/],
+    [{ mode: 'duration' as const, start: '2026-11-15 08:00', end: '2026-11-16 06:00', unit: 'h', validatedMax: '6 months' }, /same kind of unit/],
+    [{ mode: 'accumulated' as const, readings: [{ time: '2026-11-15 08:00', value: '40 °C' }, { time: '2026-11-15 09:00', value: '40 °C' }], inside: { low: '35', unit: '°C' }, unit: 'months' }, /only between a start and an end/],
+  ])('T13: refuses %o', (i, msg) => {
+    expect(refused(t13Duration(i))).toMatch(msg);
+  });
+});

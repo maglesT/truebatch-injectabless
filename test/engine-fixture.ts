@@ -6,7 +6,7 @@ import type { EventKind, Payload, StepEvent, StepKey } from '../shared/engine/in
 // stay (100.0 mg/mL × 100 L = 10.000 kg). The process stages are still those of the copied engine tests (the tablet
 // blocks stay in the engine copy for these tests until the sterile blocks replace them, phase E).
 export const tablet = (): MasterDoc => masterSchema.parse({
-  header: { productItemId: 'prd-1', productCode: 'PRD-001', productName: 'Examplol 100 mg/mL injection', batchSize: '100', batchUnit: 'L', densityGPerMl: '1.05', fillVolumeMl: '10.0', fillExcessMl: '0.5', dispensingRooms: ['DSP-01'] },
+  header: { productItemId: 'prd-1', productCode: 'PRD-001', productName: 'Examplol 100 mg/mL injection', batchSize: '100', batchUnit: 'L', densityGPerMl: '1.05', fillVolumeMl: '10.0', fillExcessMl: '0.5', route: 'aseptic', dispensingRooms: ['DSP-01'] },
   formula: [
     { key: 'api', materialItemId: 'mat-api', code: 'MAT-001', name: 'Examplol', mg: '100.0', role: 'api', adjust: { potency: { basis: 'dried', standardIs: 'anhydrous' } } },
     { key: 'lactose', materialItemId: 'mat-lac', code: 'MAT-002', name: 'Lactose monohydrate', mg: '120.0', role: 'excipient', adjust: { compensates: ['api'] } },
@@ -74,7 +74,7 @@ export const unplaced = <T extends { rule?: string; path: string }>(problems: T[
 /** A small master with the given stages; each step defaults to a "check a value" step without a checker. */
 export function small(stages: object[]): MasterDoc {
   return masterSchema.parse({
-    header: { productItemId: 'p', productCode: 'P', productName: 'P', batchSize: '1', batchUnit: 'L', fillVolumeMl: '1.0', dispensingRooms: ['DSP-01'] },
+    header: { productItemId: 'p', productCode: 'P', productName: 'P', batchSize: '1', batchUnit: 'L', fillVolumeMl: '1.0', fillExcessMl: '0.05', route: 'aseptic', dispensingRooms: ['DSP-01'] },
     formula: [{ key: 'x', materialItemId: 'm', code: 'M', name: 'M', mg: '100.0', role: 'excipient' }],
     stages: stages.map((s, i) => ({ key: `s${i}`, name: `Stage ${i}`, kind: 'normal', ...s,
       steps: ((s as { steps?: object[] }).steps ?? [{}]).map((t, j) => ({ key: `t${j}`, block: { id: 'check', version: 1 }, checker: false,

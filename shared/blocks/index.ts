@@ -1,5 +1,7 @@
 /** The block library: each block is a description file; a new block (or a new version of one) is a new file here. */
 import type { Block } from './format.js';
+import * as common from './common.js';
+import * as special from './special.js';
 import { binderSolution } from './binder-solution.js';
 import { blendUniformity } from './blend-uniformity.js';
 import { charge } from './charge.js';
@@ -41,11 +43,16 @@ export const BLOCKS: readonly Block[] = [
   subBatchCombine, blendUniformity, densityFlow, sieveAnalysis, punchDieCheck, pressSetup, compressionRelease, compress,
   friability, disintegration, uniformityByWeight, contentUniformity, coat, sprayCoat, polishPrint, check, qaSample,
   stageYield, tabletReconciliation, lineClearance,
+  // TrueBatch Injectables library v1 (phase E): section 4.2.
+  ...Object.values(common),
+  // Sections 4.3 to 4.8.
+  ...Object.values(special),
 ];
 // The blocks a new injectables master may use: the eleven the draft library reuses from TrueBatch Tablets. The other
 // tablet blocks stay in the engine copy only as fixtures of the engine tests, until the sterile blocks of the final
 // library (phase E) replace them there; the designer does not offer them.
-export const OFFERED = ['weigh', 'charge', 'mix', 'check', 'line-clearance', 'sub-batch-combine', 'qa-sample', 'stage-yield', 'blend-uniformity', 'sieve', 'dry-constant'];
+export const OFFERED = ['weigh', 'charge', 'mix', 'check', 'line-clearance', 'sub-batch-combine', 'qa-sample', 'stage-yield', 'blend-uniformity', 'sieve', 'dry-constant',
+  ...[...Object.values(common), ...Object.values(special)].map((b) => b.id)];
 
 export function findBlock(ref: { id: string; version: number }): Block | undefined {
   return BLOCKS.find((b) => b.id === ref.id && b.version === ref.version);

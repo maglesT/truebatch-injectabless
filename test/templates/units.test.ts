@@ -80,3 +80,39 @@ describe('units: same-kind conversion', () => {
     expect(findUnit('furlong')).toBeUndefined();
   });
 });
+
+// TrueBatch Injectables units (library v1, section 3): each value is the unit's definition.
+describe('units added for injectables', () => {
+  it.each([
+    ['760', 'Torr', 'mbar', '1013.25'], // 760 Torr = 1 atm = 1013.25 mbar
+    ['100', 'mTorr', 'µbar', '133.322368421053'], // 0.1 Torr = 13.33 Pa = 133.3 µbar
+    ['1', 'kgf/cm² g', 'bar g', '0.980665'],
+    ['10', 'psi g', 'kPa g', '68.9475729316836'],
+    ['1', 'SCFH', 'L/min', '0.4719474432'],
+    ['60', 'cm/min', 'm/h', '36'],
+    ['3', '°C/min', '°C/h', '180'],
+    ['1', 'particles/ft³', 'particles/m³', '35.3146667214886'],
+    ['1', 'CFU/mL', 'CFU/100 mL', '100'],
+    ['2.5', 'Mrad', 'kGy', '25'],
+    ['500', 'nm', 'µm', '0.5'],
+    ['1', 'mg/L', 'µg/mL', '1'],
+    ['2', 'm²', 'cm²', '20000'],
+  ])('Units: %s %s = %s in %s', (v, from, to, want) => {
+    expect(c(v, from, to)).toBe(want);
+  });
+
+  it.each([
+    ['1', 'bar g', 'bar'], // gauge ↔ absolute needs the barometric reading
+    ['300', 'mOsm/kg', 'mOsm/L'], // osmolality and osmolarity never convert
+    ['5', '%v/v', '%w/w'], // a gas fraction is not a mass fraction
+    ['10', 'IU/mL', 'mg/mL'], // a potency per volume is never a mass
+    ['8', 'F-min', 'min'], // lethality is not clock time
+    ['5', 'CFU/plate', 'CFU/m³'], // a plate is not a volume of air
+  ])('Units: refused: %s %s to %s', (v, from, to) => {
+    expect(() => convert(new Dec(v), unit(from), unit(to))).toThrow(Refused);
+  });
+
+  it.each([['psig', 'psi g'], ['barg', 'bar g'], ['mM', 'mmol/L'], ['cP', 'mPa·s'], ['vial', 'vials'], ['CFU/100mL', 'CFU/100 mL'], ['% v/v', '%v/v']])('Units: alias %s is %s', (a, s) => {
+    expect(findUnit(a)?.symbol).toBe(s);
+  });
+});

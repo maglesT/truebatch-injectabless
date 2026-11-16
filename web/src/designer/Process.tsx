@@ -147,6 +147,8 @@ function StageForm({ doc, si, stage, onChange, roles, machineTypes, areas }: {
       <div className="form-grid">
         <label>Kind<select value={stage.kind} onChange={(e) => { const kind = e.target.value as Stage['kind']; const { count: _, ...rest } = stage; onChange(kind === 'sub-batch' ? { ...rest, kind, count: stage.count ?? 2 } : { ...rest, kind }); }}>
           <option value="normal">Normal stage</option><option value="preparation">Preparation (e.g. binder solution)</option><option value="sub-batch">Sub-batches (done several times)</option></select></label>
+        {/* TI-23, TI-28: an aseptic stage's steps are only for aseptic operators. */}
+        <label className="check"><input type="checkbox" checked={!!stage.aseptic} onChange={(e) => { const { aseptic: _, ...rest } = stage; onChange(e.target.checked ? { ...rest, aseptic: true } : rest); }} />Aseptic stage (only aseptic operators)</label>
         {/* Engine change 3: results that come later (EM plates, BIs, bioburden) start after an earlier step and close before production signs. */}
         {stage.kind === 'preparation' && <label>Starts after (results that come later)
           <select value={stage.startsAfter ?? ''} onChange={(e) => { const { startsAfter: _, ...rest } = stage; onChange(e.target.value ? { ...rest, startsAfter: e.target.value } : rest); }}>

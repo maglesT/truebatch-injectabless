@@ -16,6 +16,9 @@
  *   against their limits; refused when out.
  * - Properties that do not mix by mass are refused (F0418): a size (D50, D90), a hardness or force, a pressure, a plain
  *   number such as pH. A mix of particle sizes is predicted with T22 (`t22MixPsd`).
+ * - By volume (I17, w1 J0068): `volume` of the main lot instead of `mass`, values as concentrations (mg/mL, IU/mL …);
+ *   volumes are taken as additive, the same balance in volumes. Refused for organic/water mixtures (`organicWater`,
+ *   tert-butanol, ethanol: volumes do not add; use fixed masses and a q.s. to weight).
  */
 import { defaultDecimals, Dec, fmt, HUNDRED, needKind, parse, refuse, run, sameKind, show, to, type Outcome, type Parsed, type Q } from './core.js';
 import { checkLimit, type Check, type Limit } from './rounding.js';
@@ -24,7 +27,11 @@ import type { Kind } from './units.js';
 
 export interface T26Input {
   /** Mass of the main lot (A). */
-  readonly mass: Q;
+  readonly mass?: Q;
+  /** By volume instead: the volume of the main lot (A); a, b and the target are concentrations per volume. */
+  readonly volume?: Q;
+  /** The mix is an organic solvent with water (tert-butanol, ethanol): refused by volume. */
+  readonly organicWater?: boolean;
   /** The property of A, e.g. "28.0 %" fines. */
   readonly a: Q;
   /** The same property of the donor lot (B). */
@@ -45,6 +52,7 @@ export interface T26Input {
 }
 
 export interface T26Extra {
+  /** The mixed total, in the result unit (a volume in the by-volume mode). */
   readonly totalMass: Dec;
   readonly others?: readonly { readonly name: string; readonly value: Dec; readonly check: Check }[];
   /** With the ethanol scale: the donor's volume at 20 °C, in L. */
@@ -77,9 +85,15 @@ export function ethanolWw(vv: Dec): Dec {
 
 export function t26MixToTarget(i: T26Input): Outcome<T26Extra> {
   return run(() => {
-    const m = parse(i.mass, 'The mass of the main lot');
-    needKind(m, ['mass'], 'The mass of the main lot');
-    if (!m.v.isPositive() || m.v.isZero()) refuse('The mass of the main lot must be more than zero');
+    const byVolume = i.volume !== undefined;
+    if (byVolume === (i.mass !== undefined)) refuse('Give either the mass or the volume of the main lot');
+    if (byVolume && i.organicWater === true) refuse('An organic solvent with water (tert-butanol, ethanol) is not mixed by volume: the volumes do not add. Use fixed masses and a q.s. to weight');
+    if (byVolume && i.scale === 'ethanol % v/v') refuse('Ethanol and water are not mixed by volume: the volumes do not add. Use the masses (the ethanol scale works by mass)');
+    const qty = (byVolume ? i.volume : i.mass) as Q;
+    const what0 = byVolume ? 'volume' : 'mass';
+    const m = parse(qty, `The ${what0} of the main lot`);
+    needKind(m, [byVolume ? 'volume' : 'mass'], `The ${what0} of the main lot`);
+    if (!m.v.isPositive() || m.v.isZero()) refuse(`The ${what0} of the main lot must be more than zero`);
     if (i.basis && (i.basis.a !== i.basis.b || i.basis.a !== i.basis.target)) {
       refuse(`The values are not on the same basis (main lot: ${i.basis.a}; donor: ${i.basis.b}; target: ${i.basis.target}): ` +
         "give each lot's value on the basis of the target (for an isomer ratio, each isomer as a fraction of the total on the same assay basis), or the mix drifts from the target");
@@ -88,6 +102,7 @@ export function t26MixToTarget(i: T26Input): Outcome<T26Extra> {
     const b = parse(i.b, 'The value of the donor lot');
     const t = parse(i.target, 'The target');
     sameKind([a, b, t], 'Mix to a target');
+    if (byVolume && !(a.unit.kind === 'mass concentration' || a.unit.kind.endsWith('per volume'))) refuse(`By volume, the values must be concentrations (mg/mL, IU/mL …); "${a.text}" is not`);
     if (a.unit.kind === 'temperature') refuse('Temperatures are not mixed by mass balance');
     const no = NOT_BY_MASS[a.unit.kind];
     if (no !== undefined) refuse(`${i.property ?? 'This property'} does not mix by mass: ${no}`);
@@ -98,7 +113,7 @@ export function t26MixToTarget(i: T26Input): Outcome<T26Extra> {
     const bv = w(b);
     const tv = ethanol ? w(t) : t.v;
     const what = i.property ?? (ethanol ? 'the alcohol strength' : 'the value');
-    const u = i.unit === undefined ? m.unit : (needKind({ v: new Dec(0), unit: parse(`0 ${i.unit}`, 'unit').unit, text: '' }, ['mass'], 'The result unit'), parse(`0 ${i.unit}`, 'unit').unit);
+    const u = i.unit === undefined ? m.unit : (needKind({ v: new Dec(0), unit: parse(`0 ${i.unit}`, 'unit').unit, text: '' }, [byVolume ? 'volume' : 'mass'], 'The result unit'), parse(`0 ${i.unit}`, 'unit').unit);
     const dp = i.decimals ?? defaultDecimals(u.symbol);
     if (av.eq(tv)) {
       const zero = new Dec(0);
@@ -120,7 +135,7 @@ export function t26MixToTarget(i: T26Input): Outcome<T26Extra> {
       ? `${m.text} × (${fmt(tv, 2)} − ${fmt(av, 2)}) ÷ (${fmt(bv, 2)} − ${fmt(tv, 2)}) (% w/w at 20 °C of ${t.text}, ${a.text}, ${b.text}) = ` +
         `${show(value, u.symbol, dp)} of the donor lot (${fmt(donorVolume!, 2)} L at 20 °C); mix ${show(totalMass, u.symbol, dp)} at ${t.text}`
       : `${m.text} × (${t.text} − ${a.text}) ÷ (${b.text} − ${t.text}) = ${show(value, u.symbol, dp)} of the donor lot; ` +
-        `mix ${show(totalMass, u.symbol, dp)} at ${what} ${fmt(t.v, Math.max(1, dp - 1))} ${t.unit.symbol}`;
+        `mix ${show(totalMass, u.symbol, dp)} at ${what} ${fmt(t.v, Math.max(1, dp - 1))} ${t.unit.symbol}${byVolume ? ' (volumes taken as additive)' : ''}`;
     const others = (i.others ?? []).map((o) => {
       const oa = parse(o.a, `${o.name} of the main lot`);
       const ob = parse(o.b, `${o.name} of the donor lot`);

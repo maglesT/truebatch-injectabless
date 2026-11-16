@@ -295,8 +295,10 @@ export function doneProblems(doc: MasterDoc, v: StepView, now: Date): string[] {
   // label, has passed since it was taken: taking an expired one is refused) needs a deviation note written after it.
   const today = plantDayOf(now);
   for (const [name, d] of Object.entries(v.values)) {
-    if (!name.endsWith('.expiry') || typeof d !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(d) || d >= today) continue;
-    if (!v.events.some((e) => e.kind === 'note' && plantDayOf(e.at) > d)) p.push(`${fieldLabel(block.fields, name.slice(0, -'.expiry'.length))} ${String(v.values[name.slice(0, -'.expiry'.length)] ?? '')} expired on ${plantDate(d)}, during this step. Add a deviation note first.`);
+    const useBy = block.fields.find((f) => f.name === name)?.useBy;
+    if ((!name.endsWith('.expiry') && !useBy) || typeof d !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(d) || d >= today) continue;
+    const what = useBy ? fieldLabel(block.fields, name) : `${fieldLabel(block.fields, name.slice(0, -'.expiry'.length))} ${String(v.values[name.slice(0, -'.expiry'.length)] ?? '')}`;
+    if (!v.events.some((e) => e.kind === 'note' && plantDayOf(e.at) > d)) p.push(`${what} expired on ${plantDate(d)}, during this step. Add a deviation note first.`);
   }
   const started = earliest(v.events, 'started');
   if (st.minMinutes && started && now < plus(started, st.minMinutes) && !skipOf(v.events, `min:${v.id}`)) {
