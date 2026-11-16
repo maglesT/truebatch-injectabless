@@ -14,7 +14,14 @@ export type Kind =
   | 'fraction' | 'mass concentration' | 'density' | 'rotation speed' | 'angle' | 'mass per area' | 'Strong-Cobb hardness'
   | 'mass rate' | 'volume rate' | 'count rate' | 'current' | 'power' | 'specific energy'
   | 'relative humidity' | 'absolute humidity' | 'absolute humidity per volume' | 'log' | 'frequency' | 'rpm per Hz' | 'charge'
-  | 'IU' | 'CFU' | 'activity units' | 'IU per mass' | 'CFU per mass' | 'activity units per mass' | 'mass per IU';
+  | 'IU' | 'CFU' | 'activity units' | 'IU per mass' | 'CFU per mass' | 'activity units per mass' | 'mass per IU'
+  // TrueBatch Injectables (library v1, section 3).
+  | 'gauge pressure' | 'leak rate' | 'linear speed' | 'temperature rate' | 'lethality'
+  | 'CFU per volume' | 'CFU per plate' | 'CFU per glove' | 'particle count' | 'particles per volume'
+  | 'endotoxin' | 'endotoxin per volume' | 'endotoxin per mass' | 'endotoxin per unit' | 'osmolality' | 'osmolarity'
+  | 'molar concentration' | 'charge concentration' | 'amount' | 'mass per amount' | 'volume fraction'
+  | 'conductivity' | 'viscosity' | 'radiation dose' | 'torque' | 'IU per volume' | 'activity units per volume'
+  | 'Lf' | 'Lf per volume' | 'D-antigen units' | 'D-antigen units per volume' | 'ELISA units per volume' | 'PFU per volume' | 'log titre per volume';
 
 export interface Unit {
   readonly symbol: string;
@@ -77,6 +84,41 @@ const TABLE: [string, Kind, Dec | string, string?][] = [
   ['CFU/g', 'CFU per mass', '1'], ['CFU/mg', 'CFU per mass', '1000'],
   ['U/g', 'activity units per mass', '1'], ['U/mg', 'activity units per mass', '1000'],
   ['mg/IU', 'mass per IU', '1'],
+  // TrueBatch Injectables (library v1, section 3). Containers counted like "tablets".
+  ['vials', 'count', '1'], ['ampoules', 'count', '1'], ['syringes', 'count', '1'], ['cartridges', 'count', '1'], ['bags', 'count', '1'],
+  ['bottles', 'count', '1'], ['plates', 'count', '1'],
+  // Absolute pressure of a freeze-dryer or a vacuum evaporation (1 Torr = 101325 ÷ 760 Pa exactly).
+  ['µbar', 'pressure', '0.1'], ['Torr', 'pressure', d(101325).div(760)], ['mTorr', 'pressure', d(101325).div(760000)],
+  // Gauge pressure is its own kind: turning it into absolute needs the barometric reading, so it never converts.
+  ['bar g', 'gauge pressure', '100000'], ['mbar g', 'gauge pressure', '100'], ['kPa g', 'gauge pressure', '1000'], ['psi g', 'gauge pressure', PSI],
+  ['kgf/cm² g', 'gauge pressure', '98066.5'],
+  ['mbar·L/s', 'leak rate', '1'],
+  ['mm/min', 'linear speed', '1'], ['cm/min', 'linear speed', '10'], ['m/h', 'linear speed', d(1000).div(60)],
+  // A temperature difference per time (cooling, shelf ramps), never an absolute temperature.
+  ['°C/min', 'temperature rate', '1'], ['°C/h', 'temperature rate', d(1).div(60)],
+  // Standard cubic feet per hour: 1 ft³/h at standard conditions (about 0.4719 L/min).
+  ['SCFH', 'volume rate', CFM.div(60)],
+  // F0, FH or FD in minutes at the reference temperature: never added to or compared with clock time.
+  ['F-min', 'lethality', '1'],
+  ['CFU/mL', 'CFU per volume', '1'], ['CFU/100 mL', 'CFU per volume', '0.01'], ['CFU/m³', 'CFU per volume', '0.000001'],
+  ['CFU/plate', 'CFU per plate', '1'], ['CFU/glove', 'CFU per glove', '1'],
+  ['particles', 'particle count', '1'], ['particles/m³', 'particles per volume', '1'], ['particles/L', 'particles per volume', '1000'],
+  ['particles/ft³', 'particles per volume', d(1000000).div('28316.846592')], // 1 ft³ = 0.028316846592 m³ exactly
+  ['EU', 'endotoxin', '1'], ['EU/mL', 'endotoxin per volume', '1'], ['EU/mg', 'endotoxin per mass', '1'], ['EU/unit', 'endotoxin per unit', '1'],
+  ['mOsm/kg', 'osmolality', '1'], ['mOsm/L', 'osmolarity', '1'], // two kinds: they never convert to each other
+  ['µg/mL', 'mass concentration', '0.001'], ['mg/L', 'mass concentration', '0.001'],
+  ['mmol/L', 'molar concentration', '1'], ['mEq/L', 'charge concentration', '1'], ['mmol', 'amount', '1'],
+  ['mg/mmol', 'mass per amount', '1'], // drug per amount of lipid (= g/mol)
+  ['%v/v', 'volume fraction', '1'], ['ppm v/v', 'volume fraction', '0.0001'], // a gas fraction, never % w/w
+  ['µS/cm', 'conductivity', '1'], ['mS/cm', 'conductivity', '1000'],
+  ['mPa·s', 'viscosity', '1'],
+  ['kGy', 'radiation dose', '1'], ['Mrad', 'radiation dose', '10'], // 1 Mrad = 10 kGy
+  ['N·m', 'torque', '1'],
+  // Potency per volume (I13): none converts to a mass, nor to another kind of unit.
+  ['IU/mL', 'IU per volume', '1'], ['U/mL', 'activity units per volume', '1'], ['Lf', 'Lf', '1'], ['Lf/mL', 'Lf per volume', '1'],
+  ['DU', 'D-antigen units', '1'], ['DU/mL', 'D-antigen units per volume', '1'], ['EL.U/mL', 'ELISA units per volume', '1'],
+  ['PFU/mL', 'PFU per volume', '1'], ['log10 CCID50/mL', 'log titre per volume', '1'],
+  ['nm', 'length', '0.000001'], ['m²', 'area', '1000000'],
 ];
 
 /** Other spellings people type. */
@@ -85,6 +127,13 @@ const ALIASES: Record<string, string> = {
   mm2: 'mm²', cm2: 'cm²', sec: 's', hr: 'h', degC: '°C', degF: '°F', kP: 'kp', Kp: 'kp',
   '% w/w': '%w/w', '% w/v': '%w/v', '% RH': '%RH', RH: '%RH', cfu: 'CFU', 'cfu/g': 'CFU/g', 'cfu/mg': 'CFU/mg',
   'kg/cm²': 'kgf/cm²', 'N/mm2': 'N/mm²', 'g/m3': 'g/m³', 'ft³/min': 'cfm', 'ft3/min': 'cfm', meq: 'mEq', mEQ: 'mEq', 'US gallon': 'US gal', 'imperial gallon': 'imp gal', 'kg/cm2': 'kgf/cm²', 'g/cm3': 'g/cm³', 'm3/h': 'm³/h', tablet: 'tablets', unit: 'units',
+  // TrueBatch Injectables.
+  'bar(g)': 'bar g', barg: 'bar g', 'mbar(g)': 'mbar g', psig: 'psi g', 'psi(g)': 'psi g', 'kPa(g)': 'kPa g', 'kg/cm² g': 'kgf/cm² g', 'kg/cm2 g': 'kgf/cm² g',
+  torr: 'Torr', mtorr: 'mTorr', ubar: 'µbar', 'mbar L/s': 'mbar·L/s', 'mbar.L/s': 'mbar·L/s', scfh: 'SCFH', F0: 'F-min',
+  'cfu/mL': 'CFU/mL', 'cfu/100 mL': 'CFU/100 mL', 'CFU/100mL': 'CFU/100 mL', 'cfu/m³': 'CFU/m³', 'CFU/m3': 'CFU/m³', 'cfu/plate': 'CFU/plate', 'cfu/glove': 'CFU/glove',
+  'particles/m3': 'particles/m³', 'particles/ft3': 'particles/ft³', 'mOsmol/kg': 'mOsm/kg', 'mOsmol/L': 'mOsm/L', mM: 'mmol/L', 'mmol/l': 'mmol/L',
+  '% v/v': '%v/v', 'uS/cm': 'µS/cm', 'μS/cm': 'µS/cm', cP: 'mPa·s', 'mPa.s': 'mPa·s', 'mPa s': 'mPa·s', Nm: 'N·m', 'N m': 'N·m', 'ug/mL': 'µg/mL', 'mcg/mL': 'µg/mL',
+  vial: 'vials', ampoule: 'ampoules', syringe: 'syringes', cartridge: 'cartridges', bag: 'bags', bottle: 'bottles', plate: 'plates', m2: 'm²',
 };
 
 const UNITS = new Map<string, Unit>(TABLE.map(([symbol, kind, factor, offset]) => [symbol, { symbol, kind, factor: d(factor.toString()), offset: d(offset ?? '0') }]));
