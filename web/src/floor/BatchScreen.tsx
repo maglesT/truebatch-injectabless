@@ -9,6 +9,7 @@ import {
 } from '../api-floor.js';
 import { StepScreen } from './StepScreen.js';
 import { DemoSkip } from './DemoSkip.js';
+import { FillingPanel } from './FillingPanel.js';
 import { Terminate, terminatedText } from '../release/Terminate.js';
 import './floor.css';
 
@@ -92,7 +93,7 @@ function Overview({ d, blocks, now, reload }: { d: BatchDetail; blocks: Block[];
       <nav className="stagebar" aria-label="Stages">
         {d.stages.map((s) => (
           <button key={s.key} className={`${s.closed ? 'closed' : s === current ? 'current' : ''}${s.index === shown ? ' on' : ''}`} onClick={() => setShown(s.index)} aria-pressed={s.index === shown}>
-            <small>{s.closed ? '✓ Closed' : ended ? 'Terminated' : s === current ? 'Now' : s.open ? 'Open' : 'Waiting'}</small><span>{s.name}</span>
+            <small>{s.closed ? '✓ Closed' : ended ? 'Terminated' : doc.stages[s.index]!.startsAfter && s.open ? 'Waiting for results' : s === current ? 'Now' : s.open ? 'Open' : 'Waiting'}</small><span>{s.name}</span>
           </button>
         ))}
       </nav>
@@ -100,6 +101,7 @@ function Overview({ d, blocks, now, reload }: { d: BatchDetail; blocks: Block[];
       <section className="dash-panel" aria-label={`Stage ${stage.name}`}>
         <div className="panel-head"><h2>{stage.name}</h2><span className="muted">{stage.kind === 'sub-batch' ? `${stage.count} sub-batches · ` : ''}{steps.filter(finished).length} of {steps.length} steps finished</span></div>
         {d.stages[shown]!.blocked && <p className="notice">{d.stages[shown]!.blocked}</p>}
+        {!ended && <FillingPanel d={d} stage={shown} now={now} />}
         <div className="steplist">
           {steps.map((s) => {
             const st = stepOf(doc, s.key);
@@ -144,7 +146,7 @@ export function Alerts({ d, blocks, now, only }: { d: BatchDetail; blocks: Block
     const late = t.state === 'late' || (!least && !t.skipped && left < 0);
     // The periodic timer belongs to the next round; it is shown on the round that started it.
     const prev = t.kind === 'periodic' ? id({ ...t.key, round: t.key.round - 1 }) : id(t.key);
-    items.push({ tone: late ? 'bad' : t.state === 'due soon' || t.state === 'due' ? 'warn' : 'info', tag: t.kind === 'hold' ? (late ? 'Hold time exceeded' : 'Hold time') : t.kind === 'periodic' ? (late ? 'Check overdue' : 'Next check') : 'Minimum time',
+    items.push({ tone: late ? 'bad' : t.state === 'due soon' || t.state === 'due' ? 'warn' : 'info', tag: t.kind === 'hold' ? (t.id.startsWith('limit:') ? (late ? 'Time limit exceeded' : 'Time limit') : late ? 'Hold time exceeded' : 'Hold time') : t.kind === 'periodic' ? (late ? 'Check overdue' : 'Next check') : 'Minimum time',
       text: t.label, sub: t.skipped ? `DEMO: wait skipped, ${plainClock(t.skipped.at)}` : late ? `Ran out ${plainClock(t.at)}: a deviation note is needed` : least ? `Can be ${t.kind === 'duration' ? 'ended' : 'finished'} from ${plainClock(t.at)}` : `Due ${plainClock(t.at)}`,
       step: t.kind === 'hold' ? undefined : prev, at: late || t.skipped || (least && left <= 0) ? undefined : left });
   }

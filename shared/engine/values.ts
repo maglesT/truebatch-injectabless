@@ -306,6 +306,8 @@ export function evaluate(doc: MasterDoc, events: readonly StepEvent[], key: Step
     if (r.ok) { inputs[s.name] = asQ(r); asResults[s.name] = { ok: true, value: new Dec(r.value), unit: r.unit }; }
   }
   for (const c of block.calcs) {
+    // A limit check of an optional value that was not given checks nothing: it is left out, as "$name?" promises.
+    if (c.template === 'C1' && unset((c.args as { value?: unknown }).value, { ...inputs, ...asResults })) continue;
     const args = resolve(c.args, c.template === 'C1' ? { ...inputs, ...asResults } : inputs);
     if (args === MISSING) continue;
     const skip = c.template === 'T13' && events.some((e) => e.kind === 'demo_wait_skipped' && e.payload.timer === durationId(key, c.name));

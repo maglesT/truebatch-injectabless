@@ -112,8 +112,7 @@ export function refusal(action: Action, c: ActionContext): Refused | null {
   const rule = ACTIONS[action];
   if (!rule.permissions.some((p) => c.user.permissions.includes(p))) return { status: 403, error: 'forbidden', message: 'You do not have the permission for this action.' };
   if (c.needs && action !== 'check' && action !== 'release-hold' && action !== 'note' && !c.user.permissions.includes(c.needs)) {
-    return { status: 403, error: 'forbidden', message: c.needs.endsWith('.inspect') ? 'Only a visual inspector (a permission QA grants) records and signs the visual inspection.'
-      : 'Only an aseptic operator (a permission QA grants) records and signs the steps of an aseptic stage.' };
+    return { status: 403, error: 'forbidden', message: needsText(c.needs) };
   }
   const signed = c.events.some((e) => e.kind === 'done');
   const wrong = (message: string): Refused => ({ status: 409, error: 'wrong_state', message });
@@ -127,6 +126,10 @@ export function refusal(action: Action, c: ActionContext): Refused | null {
 }
 
 /** TI-23, TI-28, TI-30: the QA-given permission a step needs: aseptic operator in an aseptic stage, visual inspector for inspection. */
+/** Why a step needs a QA-given permission, as the refusal and the step screen say it. */
+export const needsText = (needs: string) => (needs.endsWith('.inspect') ? 'Only a visual inspector (a permission QA grants) records and signs the visual inspection.'
+  : 'Only an aseptic operator (a permission QA grants) records and signs the steps of an aseptic stage.');
+
 export function stepNeeds(stage: { aseptic?: boolean } | undefined, block: { needs?: 'inspect' } | undefined): string | undefined {
   if (block?.needs === 'inspect') return 'truebatch_injectables.batch.inspect';
   return stage?.aseptic ? 'truebatch_injectables.batch.aseptic' : undefined;

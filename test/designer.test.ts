@@ -6,7 +6,7 @@ import { describeMaster, diffMasters, stepText } from '../web/src/designer/descr
 import { dispensing, workedExample } from '../web/src/designer/example.js';
 import { answerDoc, earlierRefs, neededKind, scaleDoc, stepFrom } from '../web/src/designer/model.js';
 import { sentence, sentenceText } from '../web/src/designer/sentences.js';
-import { defaultDispensingRooms, SKELETON_LIST, skeletonStages } from '../web/src/designer/skeletons.js';
+import { defaultDispensingRooms, skeletonList, skeletonStages } from '../web/src/designer/skeletons.js';
 import { tablet, unplaced } from './engine-fixture.js';
 
 // The shared test master is built from test-only blocks (test/test-blocks.ts).
@@ -72,24 +72,41 @@ describe('master designer', () => {
     expect(rows[2]!.adjusted).toBeUndefined();
   });
 
-  it('TI-10 the process skeleton is a valid draft and starts every stage with line clearance; what it leaves open is listed by the master check', () => {
-    const header = { productItemId: 'p', productCode: 'P', productName: 'P', batchSize: '100', batchUnit: 'L' as const, densityGPerMl: '1.02', fillVolumeMl: '10.0', fillExcessMl: '0.5', route: 'aseptic' as const, dispensingRooms: ['RM-101'] };
-    for (const s of SKELETON_LIST) {
-      const doc = masterSchema.parse({ header, formula: [], stages: skeletonStages(s.id, header) });
-      expect(doc.stages.every((st) => st.steps[0]!.block.id === 'line-clearance' && st.steps.every((t) => findBlock(t.block)))).toBe(true);
-      expect(masterChecks(doc).every((p) => /not set|no drug substance/.test(p.message))).toBe(true);
+  it('TI-10 TI-23 each starting master (by type and route) is a valid draft with the steps its route\'s rules need; the master check lists only the product\'s own', () => {
+    const header = (route: 'terminal' | 'aseptic' | 'both') => ({ productItemId: 'p', productCode: 'P', productName: 'Examplol injection', batchSize: '100', batchUnit: 'L' as const,
+      densityGPerMl: '1.02', fillVolumeMl: '10.0', fillExcessMl: '0.5', route, claimPer: 'mL' as const, dispensingRooms: ['RM-101'] });
+    expect(skeletonList('terminal').map((s) => s.id)).toEqual(['bulk-only', 'liquid-terminal', 'bag-terminal']);
+    expect(skeletonList('aseptic').map((s) => s.id)).toEqual(['bulk-only', 'liquid-aseptic', 'lyo-aseptic', 'syringe-aseptic', 'dispersion-aseptic']);
+    expect(skeletonList('both')).toEqual(skeletonList('aseptic'));
+    expect(skeletonList()).toHaveLength(7);
+    expect(skeletonStages('bulk-only', header('aseptic'))[0]!.steps.map((t) => t.block.id)).toEqual(['line-clearance', 'weigh', 'charge', 'mix', 'check', 'stage-yield']);
+    for (const route of ['terminal', 'aseptic'] as const) {
+      for (const s of skeletonList(route)) {
+        const h = header(route);
+        const doc = masterSchema.parse({ header: h, formula: [], stages: skeletonStages(s.id, h) });
+        // TI-10: a stage worked in a room starts with line clearance; every step is a block of the library.
+        expect(doc.stages.every((st) => !st.roomTypes.length || st.steps[0]!.block.id === 'line-clearance'), s.id).toBe(true);
+        expect(doc.stages.every((st) => st.steps.every((t) => findBlock(t.block))), s.id).toBe(true);
+        // Left for the author: the formula and the product's limits and values.
+        expect(masterChecks(doc).filter((p) => !/not set|no drug substance/.test(p.message)), s.id).toEqual([]);
+      }
     }
+    // An aseptic starting master marks its filling stage aseptic and reads the EM plates in a stage of results that come later.
+    const lyo = skeletonStages('lyo-aseptic', header('aseptic'));
+    expect(lyo.filter((s) => s.aseptic).map((s) => s.steps.map((t) => t.block.id).join(' '))).toEqual([
+      'line-clearance aseptic-ready interventions em-filling transfer-in fill lyo-load lyo-cycle lyo-unload qa-sample seal-check unit-reconcile']);
+    expect(lyo.find((s) => s.startsAfter)).toMatchObject({ kind: 'preparation', startsAfter: 'filling/fill', roomTypes: [] });
+    // The bulk yield on the batch mass by the density (engine change 1); the units from the header.
+    expect(lyo[0]!.steps.at(-1)!.settings.theoretical).toEqual({ header: 'batchMass' });
+    expect(lyo.at(-1)!.steps.at(-1)!.settings.theoretical).toEqual({ header: 'units' });
     // TI-11: a master that weighs names its dispensing rooms; a new one starts with the rooms of the Dispensing area
     // exactly (not the liquids block's "Liquid dispensing" booth, nor an inactive room).
-    const bare = masterSchema.parse({ header: { ...header, dispensingRooms: undefined }, formula: [], stages: skeletonStages(SKELETON_LIST[0]!.id, header) });
+    const h = header('aseptic');
+    const bare = masterSchema.parse({ header: { ...h, dispensingRooms: undefined }, formula: [], stages: skeletonStages('liquid-aseptic', h) });
     expect(masterChecks(bare).filter((p) => p.path === 'header.dispensingRooms')).toEqual([{ level: 'error', path: 'header.dispensingRooms', rule: 'TI-11',
       message: 'The master weighs but names no dispensing rooms: choose them in the header (rooms of master data)' }]);
     expect(defaultDispensingRooms([{ code: 'RM-101', area: 'Dispensing', active: true }, { code: 'RM-102', area: 'Dispensing', active: false },
       { code: 'RM-301', area: 'Liquid dispensing', active: true }, { code: 'RM-103', area: 'Granulation', active: true }])).toEqual(['RM-101']);
-    const sol = skeletonStages('solution-compounding', header);
-    expect(sol.map((s) => [s.roomTypes.join(), s.steps.map((t) => t.block.id).join(' ')])).toEqual([['Compounding', 'line-clearance weigh charge mix check stage-yield']]);
-    // The bulk yield on the batch mass by the density (engine change 1).
-    expect(sol[0]!.steps.at(-1)!.settings.theoretical).toEqual({ header: 'batchMass' });
   });
 
   it('a weigh step added from the library starts with the usual tolerance', () => {

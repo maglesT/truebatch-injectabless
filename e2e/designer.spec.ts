@@ -35,7 +35,10 @@ test('TI-02 build a master from a skeleton, fix a master-check problem, then che
   await author.getByLabel('Fill excess').fill('0.5');
   await author.getByLabel('Route').selectOption('aseptic');
   await expect(author.locator('.calc-note')).toContainText('Expected units: 9523 units');
-  await author.getByText('Process skeleton: Solution: compounding').click();
+  // The starting masters of the aseptic route; this one is the bulk only.
+  await expect(author.getByText('Starting master: Freeze-dried vials, aseptic')).toBeVisible();
+  await expect(author.getByText(/Starting master: .*terminally sterilised/)).toHaveCount(0);
+  await author.getByText('Starting master: Bulk solution only (compounding, no filling)').click();
   await author.getByRole('button', { name: 'Create draft' }).click();
   await expect(author.getByRole('heading', { name: 'PRD-001 · Examplol 50 mg/mL injection' })).toBeVisible();
 

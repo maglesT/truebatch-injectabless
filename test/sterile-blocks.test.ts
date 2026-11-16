@@ -84,3 +84,15 @@ describe('the sterile blocks of the injectables library', () => {
     expect(at(0)).toBeInstanceOf(Date);
   });
 });
+
+describe('an optional reading', () => {
+  it('left blank checks nothing: its limit check is left out, not failed; given, it is checked against its limit', () => {
+    const doc = one('bulk-test', { phLimit: { low: '6.5', high: '7.5', unit: 'pH' }, solventLimit: { high: '50', unit: 'ppm' } });
+    const blank = run(doc, { reference: 'S-1', ph: { value: '7.0', unit: 'pH' }, appearance: 'yes' });
+    expect(blank.phCheck).toMatchObject({ ok: true, check: { pass: true } });
+    expect(blank.solventCheck).toBeUndefined();
+    expect(run(doc, { reference: 'S-1', ph: { value: '7.0', unit: 'pH' }, solvent: { value: '80', unit: 'ppm' }, appearance: 'yes' }).solventCheck).toMatchObject({ ok: true, check: { pass: false } });
+    // Nothing recorded yet: the master check finds no calculation to refuse.
+    expect(Object.values(run(doc, {})).filter((r) => !r.ok)).toEqual([]);
+  });
+});

@@ -201,7 +201,7 @@ export const filterTest: Block = {
     text('filterId', 'Filter ID'), { name: 'lot', label: 'Filter lot', kind: 'lot' },
     { name: 'when', label: 'When', kind: 'choice', options: ['pre-use after sterilisation', 'post-use'] },
     num('temperature', 'Test temperature', '°C'),
-    { name: 'tester', label: 'Integrity tester', kind: 'machine', types: ['integrity', 'tester', 'filter'] },
+    { name: 'tester', label: 'Integrity tester', kind: 'machine', types: ['integrity'], notTypes: ['leak', 'closure', 'press'] },
     num('result', 'Result', '$resultUnit'),
     text('printout', 'Printout reference'),
     yes('asMaster', 'Filter type and pore size as the master'),
@@ -265,18 +265,22 @@ export const componentWash: Block = {
   calcs: [within('conductivityCheck', 'Final rinse conductivity', 'conductivity?', 'conductivityLimit?'), observe('visualCheck', 'Components clean', ['visual'])],
 };
 
+// A periodic check beside a stage stops when the operator answers "finished" (as the clean-air checks in filling).
+const finished = (field: string, what: string) => ({ name: 'done', label: `${what} finished`, template: 'C4', args: { question: what, answers: [`$${field}`], expected: ['finished'], options: ['going on', 'finished'] } });
+const going = (name: string, label: string) => ({ name, label, kind: 'choice' as const, options: ['going on', 'finished'] });
+
 // 12. Depyrogenate containers in a tunnel or oven, with belt speed and hot-zone checks alongside the stage.
 export const depyrogenate: Block = {
-  id: 'depyrogenate', version: 1, name: 'Depyrogenate containers (tunnel or oven)', checker: false, periodic: { maxMinutes: 1440, alongside: true },
+  id: 'depyrogenate', version: 1, name: 'Depyrogenate containers (tunnel or oven)', checker: false, periodic: { maxMinutes: 1440, alongside: true }, stop: 'done',
   instruction: 'Check the tunnel or oven at each round: hot-zone temperature, belt speed and the grade A particle count at the exit.',
   fields: [
     { name: 'machine', label: 'Tunnel or oven', kind: 'machine', types: ['tunnel', 'oven', 'dry heat'] },
     num('hotZone', 'Hot-zone temperature', '°C'), num('beltSpeed', 'Belt speed', 'mm/min', true),
-    num('particles', 'Particles ≥ 0.5 µm at the exit', 'particles/m³', true), num('count', 'Containers through', 'units', true),
+    num('particles', 'Particles ≥ 0.5 µm at the exit', 'particles/m³', true), num('count', 'Containers through', 'units', true), going('running', 'Depyrogenation'),
   ],
   settings: [limit('hotZoneLimit', 'Hot-zone temperature limits', false), limit('beltSpeedLimit', 'Belt speed limits'), limit('particleLimit', 'Particle limit at the exit')],
   calcs: [within('hotZoneCheck', 'Hot-zone temperature', 'hotZone', 'hotZoneLimit'), within('beltCheck', 'Belt speed', 'beltSpeed?', 'beltSpeedLimit?'),
-    within('particleCheck', 'Particles at the exit', 'particles?', 'particleLimit?')],
+    within('particleCheck', 'Particles at the exit', 'particles?', 'particleLimit?'), finished('running', 'Depyrogenation')],
 };
 
 // 13. Sterilise items (autoclave, dry heat, SIP, gas, RTU tub decontamination) (TI-24): the load and its use-by.
@@ -405,7 +409,7 @@ export const leakTest100: Block = {
   id: 'leak-test-100', version: 1, name: '100 % container-closure integrity test', checker: false,
   instruction: 'Challenge the machine with the positive and negative standards before and after; test every unit and record the rejects.',
   fields: [
-    { name: 'machine', label: 'Leak tester (HVLD, vacuum decay, dye, laser)', kind: 'machine', types: ['leak', 'integrity', 'hvld', 'inspection'] },
+    { name: 'machine', label: 'Leak tester (HVLD, vacuum decay, dye, laser)', kind: 'machine', types: ['leak', 'hvld', 'cci', 'closure integrity', 'vacuum decay'] },
     yes('standardsBefore', 'Standards passed before'), yes('standardsAfter', 'Standards passed after'),
     num('tested', 'Units tested', 'units'), num('rejected', 'Units rejected', 'units'), num('passed', 'Units passed', 'units'),
   ],
@@ -479,12 +483,13 @@ export const unitReconcile: Block = {
 
 // 22. Room and line conditions, periodically beside the stage.
 export const roomStatus: Block = {
-  id: 'room-status', version: 1, name: 'Room and line conditions', checker: false, periodic: { maxMinutes: 1440, alongside: true },
+  id: 'room-status', version: 1, name: 'Room and line conditions', checker: false, periodic: { maxMinutes: 1440, alongside: true }, stop: 'done',
   instruction: 'At each round read the building management system: no alarm, differential pressures, temperature and humidity.',
-  fields: [yes('noAlarm', 'No BMS alarm'), num('pressure', 'Differential pressure', 'Pa'), num('temperature', 'Temperature', '°C'), num('humidity', 'Relative humidity', '%RH', true)],
+  fields: [yes('noAlarm', 'No BMS alarm'), num('pressure', 'Differential pressure', 'Pa'), num('temperature', 'Temperature', '°C'), num('humidity', 'Relative humidity', '%RH', true),
+    going('running', 'Work in the room')],
   settings: [limit('pressureLimit', 'Differential pressure limits', false), limit('temperatureLimit', 'Temperature limits'), limit('humidityLimit', 'Humidity limits')],
   calcs: [observe('alarmCheck', 'No BMS alarm', ['noAlarm']), within('pressureCheck', 'Differential pressure', 'pressure', 'pressureLimit'),
-    within('temperatureCheck', 'Temperature', 'temperature', 'temperatureLimit?'), within('humidityCheck', 'Humidity', 'humidity?', 'humidityLimit?')],
+    within('temperatureCheck', 'Temperature', 'temperature', 'temperatureLimit?'), within('humidityCheck', 'Humidity', 'humidity?', 'humidityLimit?'), finished('running', 'Work in the room')],
 };
 
 // 23. Time out of refrigeration: an event log (engine change 2); a later step totals the entries.

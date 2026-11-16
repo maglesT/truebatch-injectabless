@@ -6,7 +6,7 @@ import { createMaster, getVersion, STATE_LABEL, type MasterData, type MasterRow,
 import { CLAIM_PER, masterSchema, type MasterDoc } from '../../../shared/master/schema.js';
 import { headerValue } from '../../../shared/engine/values.js';
 import { scaleDoc } from './model.js';
-import { defaultDispensingRooms, SKELETON_LIST, skeletonStages } from './skeletons.js';
+import { defaultDispensingRooms, skeletonList, skeletonStages } from './skeletons.js';
 import { ChipSet, Decimal, Picker } from './ui.js';
 
 type Header = MasterDoc['header'];
@@ -78,8 +78,9 @@ export function NewMaster({ md, masters, copyOf, onCreated, onCancel }: {
   // A new master starts with the rooms of the Dispensing area as its dispensing rooms (a copy: those it names).
   const [header, setHeader] = useState<Header>({ dispensingRooms: defaultDispensingRooms(md.rooms),
     ...(copyOf?.header ?? { productItemId: '', productCode: '', productName: '', batchSize: '', batchUnit: 'L' }) });
-  const skeletons = SKELETON_LIST;
-  const [start, setStart] = useState<Start>(copyOf ? { kind: 'copy', versionId: copyOf.id } : { kind: 'skeleton', id: skeletons[0]!.id });
+  // The starting masters of the route chosen in the header (all of them before one is chosen).
+  const skeletons = skeletonList(header.route);
+  const [start, setStart] = useState<Start>(copyOf ? { kind: 'copy', versionId: copyOf.id } : { kind: 'skeleton', id: skeletonList()[0]!.id });
   const [source, setSource] = useState<MasterDoc | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -97,6 +98,7 @@ export function NewMaster({ md, masters, copyOf, onCreated, onCancel }: {
     e.preventDefault();
     setError('');
     let doc: MasterDoc = { header, formula: [], stages: [] };
+    if (start.kind === 'skeleton' && !skeletons.some((k) => k.id === start.id)) return setError('Choose a starting master for this route.');
     if (start.kind === 'skeleton') doc.stages = skeletonStages(start.id, header);
     if (start.kind === 'copy' && source) doc = { ...scaleDoc(source, header.batchSize), header: { ...header, batchUnit: source.header.batchUnit } };
     const parsed = masterSchema.safeParse(doc);
@@ -120,7 +122,7 @@ export function NewMaster({ md, masters, copyOf, onCreated, onCancel }: {
           <legend>Start from</legend>
           {skeletons.map((s) => (
             <label key={s.id} className="check route"><input type="radio" name="start" checked={start.kind === 'skeleton' && start.id === s.id} onChange={() => setStart({ kind: 'skeleton', id: s.id })} />
-              <span>Process skeleton: {s.name}<small>{s.text}</small></span></label>
+              <span>Starting master: {s.name}<small>{s.text}</small></span></label>
           ))}
           <label className="check route"><input type="radio" name="start" checked={start.kind === 'copy'} onChange={() => masters[0] && setStart({ kind: 'copy', versionId: copyOf?.id ?? masters[0].id })} disabled={!masters.length} />
             <span>A copy of another master<small>Formula and process are copied; typed batch quantities scale to the new batch size.</small></span></label>

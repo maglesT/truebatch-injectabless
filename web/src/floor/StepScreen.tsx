@@ -9,10 +9,12 @@ import { Alerts } from './BatchScreen.js';
 import { FieldInput } from './Fields.js';
 import { DemoSkip } from './DemoSkip.js';
 import { ReasonDialog } from './ReasonDialog.js';
+import { FillingPanel } from './FillingPanel.js';
 import { CERTIFICATE, fieldLabel, handEntered, LINK_OF } from '../../../shared/engine/links.js';
 import { notYetText } from '../../../shared/engine/batch.js';
 import { lineQuantity, stepFields } from '../../../shared/engine/values.js';
 import { plantText } from '../../../shared/plant-time.js';
+import { needsText, stepNeeds } from '../../../shared/engine/state.js';
 import { dispensingRooms, inLogbook, machineRefusal, roomRefusal, untypedNote } from '../../../shared/engine/picks.js';
 import { materialLines } from '../../../shared/master/schema.js';
 import { unitName } from '../../../shared/engine/stock.js';
@@ -54,6 +56,8 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   const st = stepOf(doc, row.key);
   const block = blockOf(blocks, st)!;
   const stage = doc.stages[row.key.stage]!;
+  // A step of an aseptic stage, or the visual inspection, is only for the people QA gave that permission (TI-23, TI-30).
+  const needs = stepNeeds(stage, block);
   const base = `/api/batches/${d.batch.id}/steps/${row.id}`;
   const title = stepTitle(doc, blocks, st);
   const [history, setHistory] = useState<History | null>(null);
@@ -202,6 +206,8 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
         {st.checker && <span className="chip">Second-person check</span>}
       </div>
       {notice && <p className={`notice ${notice.tone}`} role="alert">{notice.text}</p>}
+      <FillingPanel d={d} stage={row.key.stage} now={now} here={row.id} />
+      {needs && !me.permissions.includes(needs) && <p className="notice" role="note">{needsText(needs)}</p>}
       <div className="alerts">
         <Alerts d={d} blocks={blocks} now={now} only={row.id} />
         {row.blocked && <div className="fl-alert info"><span className="tag">Not open yet</span><span>{row.blocked}</span><span /></div>}
