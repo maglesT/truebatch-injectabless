@@ -146,7 +146,8 @@ async function readValues(app: FastifyInstance, doc: MasterDoc, key: StepKey, ra
     const setting = f.unit?.startsWith('$') ? step.settings[f.unit.slice(1)] : f.unit;
     const v = readValue(f, x, typeof setting === 'string' ? setting : '');
     if (typeof v === 'object' && !Array.isArray(v) && 'error' in v) { problems.push(v.error); continue; }
-    const no = typeof v !== 'string' ? null : name.includes('.') ? handProblem(f, v, now, PLANT_TZ) : null;
+    // Engine change 6: an item past its use-by date is refused when recorded.
+    const no = typeof v !== 'string' ? null : name.includes('.') || f.useBy ? handProblem({ ...f, name: f.useBy ? `${f.name}.expiry` : f.name }, v, now, PLANT_TZ) : null;
     if (no) problems.push(no);
     else out[name] = v as Value;
   }

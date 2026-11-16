@@ -21,7 +21,7 @@ export type Kind =
   | 'endotoxin' | 'endotoxin per volume' | 'endotoxin per mass' | 'endotoxin per unit' | 'osmolality' | 'osmolarity'
   | 'molar concentration' | 'charge concentration' | 'amount' | 'mass per amount' | 'volume fraction'
   | 'conductivity' | 'viscosity' | 'radiation dose' | 'torque' | 'IU per volume' | 'activity units per volume'
-  | 'Lf' | 'Lf per volume' | 'D-antigen units' | 'D-antigen units per volume' | 'ELISA units per volume' | 'PFU per volume' | 'log titre per volume';
+  | 'pH' | 'Lf' | 'Lf per volume' | 'D-antigen units' | 'D-antigen units per volume' | 'ELISA units per volume' | 'PFU per volume' | 'log titre per volume';
 
 export interface Unit {
   readonly symbol: string;
@@ -119,6 +119,8 @@ const TABLE: [string, Kind, Dec | string, string?][] = [
   ['DU', 'D-antigen units', '1'], ['DU/mL', 'D-antigen units per volume', '1'], ['EL.U/mL', 'ELISA units per volume', '1'],
   ['PFU/mL', 'PFU per volume', '1'], ['log10 CCID50/mL', 'log titre per volume', '1'],
   ['nm', 'length', '0.000001'], ['m²', 'area', '1000000'],
+  ['pH', 'pH', '1'], // a pH reading: its own kind, never converted
+  ['index', 'number', '1'], // a dimensionless index (e.g. polydispersity, PDI)
 ];
 
 /** Other spellings people type. */

@@ -29,6 +29,9 @@ export const fieldSchema = z.object({
   optional: z.boolean().optional(),
   // text: a calendar date, picked from a date picker and kept as YYYY-MM-DD; shown as "31 Oct 2029".
   date: z.boolean().optional(),
+  // Engine change 6: a date that is an item's use-by (a sterilised load, a decontaminated isolator, a held bulk): an
+  // expired one is refused when recorded, and one that expires while the step is under way needs a deviation note.
+  useBy: z.boolean().optional(),
   // machine: words of master data's type it takes (any of them, without case), e.g. ["balance"]; none: any type. A type
   // with one of the notTypes words is not taken (a QC lab "Analytical balance" is not a dispensing balance).
   types: z.array(z.string().regex(/^[a-z][a-z ]*$/)).optional(),
@@ -116,7 +119,9 @@ export function blockProblems(b: Block): string[] {
   const known = new Set([...b.fields.map((f) => f.name), ...b.settings.map((s) => s.name)]);
   for (const c of b.calcs) {
     if (!(c.template in TEMPLATES)) p.push(`calculation ${c.name}: unknown template ${c.template}`);
-    for (const r of refsIn(c.args)) if (!known.has(r)) p.push(`calculation ${c.name}: "$${r}" is not a field, setting or earlier calculation`);
+    // "$prev.name" may also name this calculation: its result in the previous round (a running total).
+    const prev = new Set(JSON.stringify(c.args).match(/"\$prev\.[a-zA-Z0-9]+/g)?.map((x) => x.slice(7)) ?? []);
+    for (const r of refsIn(c.args)) if (!known.has(r) && !(prev.has(r) && r === c.name)) p.push(`calculation ${c.name}: "$${r}" is not a field, setting or earlier calculation`);
     known.add(c.name);
   }
   if (b.stop && !b.calcs.some((c) => c.name === b.stop)) p.push(`stop: no calculation ${b.stop}`);
