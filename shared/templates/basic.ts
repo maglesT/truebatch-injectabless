@@ -3,7 +3,7 @@
  * T6 Ratio and powder indices, T21 Lesser / greater of values.
  */
 import { checkOf, defaultDecimals, Dec, fmt, HUNDRED, needKind, parse, refuse, run, sameKind, show, shownNumber, to, unitOf, ZERO, type Outcome, type Q } from './core.js';
-import type { Limit } from './rounding.js';
+import { checkLimit, type Limit } from './rounding.js';
 import { differenceUnitOf, type Kind } from './units.js';
 
 // ---------------------------------------------------------------- T1 Difference
@@ -101,8 +101,11 @@ export function t3PercentOfTarget(i: T3Input): Outcome {
 // ---------------------------------------------------------------- T4 Accountability
 export interface T4Input {
   readonly input: Q;
-  /** Output, samples, rejects, waste ... each with a name. */
-  readonly parts: readonly { readonly name: string; readonly value: Q }[];
+  /**
+   * Output, samples, rejects, waste ... each with a name. A part may carry its own `limit` on its % of the input
+   * (reject categories of visual inspection or leak testing: particles, glass, fill level, closure …).
+   */
+  readonly parts: readonly { readonly name: string; readonly value: Q; readonly limit?: Limit }[];
   readonly decimals?: number;
   /** Limit on the accountability %. */
   readonly limit?: Limit;
@@ -115,6 +118,8 @@ export interface T4Extra {
   readonly unaccountedUnit: string;
   readonly unaccountedPercent: Dec;
   readonly unaccountedCheck?: import('./rounding.js').Check;
+  /** Each part that has its own limit: its % of the input and the check. */
+  readonly partChecks?: readonly { readonly name: string; readonly percent: Dec; readonly check: import('./rounding.js').Check }[];
 }
 
 /** T4 Accountability: (sum of all parts) ÷ input × 100, and unaccounted = input − all parts. */
@@ -123,7 +128,7 @@ export function t4Accountability(i: T4Input): Outcome<T4Extra> {
     const input = parse(i.input, 'The input quantity');
     if (!input.v.isPositive() || input.v.isZero()) refuse('The input quantity must be more than zero');
     if (i.parts.length === 0) refuse('Give at least one part (output, samples, rejects, waste)');
-    const parts = i.parts.map((p) => ({ name: p.name, p: parse(p.value, `The ${p.name} quantity`) }));
+    const parts = i.parts.map((p) => ({ name: p.name, p: parse(p.value, `The ${p.name} quantity`), limit: p.limit }));
     sameKind([input, ...parts.map((x) => x.p)], 'Accountability');
     for (const x of parts) if (x.p.v.isNegative()) refuse(`The ${x.name} quantity cannot be negative`);
     const sum = parts.reduce((s, x) => s.plus(to(x.p, input.unit)), ZERO);
@@ -137,10 +142,19 @@ export function t4Accountability(i: T4Input): Outcome<T4Extra> {
       const lu = unitOf(i.unaccountedLimit.unit);
       unaccountedCheck = lu.kind === 'fraction' ? checkOf(unaccountedPercent, '%', i.unaccountedLimit).check : checkOf(unaccounted, u, i.unaccountedLimit).check;
     }
+    const partChecks = parts.flatMap((x) => {
+      if (x.limit === undefined) return [];
+      const pc = to(x.p, input.unit).div(input.v).times(HUNDRED);
+      return [{ name: x.name, percent: pc, check: checkLimit(pc, '%', x.limit) }];
+    });
     const shown =
       `(${parts.map((x) => `${x.p.text} ${x.name}`).join(' + ')}) ÷ ${input.text} × 100 = ${fmt(value, 2)} %; ` +
-      `unaccounted ${input.text} − ${show(sum, u, dp)} = ${show(unaccounted, u, dp)} (${fmt(unaccountedPercent, 2)} %)`;
-    return { ok: true, value, unit: '%', shown, unaccounted, unaccountedUnit: u, unaccountedPercent, ...(unaccountedCheck === undefined ? {} : { unaccountedCheck }), ...checkOf(value, '%', i.limit) };
+      `unaccounted ${input.text} − ${show(sum, u, dp)} = ${show(unaccounted, u, dp)} (${fmt(unaccountedPercent, 2)} %)` +
+      partChecks.map((x) => `; ${x.name} ${fmt(x.percent, 2)} % of the input: ${x.check.shown}`).join('');
+    return {
+      ok: true, value, unit: '%', shown, unaccounted, unaccountedUnit: u, unaccountedPercent,
+      ...(unaccountedCheck === undefined ? {} : { unaccountedCheck }), ...(partChecks.length === 0 ? {} : { partChecks }), ...checkOf(value, '%', i.limit),
+    };
   });
 }
 

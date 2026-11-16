@@ -240,3 +240,31 @@ describe('Units added in round 3', () => {
     expect(ok(c1WithinLimits({ value: '8 SCU', limit: { low: '5', high: '12', unit: 'SCU' } })).check?.pass).toBe(true);
   });
 });
+
+describe('T26 (I17) dilute or mix to a target by volume', () => {
+  it('T26: drug substance at 52.0 mg/mL in 100 L diluted with vehicle (0 mg/mL) to 50.0 mg/mL: 4 L vehicle', () => {
+    // 100 L × (50.0 − 52.0) ÷ (0 − 50.0) = 4 L; mix 104 L
+    const r = ok(t26MixToTarget({ volume: '100 L', a: '52.0 mg/mL', b: '0 mg/mL', target: '50.0 mg/mL', property: 'concentration' }));
+    expect(r.value.toString()).toBe('4');
+    expect(r.unit).toBe('L');
+    expect(r.totalMass.toString()).toBe('104');
+    expect(r.shown).toContain('volumes taken as additive');
+  });
+
+  it('T26: upward with a concentrated donor: 100 L at 48 mg/mL + donor at 100 mg/mL to 50 mg/mL: 4 L', () => {
+    // 100 × (50 − 48) ÷ (100 − 50) = 4 L
+    expect(ok(t26MixToTarget({ volume: '100 L', a: '48 mg/mL', b: '100 mg/mL', target: '50 mg/mL' })).value.toString()).toBe('4');
+  });
+
+  it.each([
+    [{ volume: '100 L', a: '52 mg/mL', b: '0 mg/mL', target: '50 mg/mL', organicWater: true }, /not mixed by volume/],
+    [{ volume: '100 L', a: '95 %', b: '0 %', target: '75 %', scale: 'ethanol % v/v' as const }, /not mixed by volume/],
+    [{ volume: '100 L', a: '28 %', b: '10 %', target: '20 %' }, /must be concentrations/],
+    [{ volume: '100 L', mass: '100 kg', a: '52 mg/mL', b: '0 mg/mL', target: '50 mg/mL' }, /either the mass or the volume/],
+    [{ volume: '100 kg', a: '52 mg/mL', b: '0 mg/mL', target: '50 mg/mL' }, /must be a volume/],
+    // Basis (F0027, master check 9): functional against total protein.
+    [{ volume: '100 L', a: '52 mg/mL', b: '0 mg/mL', target: '50 mg/mL', basis: { a: 'functional protein', b: 'functional protein', target: 'total protein' } }, /not on the same basis/],
+  ])('T26: by volume refuses %o', (i, msg) => {
+    expect(refused(t26MixToTarget(i))).toMatch(msg);
+  });
+});

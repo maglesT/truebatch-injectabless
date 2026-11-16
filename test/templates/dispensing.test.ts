@@ -395,3 +395,140 @@ describe('T20 Multi-lot quantity', () => {
     expect(refused(t20MultiLot(i))).toMatch(msg);
   });
 });
+
+describe('T8 (I8) ratio × measured amount', () => {
+  it('T8: liposome drug = 471 mg/mmol × 10.2 mmol/L × 20 L of lipid measured in this batch = 96.08 g', () => {
+    // 10.2 × 20 = 204 mmol; × 471 = 96084 mg = 96.084 g
+    const r = ok(t8BatchScaling({ mode: 'ratio x measured', ratio: '471 mg/mmol', measured: { value: '10.2', unit: 'mmol/L', recorded: true }, volume: '20 L' }));
+    expect(r.value.toString()).toBe('96.084');
+    expect(r.unit).toBe('g');
+    expect(r.shown).toBe('471 mg/mmol × 10.2 mmol/L × 20 L (measured in this batch) = 96.08 g');
+  });
+
+  it('T8: the measured amount in mmol: 471 mg/mmol × 204 mmol = 96.084 g', () => {
+    expect(ok(t8BatchScaling({ mode: 'ratio x measured', ratio: '471 mg/mmol', measured: { value: '204', unit: 'mmol', recorded: true } })).value.toString()).toBe('96.084');
+  });
+
+  it.each([
+    [{ mode: 'ratio x measured' as const, ratio: '471 mg/mmol', measured: { value: '204', unit: 'mmol', recorded: false } }, /measured and recorded in this batch/],
+    [{ mode: 'ratio x measured' as const, ratio: '471 mg/mmol', measured: { value: '10.2', unit: 'mmol/L', recorded: true } }, /needs the volume/],
+    [{ mode: 'ratio x measured' as const, ratio: '471 mg', measured: { value: '204', unit: 'mmol', recorded: true } }, /ratio must be a mass per amount/],
+    [{ mode: 'ratio x measured' as const, ratio: '471 mg/mmol', measured: { value: '160', unit: 'g', recorded: true } }, /must be an amount or a molar concentration/],
+  ])('T8: ratio × measured refuses %o', (i, msg) => {
+    expect(refused(t8BatchScaling(i))).toMatch(msg);
+  });
+});
+
+describe('T9 (I9) fill excess of a sterile powder', () => {
+  it('T9: (500 mg + 25 mg fill excess) × 100 ÷ 98.0 % = 535.71 mg, of which 25.51 mg for the excess', () => {
+    // 525 × 100 ÷ 98 = 535.714; 25 × 100 ÷ 98 = 25.510
+    const r = ok(t9PotencyAdjusted({ standard: '500 mg', standardIs: 'anhydrous', assay: '98.0 %', basis: 'as is', excess: '25 mg' }));
+    expect(r.value.toFixed(3)).toBe('535.714');
+    expect(r.excessAmount?.toFixed(3)).toBe('25.510');
+    expect(r.shown).toContain('fill excess');
+    expect(r.shown).toContain('not an overage');
+  });
+
+  it('T9: excess as % of the label claim: 5 % of 500 mg is the same 25 mg', () => {
+    expect(ok(t9PotencyAdjusted({ standard: '500 mg', standardIs: 'anhydrous', assay: '98.0 %', basis: 'as is', excess: '5 %' })).value.toFixed(3)).toBe('535.714');
+  });
+
+  it('T9: ceftriaxone sodium vial, potency 880 µg/mg as parent: (1000 + 5 %) × 100 ÷ 88.0 = 1193.18 mg', () => {
+    // 1050 × 100 ÷ 88 = 1193.182
+    const r = ok(t9PotencyAdjusted({ standard: '1000 mg', assay: '880 µg/mg', basis: 'as is', potencyAs: 'parent', excess: '5 %' }));
+    expect(r.value.toFixed(3)).toBe('1193.182');
+  });
+
+  it('T9: without excess nothing changes', () => {
+    expect(ok(t9PotencyAdjusted({ standard: '500 mg', standardIs: 'anhydrous', assay: '98.0 %', basis: 'as is' })).excessAmount).toBeUndefined();
+  });
+
+  it.each([
+    [{ standard: '500 mg', standardIs: 'anhydrous' as const, assay: '98.0 %', basis: 'as is' as const, excess: '-5 mg' }, /cannot be negative/],
+    [{ standard: '500 mg', standardIs: 'anhydrous' as const, assay: '98.0 %', basis: 'as is' as const, excess: '0.2 mL' }, /fill excess must be a mass/],
+  ])('T9: excess refuses %o', (i, msg) => {
+    expect(refused(t9PotencyAdjusted(i))).toMatch(msg);
+  });
+});
+
+describe('T11 (I10) molar mode', () => {
+  const dihydrate = { name: 'sodium dihydrogen phosphate dihydrate', mw: '156.01', hydrateOrSolvate: true };
+  it('T11: 10 mmol/L phosphate × 100 L = 1000 mmol × 156.01 g/mol = 156.01 g of the dihydrate', () => {
+    const r = ok(t11SaltFactor({ quantity: '10 mmol/L', volume: '100 L', from: { name: 'phosphate', mw: '94.97' }, to: dihydrate }));
+    expect(r.value.toString()).toBe('156.01');
+    expect(r.unit).toBe('g');
+    expect(r.shown).toContain('MW includes water');
+  });
+
+  it('T11: trehalose 50 mmol as the dihydrate (378.33) = 18.9165 g; as the anhydrous form (342.30) = 17.115 g', () => {
+    expect(ok(t11SaltFactor({ quantity: '50 mmol', from: { name: 'trehalose', mw: '342.30' }, to: { name: 'trehalose dihydrate', mw: '378.33', hydrateOrSolvate: true } })).value.toString()).toBe('18.9165');
+    expect(ok(t11SaltFactor({ quantity: '50 mmol', from: { name: 'trehalose', mw: '342.30' }, to: { name: 'trehalose', mw: '342.30', hydrateOrSolvate: false } })).value.toString()).toBe('17.115');
+  });
+
+  it('T11: 40 mEq/L potassium × 1 L as potassium chloride: 40 mmol × 74.55 = 2982 mg', () => {
+    expect(ok(t11SaltFactor({ quantity: '40 mEq/L', volume: '1 L', from: { name: 'potassium', mw: '39.098', charge: 1 }, to: { name: 'potassium chloride', mw: '74.55' } })).value.toString()).toBe('2982');
+  });
+
+  it.each([
+    [{ quantity: '10 mmol/L', from: { name: 'phosphate', mw: '94.97' }, to: dihydrate }, /needs the volume/],
+    [{ quantity: '10 mmol/L', volume: '100 L', from: { name: 'phosphate', mw: '94.97' }, to: { name: 'sodium dihydrogen phosphate', mw: '156.01' } }, /anhydrous form or as a hydrate/],
+    [{ quantity: '10 mmol/L', volume: '100 L', from: { name: 'phosphate', mw: '94.97' }, to: { name: 'sodium dihydrogen phosphate', mw: '', hydrateOrSolvate: true } }, /molecular weight of the form weighed/],
+    [{ quantity: '40 mEq/L', volume: '1 L', from: { name: 'potassium', mw: '39.098' }, to: { name: 'potassium chloride', mw: '74.55' } }, /charge of the ion/],
+  ])('T11: molar refuses %o', (i, msg) => {
+    expect(refused(t11SaltFactor(i))).toMatch(msg);
+  });
+});
+
+describe('T18 (I13) content per volume, titres, ethanol % v/v, units of one product', () => {
+  it('T18: 400 g of drug from a bulk at 25.0 mg/mL = 16 L; with density 1.010 g/mL = 16.16 kg', () => {
+    // 400000 mg ÷ 25.0 mg/mL = 16000 mL = 16 L; × 1.010 g/mL = 16160 g
+    const r = ok(t18ContentAdjusted({ target: '400 g', content: '25.0 mg/mL', formulaQuantityIs: 'dry', unit: 'L', density: '1.010 g/mL' }));
+    expect(r.value.toString()).toBe('16');
+    expect(r.mass?.toString()).toBe('16.16');
+    expect(r.massUnit).toBe('kg');
+  });
+
+  it('T18: heparin 5,000,000 IU from 25,000 IU/mL = 200 mL; tetanus toxoid 2,000,000 Lf from 1500 Lf/mL = 1333.33 mL', () => {
+    expect(ok(t18ContentAdjusted({ target: '5000000 IU', content: '25000 IU/mL', formulaQuantityIs: 'dry' })).value.toString()).toBe('200');
+    expect(ok(t18ContentAdjusted({ target: '2000000 Lf', content: '1500 Lf/mL', formulaQuantityIs: 'dry' })).value.toFixed(2)).toBe('1333.33');
+  });
+
+  it('T18: live vaccine: 3.2e11 infectious units from a titre of 8.5 log10 CCID50/mL (10^8.5 per mL) = 1011.93 mL', () => {
+    // 3.2e11 ÷ 316227766.02 = 1011.9289 mL
+    const r = ok(t18ContentAdjusted({ target: '3.2e11', content: '8.5 log10 CCID50/mL', formulaQuantityIs: 'dry' }));
+    expect(r.value.toFixed(4)).toBe('1011.9289');
+    expect(r.shown).toContain('10^8.5 per mL');
+  });
+
+  it('T18: wet: 1000 mL written at 8.0 log10, lot at 8.3 log10: 1000 × 10^8.0 ÷ 10^8.3 = 501.19 mL (logs never divided as numbers)', () => {
+    expect(ok(t18ContentAdjusted({ target: '1000 mL', content: '8.3 log10 CCID50/mL', nominalContent: '8.0 log10 CCID50/mL', formulaQuantityIs: 'wet' })).value.toFixed(4)).toBe('501.1872');
+  });
+
+  it('T18: wet by volume: 200 mL written at 50.0 mg/mL, lot at 48.0 mg/mL = 208.33 mL', () => {
+    expect(ok(t18ContentAdjusted({ target: '200 mL', content: '48.0 mg/mL', nominalContent: '50.0 mg/mL', formulaQuantityIs: 'wet' })).value.toFixed(2)).toBe('208.33');
+  });
+
+  it('T18: ethanol 96 % v/v = 93.84 % w/w (OIML R 22): 100 g of ethanol needs 106.57 g of the lot', () => {
+    // 100 × 100 ÷ 93.8384 = 106.566
+    const r = ok(t18ContentAdjusted({ target: '100 g', content: '96 %v/v', formulaQuantityIs: 'dry', scale: 'ethanol % v/v' }));
+    expect(r.value.toFixed(3)).toBe('106.566');
+    expect(r.shown).toContain('% w/w at 20 °C');
+  });
+
+  it('T18: botulinum toxin units of the same product and assay: 50000 U from 2000 U/mL = 25 mL', () => {
+    const r = ok(t18ContentAdjusted({ target: '50000 U', content: '2000 U/mL', formulaQuantityIs: 'dry', unitsOf: 'botulinum toxin type A, maker A assay', lotUnitsOf: 'Botulinum toxin type A,  maker A assay' }));
+    expect(r.value.toString()).toBe('25');
+  });
+
+  it.each([
+    [{ target: '50000 U', content: '2000 U/mL', formulaQuantityIs: 'dry' as const, unitsOf: 'botulinum toxin type A, maker A assay', lotUnitsOf: 'botulinum toxin type A, maker B assay' }, /cannot be used for another/],
+    [{ target: '50000 U', content: '2000 U/mL', formulaQuantityIs: 'dry' as const, unitsOf: 'botulinum toxin type A, maker A assay' }, /name both/],
+    [{ target: '10000 IU', content: '2.5 mg/mL', formulaQuantityIs: 'dry' as const }, /never turned into a mass/],
+    [{ target: '10 mg', content: '25000 IU/mL', formulaQuantityIs: 'dry' as const }, /must be in IU/],
+    [{ target: '3.2e11 IU', content: '8.5 log10 CCID50/mL', formulaQuantityIs: 'dry' as const }, /plain number/],
+    [{ target: '100 g', content: '96 %v/v', formulaQuantityIs: 'dry' as const }, /% v\/v .* cannot be used as a % w\/w/],
+    [{ target: '400 g', content: '96.0 %', formulaQuantityIs: 'dry' as const, density: '1.0 g/mL' }, /not a volume/],
+  ])('T18: refuses %o', (i, msg) => {
+    expect(refused(t18ContentAdjusted(i))).toMatch(msg);
+  });
+});

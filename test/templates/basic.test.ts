@@ -260,3 +260,33 @@ describe('T21 Lesser / greater', () => {
     expect(refused(t21LesserGreater({ which: 'lesser', values }))).toMatch(msg);
   });
 });
+
+describe('T4 (I4) each part with its own limit', () => {
+  // Visual inspection of 20000 vials: 19650 good + 120 particles + 30 glass + 150 fill level + 50 closure = 20000.
+  const parts = [
+    { name: 'good', value: '19650 vials' },
+    { name: 'particles', value: '120 vials', limit: { high: '0.50', unit: '%' } },
+    { name: 'glass', value: '30 vials', limit: { high: '0.20', alertHigh: '0.10', unit: '%' } },
+    { name: 'fill level', value: '150 vials' },
+    { name: 'closure', value: '50 vials', limit: { high: '0.50', unit: '%' } },
+  ];
+  it('T4: reject categories against their own limits: particles 0.60 % fails, glass 0.15 % alerts, closure 0.25 % passes', () => {
+    // 120 ÷ 20000 × 100 = 0.60 %; 30 ÷ 20000 × 100 = 0.15 %; 50 ÷ 20000 × 100 = 0.25 %
+    const r = ok(t4Accountability({ input: '20000 vials', parts }));
+    expect(r.value.toFixed(2)).toBe('100.00');
+    expect(r.partChecks?.map((x) => [x.name, x.percent.toFixed(2), x.check.level])).toEqual([
+      ['particles', '0.60', 'fail'],
+      ['glass', '0.15', 'alert'],
+      ['closure', '0.25', 'pass'],
+    ]);
+    expect(r.shown).toContain('particles 0.60 % of the input');
+  });
+
+  it('T4: without part limits nothing changes (no partChecks)', () => {
+    expect(ok(t4Accountability({ input: '20000 vials', parts: [{ name: 'good', value: '19900 vials' }, { name: 'rejects', value: '100 vials' }] })).partChecks).toBeUndefined();
+  });
+
+  it('T4: a part limit with an alert above its action limit is refused', () => {
+    expect(refused(t4Accountability({ input: '20000 vials', parts: [{ name: 'glass', value: '30 vials', limit: { high: '0.20', alertHigh: '0.30', unit: '%' } }] }))).toMatch(/alert limit/);
+  });
+});

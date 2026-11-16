@@ -21,7 +21,8 @@ export type Kind =
   | 'endotoxin' | 'endotoxin per volume' | 'endotoxin per mass' | 'endotoxin per unit' | 'osmolality' | 'osmolarity'
   | 'molar concentration' | 'charge concentration' | 'amount' | 'mass per amount' | 'volume fraction'
   | 'conductivity' | 'viscosity' | 'radiation dose' | 'torque' | 'IU per volume' | 'activity units per volume'
-  | 'pH' | 'Lf' | 'Lf per volume' | 'D-antigen units' | 'D-antigen units per volume' | 'ELISA units per volume' | 'PFU per volume' | 'log titre per volume';
+  | 'pH' | 'Lf' | 'Lf per volume' | 'D-antigen units' | 'D-antigen units per volume' | 'ELISA units per volume' | 'PFU per volume' | 'log titre per volume'
+  | 'calendar months';
 
 export interface Unit {
   readonly symbol: string;
@@ -121,6 +122,8 @@ const TABLE: [string, Kind, Dec | string, string?][] = [
   ['nm', 'length', '0.000001'], ['m²', 'area', '1000000'],
   ['pH', 'pH', '1'], // a pH reading: its own kind, never converted
   ['index', 'number', '1'], // a dimensionless index (e.g. polydispersity, PDI)
+  // Calendar months (APS and qualification validity, I11): counted on the calendar, so never converted to days.
+  ['months', 'calendar months', '1'],
 ];
 
 /** Other spellings people type. */
@@ -135,7 +138,7 @@ const ALIASES: Record<string, string> = {
   'cfu/mL': 'CFU/mL', 'cfu/100 mL': 'CFU/100 mL', 'CFU/100mL': 'CFU/100 mL', 'cfu/m³': 'CFU/m³', 'CFU/m3': 'CFU/m³', 'cfu/plate': 'CFU/plate', 'cfu/glove': 'CFU/glove',
   'particles/m3': 'particles/m³', 'particles/ft3': 'particles/ft³', 'mOsmol/kg': 'mOsm/kg', 'mOsmol/L': 'mOsm/L', mM: 'mmol/L', 'mmol/l': 'mmol/L',
   '% v/v': '%v/v', 'uS/cm': 'µS/cm', 'μS/cm': 'µS/cm', cP: 'mPa·s', 'mPa.s': 'mPa·s', 'mPa s': 'mPa·s', Nm: 'N·m', 'N m': 'N·m', 'ug/mL': 'µg/mL', 'mcg/mL': 'µg/mL',
-  vial: 'vials', ampoule: 'ampoules', syringe: 'syringes', cartridge: 'cartridges', bag: 'bags', bottle: 'bottles', plate: 'plates', m2: 'm²',
+  vial: 'vials', ampoule: 'ampoules', syringe: 'syringes', cartridge: 'cartridges', bag: 'bags', bottle: 'bottles', plate: 'plates', m2: 'm²', month: 'months',
 };
 
 const UNITS = new Map<string, Unit>(TABLE.map(([symbol, kind, factor, offset]) => [symbol, { symbol, kind, factor: d(factor.toString()), offset: d(offset ?? '0') }]));

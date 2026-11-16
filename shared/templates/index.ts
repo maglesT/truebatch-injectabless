@@ -20,3 +20,4 @@ export { i18Density } from './fill.js';
 export { i19FilterIntegrity } from './filter.js';
 export { i20Lethality } from './lethality.js';
 export { i21Cycle } from './cycle.js';
+export { i22Count, type I22Input, type CountSample } from './counts.js';
