@@ -154,6 +154,12 @@ describe('the review list for QA', () => {
     const events = [ev('started', '0.1.0.1'), reading('0.1.0.1', { readingCheck: notPassed }), ev('done', '0.1.0.1'), ev('started', '0.1.0.2'), reading('0.1.0.2', { readingCheck: notPassed })];
     const { steps } = openSteps(d, events, at(1000));
     expect(steps.map((v) => [v.id, v.notYet, cutShort(true, v, steps), cutShort(false, v, steps)])).toEqual([['0.1.0.1', 'readingCheck', false, false], ['0.1.0.2', 'readingCheck', true, false]]);
+    // Round 2 signed done without passing, round 3 opened but never started, then terminated: round 2 was cut short.
+    const events3 = [...events, ev('done', '0.1.0.2')];
+    const { steps: steps3 } = openSteps(d, events3, at(1000));
+    const r3 = steps3.find((v) => v.id === '0.1.0.3');
+    expect(r3 && ['waiting', 'open'].includes(r3.state)).toBe(true);
+    expect(steps3.filter((v) => v.id !== '0.1.0.3').map((v) => [v.id, cutShort(true, v, steps3)])).toEqual([['0.1.0.1', false], ['0.1.0.2', true]]);
     const record = (batchEvents: BatchEvent[]) => JSON.stringify(batchRecordDoc({ batch: { id: 1, batchNo: 'TI260099', masterVersionId: 1, issuedBy: 1, issuedAt: at(0) }, doc: d,
       events: events.map((e) => ({ ...e, personName: 'RAMESH' })), batchEvents: batchEvents.map((b) => ({ ...b, personName: 'MEERA' })), now: at(1000), versionNo: 1, issuedByName: 'SUPER', signatures: [] }, 'QA'));
     const ended = record([be('rejected', { terminated: true, reason: 'The filling line broke down' })]);
