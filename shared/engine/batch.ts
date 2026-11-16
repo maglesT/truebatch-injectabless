@@ -131,9 +131,41 @@ function after(doc: MasterDoc, st: Step, last: StepView, wait: boolean): string 
   return null;
 }
 
-/** Hold times: from the producing stage's last step done (the earliest copy) to the start of the stage that uses it. */
-export function holdTimers(doc: MasterDoc, events: readonly StepEvent[], now: Date): Timer[] {
+/** Where a time limit's point is: the stage and step indexes of "stage/step", or undefined. */
+const pointOf = (doc: MasterDoc, ref: string) => {
+  const [sk, tk] = ref.split('/') as [string, string];
+  const si = doc.stages.findIndex((s) => s.key === sk);
+  const ti = doc.stages[si]?.steps.findIndex((t) => t.key === tk) ?? -1;
+  return ti < 0 ? undefined : { si, ti, st: doc.stages[si]!.steps[ti]! };
+};
+/**
+ * Engine change 5: the master's time limits, from step X (start or end) to step Y (start or end), on the hold-time
+ * timer (kind 'hold': the same display, due soon, late and deviation note). A start is the step's first start, an end
+ * its first time done (any copy or round), as a hold time runs from the first copy done.
+ */
+function limitTimers(doc: MasterDoc, events: readonly StepEvent[], now: Date): Timer[] {
   const out: Timer[] = [];
+  for (const l of doc.timeLimits ?? []) {
+    const a = pointOf(doc, l.from.step);
+    const b = pointOf(doc, l.to.step);
+    if (!a || !b) continue;
+    const at1 = (p: { si: number; ti: number }, end: boolean) => earliest(events.filter((e) => e.stage === p.si && e.step === p.ti), end ? 'done' : 'started');
+    const from = at1(a, l.from.at === 'end');
+    if (!from) continue;
+    const id = `limit:${l.key}`;
+    const skip = skipOf(events, id);
+    const at = skip?.at ?? plus(from, l.hours * 60);
+    const reached = at1(b, l.to.at === 'end');
+    const state = reached ? (reached > at && !skip ? 'late' : null) : skip ? 'due' : phase(from, at, now);
+    const words = (p: { st: Step }, end: boolean) => `${end ? 'the end' : 'the start'} of “${stepTitle(doc, p.st)}”`;
+    if (state) out.push({ id, kind: 'hold', key: { stage: b.si, sub: 1, step: b.ti, round: 1 }, label: `${l.name} (at most ${l.hours} h, from ${words(a, l.from.at === 'end')} to ${words(b, l.to.at === 'end')})`, from, at, state, ...skipped(skip) });
+  }
+  return out;
+}
+
+/** Hold times: from the producing stage's last step done (the earliest copy) to the start of the stage that uses it; and the time limits. */
+export function holdTimers(doc: MasterDoc, events: readonly StepEvent[], now: Date): Timer[] {
+  const out: Timer[] = limitTimers(doc, events, now);
   doc.stages.forEach((s, si) => {
     for (const u of s.uses) {
       const pi = doc.stages.findIndex((p) => p.key === u);

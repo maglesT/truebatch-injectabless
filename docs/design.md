@@ -72,6 +72,17 @@ adding anything, look how TrueBatch Tablets does it and copy that.
   readings, and the worked example uses them. The master check refuses a number that is not a whole number from 1 to
   100.
 
+## Engine change 5: time limits from step X to step Y (built 16 November 2026)
+- The master lists its **time limits** (TI-17): a name, from step X (its start or its end) to step Y (its start or its
+  end), at most N hours. Start of compounding to filtration, end of sterilisation to the start of filling, the total
+  aseptic time, stoppering to crimping…
+- Each runs on the **hold-time timer** of Tablets (the same display, due soon at 85 %, late, the demo skip): a start
+  is the step's first start, an end its first time done (any copy or round). Reached in time, it is gone; reached
+  late, a deviation note is needed before production signs; run out before Y's stage started, that stage waits for
+  the note, as after a hold time.
+- The master check: two steps of this master, a name, not the same point twice. The designer has a "Time limits" list
+  on the Process tab; the plain-sentence review lists them.
+
 ## Platform
 - Runs on the Medhanta platform. Core provides people, sign-in, permissions, e-signature re-authentication and master
   data. Normal platform sign-in (OIDC through core, one person per browser).

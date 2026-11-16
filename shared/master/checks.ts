@@ -32,6 +32,17 @@ export function masterChecks(doc: MasterDoc): Problem[] {
   formulaChecks(doc, out, error);
 
   twice(doc.stages.map((s) => s.key), 'stages');
+  // Engine change 5: each time limit names steps of this master (TI-17).
+  twice((doc.timeLimits ?? []).map((l) => l.key), 'timeLimits');
+  (doc.timeLimits ?? []).forEach((l, i) => {
+    for (const p of [l.from, l.to]) {
+      const [sk, tk] = p.step.split('/') as [string, string];
+      if (!p.step) error(`timeLimits[${i}]`, `${l.name || 'A time limit'}: choose its ${p === l.from ? 'first' : 'last'} step`, 'TI-17');
+      else if (!doc.stages.find((s) => s.key === sk)?.steps.some((t) => t.key === tk)) error(`timeLimits[${i}]`, `${l.name || 'A time limit'}: ${p.step} is not a step of this master`, 'TI-17');
+    }
+    if (!l.name.trim()) error(`timeLimits[${i}]`, 'A time limit needs its name', 'TI-17');
+    if (l.from.step === l.to.step && l.from.at === l.to.at) error(`timeLimits[${i}]`, `${l.name}: it starts and ends at the same point`, 'TI-17');
+  });
   // TI-11: a master that weighs names the rooms its materials are weighed in (its balances are offered there).
   const weighs = doc.stages.some((s) => s.steps.some((t) => findBlock(t.block)?.fields.some((f) => f.kind === 'machine' && isBalance(f))));
   if (weighs && !doc.header.dispensingRooms?.length) error('header.dispensingRooms', 'The master weighs but names no dispensing rooms: choose them in the header (rooms of master data)', 'TI-11');
