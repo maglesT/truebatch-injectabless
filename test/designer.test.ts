@@ -123,6 +123,11 @@ describe('master designer', () => {
       .toEqual([`Order-critical: after step 3. ${stepTitle(d, d.stages[0]!.steps[2]!)}.`]);
   });
 
+  it('a limit on a T6 result is of its own kind: diavolumes (a ratio of two volumes) have no unit, not litres', () => {
+    expect(neededKind(block('tff'), 'diavolumeLimit')).toBe('number');
+    expect(neededKind(block('tff'), 'tmpLimit')).not.toBe('number');
+  });
+
   it('a weigh step added from the library starts with the usual tolerance', () => {
     expect(stepFrom(block('weigh'), []).settings).toEqual({ tolerance: '0.5' });
     expect(stepFrom(block('mix'), []).settings).toEqual({});

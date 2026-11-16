@@ -41,6 +41,11 @@ export function neededKind(block: Block, setting: string, settings: Step['settin
     if (s?.kind === 'limit' && PERCENT_RESULT.includes(c.template)) return 'fraction';
     if (s?.kind === 'limit' && c.template === 'F2') return undefined;
     if (s?.kind === 'limit' && c.template === 'T13') return 'time';
+    // T6's result has a kind of its own, not its inputs' (a ratio of two volumes has no unit; Carr index is a %).
+    if (s?.kind === 'limit' && c.template === 'T6') {
+      const mode = (c.args as { mode?: string }).mode;
+      return mode === 'carr' ? 'fraction' : mode === 'angle of repose' ? kindOfUnit('°') : kindOfUnit('');
+    }
     for (const r of refs) {
       if (r === setting || block.settings.find((x) => x.name === r)?.kind === 'limit') continue;
       const k = kindOf(block, r, settings, new Set(seen));
