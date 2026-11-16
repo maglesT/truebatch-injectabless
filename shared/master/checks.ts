@@ -111,11 +111,6 @@ export function masterChecks(doc: MasterDoc): Problem[] {
         const r = c1WithinLimits({ value: { value: '0', unit }, limit: st.onlyIf.limit });
         if (!r.ok) error(`${p}.onlyIf`, `The rule for leaving the step out: ${r.message}`);
       }
-      // A spray of a liquid made in excess: the amount to apply per charge, or all of it would be sprayed (F0339).
-      const excess = /^(coat|spray-coat)$/.test(st.block.id) && s.uses.some((u) => doc.stages.find((x) => x.key === u && x.kind === 'preparation')?.steps
-        .some((t) => Object.values(t.settings).some((v) => typeof v === 'object' && 'formula' in v && v.adjusted && doc.formula.find((f) => f.key === v.formula)?.adjust?.overage)));
-      if (excess && !st.applyPerCharge) error(p, 'The liquid is made with an overage: state the amount to apply per charge, and stop at that net weight (F0339: spraying all of it gives about 4.5 % more drug); the rest goes to the reconciliation');
-      if (st.applyPerCharge) for (const [k, v] of Object.entries(st.applyPerCharge)) if (!isMass(v)) error(`${p}.applyPerCharge.${k}`, `"${v}" is not a mass with a unit, e.g. "971 g"`);
       if (block.periodic && !st.everyMinutes) error(`${p}.everyMinutes`, `${block.name} needs the interval of its periodic checks`, 'TI-15');
       if (block.periodic && st.everyMinutes && st.everyMinutes > block.periodic.maxMinutes) {
         error(`${p}.everyMinutes`, `Periodic checks every ${st.everyMinutes} min: they must be at least every ${block.periodic.maxMinutes} min`, 'TI-15');

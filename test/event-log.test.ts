@@ -17,7 +17,7 @@ vi.mock('../shared/blocks/index.js', async (original) => {
     calcs: [{ name: 'total', label: 'Total units removed', template: 'T2', args: { values: '$removed' } }],
   };
   const BLOCKS = [...m.BLOCKS, log, total];
-  return { ...m, BLOCKS, OFFERED: [...m.OFFERED, 'test-log'], findBlock: (r: { id: string; version: number }) => BLOCKS.find((b) => b.id === r.id && b.version === r.version) };
+  return { ...m, BLOCKS, findBlock: (r: { id: string; version: number }) => BLOCKS.find((b) => b.id === r.id && b.version === r.version) };
 });
 
 const { evaluate, openSteps, parseKey } = await import('../shared/engine/index.js');

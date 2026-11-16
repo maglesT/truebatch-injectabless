@@ -1,6 +1,6 @@
 // Pure helpers of the designer over the master document: keys, units and their kinds, what an input may be picked
 // from, scaling to a new batch size. No GMP maths here: numbers go through the templates library.
-import { BLOCKS, findBlock, OFFERED, type Block } from '../../../shared/blocks/index.js';
+import { BLOCKS, findBlock, type Block } from '../../../shared/blocks/index.js';
 import { refsIn } from '../../../shared/blocks/format.js';
 import { stepTitle as title } from '../../../shared/engine/batch.js';
 import { Dec, findUnit, type Kind } from '../../../shared/templates/index.js';
@@ -124,7 +124,7 @@ export const newStage = (name: string, taken: string[]): Stage =>
   ({ key: newKey(name, taken), name, kind: 'normal', roomTypes: [], machineTypes: [], role: '', uses: [], steps: [] });
 
 /** The latest version of each block of this product (the library offers only these for new steps). */
-export const LIBRARY = BLOCKS.filter((b) => OFFERED.includes(b.id)).filter((b) => !BLOCKS.some((x) => x.id === b.id && x.version > b.version));
+export const LIBRARY = BLOCKS.filter((b) => !BLOCKS.some((x) => x.id === b.id && x.version > b.version));
 /** Blocks found by plain words in their name, instruction, fields and settings. */
 export function searchBlocks(q: string): Block[] {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);

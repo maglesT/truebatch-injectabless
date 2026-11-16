@@ -1,6 +1,9 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { call, freshApp, login, proofFor, seedUser, type TestApp } from './helpers.js';
 import { small } from './engine-fixture.js';
+
+// The shared test master is built from test-only blocks (test/test-blocks.ts).
+vi.mock('../shared/blocks/index.js', async (original) => (await import('./test-blocks.js')).withTestBlocks(original as never));
 
 // GET /api/batches: "My work" on the floor screens: the batches in production with what waits for each person.
 

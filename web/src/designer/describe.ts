@@ -2,7 +2,7 @@
 // changes view against the previous version. Each line has a key, so two versions can be compared line by line.
 import { findBlock } from '../../../shared/blocks/index.js';
 import { masterChecks } from '../../../shared/master/checks.js';
-import { batchText } from '../../../shared/engine/values.js';
+import { batchText, HEADER_WORDS } from '../../../shared/engine/values.js';
 import { placeLabel } from './model.js';
 import type { FormulaLine, MasterDoc, Stage, Step } from '../../../shared/master/schema.js';
 import { sentence, sentenceText, settingText, slotsOf } from './sentences.js';
@@ -46,9 +46,8 @@ export function stepText(doc: MasterDoc, t: Step, j: number): string {
     `Signed by the operator${t.checker ? ' and checked by a second person' : ''}${t.waitForCheck ? '; the next step waits for the check' : ''}.`,
     t.critical ? 'Critical step.' : '', t.minMinutes ? `Takes at least ${t.minMinutes} minutes.` : '', flow,
     t.everyMinutesLater ? `After ${t.everyMinutesLater.afterMinutes} minutes, a round every ${t.everyMinutesLater.everyMinutes} minutes.` : '',
-    t.onlyIf ? `Done only when the ${t.onlyIf.header === 'batchSize' ? 'batch size' : 'core batch weight'} is ${t.onlyIf.limit.low ? `at least ${t.onlyIf.limit.low}` : ''}${t.onlyIf.limit.low && t.onlyIf.limit.high ? ' and ' : ''}${t.onlyIf.limit.high ? `at most ${t.onlyIf.limit.high}` : ''} ${t.onlyIf.limit.unit}; otherwise left out.` : '',
-    t.orderAfter ? `Order-critical: after step ${t.orderAfter}.` : '',
-    t.applyPerCharge ? `Apply ${t.applyPerCharge.liquid} of the liquid per ${t.applyPerCharge.charge} charged, then stop.` : ''].filter(Boolean).join(' ');
+    t.onlyIf ? `Done only when the ${HEADER_WORDS[t.onlyIf.header]} is ${t.onlyIf.limit.low ? `at least ${t.onlyIf.limit.low}` : ''}${t.onlyIf.limit.low && t.onlyIf.limit.high ? ' and ' : ''}${t.onlyIf.limit.high ? `at most ${t.onlyIf.limit.high}` : ''} ${t.onlyIf.limit.unit}; otherwise left out.` : '',
+    t.orderAfter ? `Order-critical: after step ${t.orderAfter}.` : ''].filter(Boolean).join(' ');
 }
 
 export function describeMaster(doc: MasterDoc): Section[] {

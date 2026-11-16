@@ -1,9 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   batchRefusal, batchView, evaluate, notYetText, review,
   type BatchAction, type BatchEvent, type BatchEventKind, type StepEvent,
 } from '../shared/engine/index.js';
 import { at, ev, fail, pass, reading, small } from './engine-fixture.js';
+
+// The shared test master is built from test-only blocks (test/test-blocks.ts).
+vi.mock('../shared/blocks/index.js', async (original) => (await import('./test-blocks.js')).withTestBlocks(original as never));
 
 // The batch status and its signatures (TI-20, TI-21), computed from step events and batch events.
 

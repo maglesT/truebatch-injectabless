@@ -13,16 +13,15 @@ SQL, a small set of rules checked once in the app.
 - The 29 TrueBatch Injectables rules and their tests: `docs/rules.md`
 - The calculation templates: `shared/templates/README.md`
 
-## Status (phase C)
-The copy of TrueBatch Tablets, renamed (product `truebatch_injectables`, batch numbers `TI`, permissions
-`truebatch_injectables.*`, rules `TI-xx`), with TrueBatch Tablets Packing removed. Everything the copy brings works:
-sign-on through core, permissions, audit trail, e-signatures, master-data reads, the master designer and its checks,
-the batch engine, shop floor, QC and QA release, the batch record PDF, links to Deviations, QMS, Logbook and MMS with
-hand entry when a link is down, the demo skip. Still from tablets until the next phases: the tablet header and
-formula (mg per tablet), the tablet blocks and process skeletons. Next: the six approved engine changes (liquid
-header, event log beside filling, results that come days later, number of readings set by the master, time limits
-from step X to step Y, an item expiring during a step) and the clean-air limits table; then the sterile templates and
-blocks from the final library.
+## Status (phase E)
+Built: the copy of TrueBatch Tablets renamed and without Packing (phase C); the six approved engine changes and the
+clean-air limits table (phase D: liquid header, event log, results that come later, number of readings set by the
+master, time limits from step X to step Y, an item expiring during a step); the injectables library v1 (phase E):
+units, templates I18-I22 and the setting changes of the reused ones, the 11 reused and the sterile blocks as data, the
+library's master calculation checks, and the 29 rules with their tests (`docs/rules.md`). The tablet steps are gone
+from the product (the engine tests keep five of them as test-only fixtures, `test/test-blocks.ts`). Next: the screens
+(phase F: the filling screen, the designer by type and route), links and the platform release (G), the end-to-end runs
+on the demo (H).
 
 ## Develop
 Needs Node 22 and PostgreSQL 17.
