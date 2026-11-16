@@ -129,6 +129,14 @@ test('TI-22 release journey: QC approves with its report number, QA reviews, clo
 
 test('TI-21 QA terminates a batch still in production from the To review list: a reason, a signature; the batch screen says who, when and why', async ({ browser }) => {
   const batch = await issuedBatch(browser);
+  // The first step was performed and waits for its second-person check when QA terminates.
+  const op = await person(browser, 'op1');
+  const step = async (key: string, action: string, body: object = {}) => expect((await op.page.request.post(`/api/batches/${batch.id}/steps/${key}/${action}`, { data: body })).ok()).toBe(true);
+  await step('0.1.0.1', 'start');
+  await step('0.1.0.1', 'record', { values: { reading: '6.0' } });
+  const hash = (await (await op.page.request.get(`/api/batches/${batch.id}`)).json() as { steps: { id: string; contentHash: string }[] }).steps.find((s) => s.id === '0.1.0.1')!.contentHash;
+  await step('0.1.0.1', 'done', { proof: await op.proof('performed'), contentHash: hash });
+  await op.ctx.close();
   const qa = await person(browser, 'qa1');
   await qa.page.getByRole('button', { name: 'To review' }).click();
   const inProduction = qa.page.getByRole('region', { name: 'In production' });
@@ -152,6 +160,20 @@ test('TI-21 QA terminates a batch still in production from the To review list: a
   const stages = qa.page.getByRole('navigation', { name: 'Stages' });
   await expect(stages).toContainText('Terminated');
   await expect(stages.locator('small', { hasText: /^(Now|Open|Waiting)$/ })).toHaveCount(0);
+  // Its steps never read as still to come (owner, 16 Nov 2026): "Terminated, not started", no "Ready to start" or "Waits for".
+  const steplist = qa.page.locator('.steplist');
+  await expect(steplist).toContainText('Terminated, not started');
+  await expect(steplist.locator('.chip', { hasText: /^(Waiting|Ready to start|In progress|Waiting for check)$/ })).toHaveCount(0);
+  await expect(steplist).not.toContainText('Waits for');
   if (process.env.SHOTS) await qa.page.screenshot({ path: `${process.env.SHOTS}/batch-terminated.png`, fullPage: true });
+  // The step left waiting for its check: no "Waiting for a second person" (owner, 16 Nov 2026).
+  await steplist.locator('.step-row').first().click();
+  await expect(qa.page.locator('.step-title .chip').first()).toHaveText('Terminated, not checked');
+  await expect(qa.page.getByRole('region', { name: 'What was recorded' })).toBeVisible();
+  await expect(qa.page.getByText(/Waiting for a second person|a second person checks it/)).toHaveCount(0);
+  await qa.page.goto(`/#/batch/${batch.id}`);
+  await steplist.locator('.step-row').nth(1).click();
+  await expect(qa.page.locator('.step-title .chip').first()).toHaveText('Terminated, not started');
+  await expect(qa.page.getByText('Not open yet')).toHaveCount(0);
   await qa.ctx.close();
 });

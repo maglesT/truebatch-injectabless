@@ -7,7 +7,7 @@ import type { Action, EventKind, Payload, State, StepKey } from '../../shared/en
 import type { Stored, Value } from '../../shared/engine/values.js';
 import { unitName, type Returned } from '../../shared/engine/stock.js';
 import { PROVIDER_NAME, type Source } from '../../shared/engine/links.js';
-import { stepTitle as sharedStepTitle } from '../../shared/engine/batch.js';
+import { stepTitle as sharedStepTitle, TERMINATED_STATE } from '../../shared/engine/batch.js';
 import { plantText, sep } from '../../shared/plant-time.js';
 
 export type { Block, BlockField, MasterDoc, Step, Action, State, StepKey, Stored, Value, Source };
@@ -128,6 +128,11 @@ export const STATE_LABEL: Record<State, [string, string]> = {
   checked: ['Checked', 'chip-ok'],
   not_applicable: ['Not applicable', ''],
 };
+/** A step's state as a chip; a terminated batch's unfinished step says so, never "Ready to start" (as the PDF). */
+export function stateLabel(state: State, terminated: unknown): [string, string] {
+  const t = terminated ? TERMINATED_STATE[state] : undefined;
+  return t ? [t[0]!.toUpperCase() + t.slice(1), ''] : STATE_LABEL[state];
+}
 export const STATUS_CHIP: Record<string, string> = {
   'in production': 'chip-info', 'manufacturing complete': 'chip-warn', 'production approved': 'chip-ok', 'QC approved': 'chip-ok', released: 'chip-ok', rejected: 'chip-bad',
 };

@@ -456,6 +456,9 @@ describe('QA terminates a batch that cannot be finished (owner, 16 Nov 2026)', (
     expect(await refused([...back('0'), { lot: 'MCC-1', value: '1', unit: 'kg' }])).toMatchObject({ problems: ['Lot MCC-1 (kg) was not issued to this batch.'] });
     expect((await terminate('meera', { reason: 'x', returns: back('-1') })).statusCode).toBe(400);
     expect((await full()).batch.status).toBe('in production');
+    // In production the record says what is still to come.
+    const live = await recordText(id);
+    for (const t of ['not weighed yet · 2.1 Weigh a material: Examplol', '1.2 Mix for a time\nin progress |', '2.1 Weigh a material: Examplol\nnot started |']) expect(live).toContain(t);
   });
 
   it('TI-21 terminate frees the uses: a signed rejection; equipment_use_v1 ends every open use then, batch_fact_v1 says REJECTED', async () => {
@@ -493,6 +496,9 @@ describe('QA terminates a batch that cannot be finished (owner, 16 Nov 2026)', (
     expect(text).toContain('Status | rejected');
     expect(text.match(/Terminated by MEERA at \d{1,2} \w{3} 20\d\d, \d\d:\d\d IST: The stirrer broke down; the binder cannot be made/g)).toHaveLength(2);
     expect(text).toContain('Rejected | MEERA');
+    // Nothing it never did reads as still to come (owner, 16 Nov 2026).
+    for (const t of ['not weighed (terminated) · 2.1 Weigh a material: Examplol', '1.2 Mix for a time\nterminated, not finished |', '2.1 Weigh a material: Examplol\nterminated, not started |']) expect(text).toContain(t);
+    expect(text).not.toMatch(/\byet\b|\nnot started|\nin progress/);
     const r = (await as('viewer', 'GET', `/api/batches/${id}/review`)).json() as { status: string; batchEvents: { kind: string; payload: object; personName: string }[] };
     expect(r).toMatchObject({ status: 'rejected', batchEvents: [{ kind: 'rejected', payload: { terminated: true }, personName: 'MEERA' }] });
   });
