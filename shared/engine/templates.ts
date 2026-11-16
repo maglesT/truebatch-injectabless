@@ -12,6 +12,8 @@ export const TEMPLATES: Record<string, Template> = {
   T25: T.t25AbsoluteHumidity, T26: T.t26MixToTarget,
   // Variants with their own result shape (formulation test, waves 3 and 5).
   'T14-stratified': T.t14Stratified, 'T22-mix': T.t22MixPsd,
+  // TrueBatch Injectables library v1: the new templates, by their library ID (T12 is offered again as I23).
+  I18: T.i18Density, I19: T.i19FilterIntegrity, I20: T.i20Lethality, I21: T.i21Cycle, I23: T.t12DryBasis,
   C1: T.c1WithinLimits, C2: T.c2Count, C3: T.c3AllIndividual, C4: T.c4Observation, C5: T.c5SameBasis,
   C6: T.c6StagedTest, C7: T.c7SamplingPlan,
   // Packing: expiry from the shelf life, printed data against the batch data, serialisation codes of sample packs.

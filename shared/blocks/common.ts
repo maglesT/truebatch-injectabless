@@ -110,10 +110,14 @@ export const makeUp: Block = {
     num('temperature', 'Temperature', '°C'),
     time('mixStart', 'Mixing start'), time('mixEnd', 'Mixing end'),
   ],
-  settings: [limit('netLimit', 'Final batch weight limits', false), limit('temperatureLimit', 'Temperature limits'), limit('mixTimeLimit', 'Mixing time limits')],
+  settings: [
+    { name: 'volume', label: 'Final batch volume', kind: 'quantity' }, { name: 'density', label: 'Density at the make-up temperature', kind: 'quantity' },
+    { name: 'tolerance', label: 'Tolerance on the batch weight (± %)', kind: 'number' }, limit('temperatureLimit', 'Temperature limits'), limit('mixTimeLimit', 'Mixing time limits'),
+  ],
   calcs: [
+    { name: 'target', label: 'Target batch weight', template: 'I18', args: { mode: 'convert', quantity: '$volume', density: '$density', unit: 'kg', decimals: 3 } },
     { name: 'net', label: 'Batch weight', template: 'T1', args: { a: '$gross', b: '$tare' } },
-    within('netCheck', 'Batch weight', 'net', 'netLimit'),
+    { name: 'netCheck', label: 'Batch weight against the target', template: 'C1', args: { value: '$net', around: { centre: '$target', name: 'target batch weight', plusMinusPercent: '$tolerance' } } },
     within('temperatureCheck', 'Temperature', 'temperature', 'temperatureLimit?'),
     duration('mixTime', 'Mixing time', 'mixStart', 'mixEnd', 'mixTimeLimit?'),
   ],
@@ -203,12 +207,16 @@ export const filterTest: Block = {
     yes('asMaster', 'Filter type and pore size as the master'),
   ],
   settings: [
-    { name: 'resultUnit', label: 'Result unit', kind: 'text', options: ['bar g', 'mbar g', 'psi g', 'kPa g', 'mL/min', 'mbar'] },
-    limit('makerLimit', 'Maker\'s limit for the wetting fluid (bubble point: low; diffusion, decay, intrusion: high)', false),
+    { name: 'test', label: 'Test', kind: 'text', options: ['bubble point', 'diffusion', 'pressure decay', 'water intrusion'] },
+    { name: 'resultUnit', label: 'Result unit', kind: 'text', options: ['bar g', 'mbar g', 'psi g', 'kPa g', 'kgf/cm² g', 'mL/min', 'mbar'] },
+    { name: 'makerLimit', label: 'Maker\'s limit for the wetting fluid', kind: 'quantity' },
+    { name: 'wettedWith', label: 'Wetted with', kind: 'text', options: ['water', 'alcohol', 'product', 'solvent'] },
+    { name: 'productFactor', label: 'Product factor from validation (product or solvent wetted)', kind: 'number', optional: true },
+    limit('temperatureRange', 'Test temperature range (the maker\'s)', false),
   ],
   calcs: [
     observe('filterCheck', 'Filter as the master', ['asMaster']),
-    within('integrity', 'Integrity test', 'result', 'makerLimit'),
+    { name: 'integrity', label: 'Integrity test', template: 'I19', args: { mode: '$test', result: '$result', makerLimit: '$makerLimit', wettedWith: '$wettedWith', productFactor: '$productFactor?', temperature: '$temperature', temperatureRange: '$temperatureRange' } },
   ],
 };
 
@@ -288,7 +296,7 @@ export const sterilise: Block = {
   ],
   calcs: [
     within('exposureCheck', 'Exposure time', 'exposure', 'exposureLimit'), within('lowestCheck', 'Lowest probe temperature', 'lowest', 'lowestLimit'),
-    observe('loadCheck', 'Load as validated, indicator passed, dry and intact', ['pattern', 'indicator', 'dryIntact']),
+    observe('loadCheck', 'Load pattern, indicator, dry and intact', ['pattern', 'indicator', 'dryIntact']),
   ],
 };
 
@@ -306,9 +314,11 @@ export const fill: Block = {
   settings: [
     { name: 'needles', label: 'Number of filling needles', kind: 'number' },
     limit('meanLimit', 'Mean fill weight limits', false), { name: 'band', label: 'Each fill weight within (± % of the target)', kind: 'number' },
-    { name: 'target', label: 'Target net fill weight', kind: 'quantity' }, limit('headspaceLimit', 'Headspace oxygen limit'),
+    { name: 'fillTarget', label: 'Fill target (fill + excess)', kind: 'quantity' }, { name: 'density', label: 'Density of the bulk', kind: 'quantity' },
+    limit('headspaceLimit', 'Headspace oxygen limit'),
   ],
   calcs: [
+    { name: 'target', label: 'Target net fill weight', template: 'I18', args: { mode: 'convert', quantity: '$fillTarget', density: '$density', unit: 'g', decimals: 3 } },
     { name: 'mean', label: 'Mean fill weight', template: 'T7', args: { readings: '$weights', limit: '$meanLimit' } },
     { name: 'each', label: 'Each needle', template: 'C3', args: { readings: '$weights', band: { plusMinusPercent: '$band', of: { target: '$target' } } } },
     observe('stopperCheck', 'Stoppers seated (and stirring on)', ['stoppers', 'stirring?']),
@@ -351,7 +361,7 @@ export const terminalSterilise: Block = {
   calcs: [
     within('lethality', 'Lowest probe lethality', 'lowestF', 'lethalityLimit'), within('exposureCheck', 'Exposure time', 'exposure', 'exposureLimit?'),
     within('maxProductCheck', 'Highest product temperature', 'maxProduct', 'maxProductLimit?'),
-    observe('loadCheck', 'Load as validated, indicators passed, kept apart', ['pattern', 'indicators', 'apart']),
+    observe('loadCheck', 'Load pattern, indicators, kept apart', ['pattern', 'indicators', 'apart']),
   ],
 };
 
@@ -401,8 +411,8 @@ export const leakTest100: Block = {
   ],
   settings: [limit('rejectLimit', 'Rejects allowed (% of units tested)')],
   calcs: [
-    observe('standardsCheck', 'Standards passed before and after', ['standardsBefore', 'standardsAfter']),
-    { name: 'balance', label: 'Units tested = passed + rejected', template: 'T4', args: { input: '$tested', parts: [{ name: 'passed', value: '$passed' }, { name: 'rejected', value: '$rejected' }], limit: { low: '100.0', high: '100.0', unit: '%' } } },
+    observe('standardsCheck', 'Standards before and after', ['standardsBefore', 'standardsAfter']),
+    { name: 'balance', label: 'Units tested, accounted for', template: 'T4', args: { input: '$tested', parts: [{ name: 'passed', value: '$passed' }, { name: 'rejected', value: '$rejected' }], limit: { low: '100.0', high: '100.0', unit: '%' } } },
     { name: 'rejectRate', label: 'Reject rate', template: 'T3', args: { actual: '$rejected', theoretical: '$tested', limit: '$rejectLimit?' } },
   ],
 };
@@ -417,8 +427,8 @@ export const headspaceGas: Block = {
   ],
   settings: [{ name: 'gas', label: 'Gas', kind: 'text', options: ['nitrogen', 'argon', 'carbon dioxide', 'perflutren'] }, limit('rejectLimit', 'Rejects allowed (% of units tested)')],
   calcs: [
-    observe('standardsCheck', 'Standards passed', ['standards']),
-    { name: 'balance', label: 'Units tested = passed + rejected', template: 'T4', args: { input: '$tested', parts: [{ name: 'passed', value: '$passed' }, { name: 'rejected', value: '$rejected' }], limit: { low: '100.0', high: '100.0', unit: '%' } } },
+    observe('standardsCheck', 'Standards before and after', ['standards']),
+    { name: 'balance', label: 'Units tested, accounted for', template: 'T4', args: { input: '$tested', parts: [{ name: 'passed', value: '$passed' }, { name: 'rejected', value: '$rejected' }], limit: { low: '100.0', high: '100.0', unit: '%' } } },
     { name: 'rejectRate', label: 'Reject rate', template: 'T3', args: { actual: '$rejected', theoretical: '$tested', limit: '$rejectLimit?' } },
   ],
 };
@@ -435,7 +445,7 @@ export const visualInspect: Block = {
   settings: [limit('rejectLimit', 'All rejects allowed (% of units in)'), limit('particleLimit', 'Particle rejects allowed (% of units in)')],
   calcs: [
     observe('qualifiedCheck', 'Inspector qualified or machine challenged', ['qualified']),
-    { name: 'balance', label: 'Units in = out + rejects + samples', template: 'T4', args: { input: '$unitsIn', parts: [{ name: 'good', value: '$unitsOut' }, { name: 'particles', value: '$particles' }, { name: 'glass', value: '$glass' }, { name: 'fill level', value: '$fillLevel' }, { name: 'closure', value: '$closure' }, { name: 'other', value: '$other' }, { name: 'samples', value: '$samples' }], limit: { low: '100.0', high: '100.0', unit: '%' } } },
+    { name: 'balance', label: 'Units in, accounted for', template: 'T4', args: { input: '$unitsIn', parts: [{ name: 'good', value: '$unitsOut' }, { name: 'particles', value: '$particles' }, { name: 'glass', value: '$glass' }, { name: 'fill level', value: '$fillLevel' }, { name: 'closure', value: '$closure' }, { name: 'other', value: '$other' }, { name: 'samples', value: '$samples' }], limit: { low: '100.0', high: '100.0', unit: '%' } } },
     { name: 'particleRate', label: 'Particle rejects', template: 'T3', args: { actual: '$particles', theoretical: '$unitsIn', limit: '$particleLimit?' } },
   ],
 };

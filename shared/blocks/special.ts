@@ -40,7 +40,7 @@ export const isolatorDecon: Block = {
     yes('indicator', 'Chemical indicator passed'), text('bi', 'Biological indicator ID (result later)', true), useBy('useBy', 'Decontamination valid until'),
   ],
   settings: [limit('leakLimit', 'Leak rate limit'), limit('h2o2Limit', 'H2O2 limit at the end of aeration', false)],
-  calcs: [within('leakCheck', 'Leak rate', 'leakRate?', 'leakLimit?'), within('h2o2Check', 'H2O2 after aeration', 'h2o2', 'h2o2Limit'), observe('indicatorCheck', 'Indicator passed', ['indicator'])],
+  calcs: [within('leakCheck', 'Leak rate', 'leakRate?', 'leakLimit?'), within('h2o2Check', 'H2O2 after aeration', 'h2o2', 'h2o2Limit'), observe('indicatorCheck', 'Chemical indicator', ['indicator'])],
 };
 
 // 26. Transfer of sterile items into grade A: the load, its use-by (engine change 6) and the method.
@@ -151,7 +151,7 @@ export const lyoUnload: Block = {
   calcs: [
     within('stopperCheck', 'Stoppering pressure', 'stopperPressure?', 'stopperLimit?'),
     duration('toCapping', 'Unloading to capping', 'unloadedAt', 'cappedAt', 'cappingLimit?'),
-    { name: 'balance', label: 'Units loaded = unloaded + damaged', template: 'T4', args: { input: '$loaded', parts: [{ name: 'unloaded', value: '$unloaded' }, { name: 'damaged', value: '$damaged' }] } },
+    { name: 'balance', label: 'Units loaded, accounted for', template: 'T4', args: { input: '$loaded', parts: [{ name: 'unloaded', value: '$unloaded' }, { name: 'damaged', value: '$damaged' }] } },
   ],
 };
 
@@ -223,7 +223,7 @@ export const homogenise: Block = {
     num('pressure', 'Pressure', 'bar', true), num('speed', 'Speed', 'rpm', true), num('outlet', 'Outlet temperature', '°C', true), time('start', 'Start'), time('end', 'End')],
   settings: [limit('pressureLimit', 'Pressure limits'), limit('speedLimit', 'Speed limits'), limit('outletLimit', 'Outlet temperature limits')],
   calcs: [within('pressureCheck', 'Pressure', 'pressure?', 'pressureLimit?'), within('speedCheck', 'Speed', 'speed?', 'speedLimit?'), within('outletCheck', 'Outlet temperature', 'outlet?', 'outletLimit?'),
-    duration('time', 'Pass time', 'start', 'end', '')],
+    duration('time', 'Time of this run', 'start', 'end', '')],
 };
 
 // 38. Particle, droplet or vesicle size; the stop check of homogenise (master: repeat until).
