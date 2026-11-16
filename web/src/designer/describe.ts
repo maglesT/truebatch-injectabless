@@ -30,6 +30,7 @@ function stageText(doc: MasterDoc, s: Stage): string {
   return [`${kind}, the responsibility of the ${s.role || '(role not set)'}.`,
     `Machine types: ${s.machineTypes.join(', ') || 'any'}. Rooms: ${s.roomTypes.join(', ') || 'any'}.`,
     uses.length ? `Uses ${uses.join(' and ')}.` : '',
+    s.startsAfter ? `Results that come later: starts after ${s.startsAfter.replace('/', ' › ')} is done, runs beside the next stages and closes before production signs.` : '',
     s.produces ? `Produces ${s.produces.name}, to be used within ${s.produces.holdHours ?? '(not set)'} hours.` : 'Produces no intermediate.'].filter(Boolean).join(' ');
 }
 

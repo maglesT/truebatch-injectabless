@@ -41,7 +41,15 @@ export function masterChecks(doc: MasterDoc): Problem[] {
     if (s.kind === 'sub-batch' && !s.count) error(path, 'A sub-batch stage needs the number of sub-batches');
     if (s.produces && !s.produces.holdHours) error(`${path}.produces`, `The intermediate ${s.produces.name} has no hold time`, 'TI-01');
     if (s.kind !== 'preparation' && !s.steps.some((t) => findBlock(t.block)?.gmp === 'yield')) error(path, `Stage ${s.name} has no yield step`);
-    if (s.kind === 'preparation' && !doc.stages.some((x) => x.uses.includes(s.key))) warn(path, `No stage uses the preparation ${s.name}`);
+    if (s.kind === 'preparation' && !s.startsAfter && !doc.stages.some((x) => x.uses.includes(s.key))) warn(path, `No stage uses the preparation ${s.name}`);
+    // Engine change 3: results that come later start after an earlier step, in a preparation stage nothing uses.
+    if (s.startsAfter) {
+      const [sk, tk] = s.startsAfter.split('/') as [string, string];
+      const pi = doc.stages.findIndex((x) => x.key === sk);
+      if (s.kind !== 'preparation') error(`${path}.startsAfter`, `Only a preparation stage starts after a step (results that come later): ${s.name} is not one`);
+      else if (pi < 0 || pi >= si || !doc.stages[pi]!.steps.some((t) => t.key === tk)) error(`${path}.startsAfter`, `${s.startsAfter} is not a step of an earlier stage`);
+      if (doc.stages.some((x) => x.uses.includes(s.key))) error(`${path}.startsAfter`, `${s.name} starts after a step, so no stage can wait for it; it only has to close before production signs`);
+    }
     // TI-10: a stage worked in a room starts with line clearance.
     const clearance = s.steps.findIndex((t) => findBlock(t.block)?.gmp === 'line-clearance');
     if (s.roomTypes.length && clearance < 0) error(path, `Stage ${s.name} is worked in a room but has no line clearance step`, 'TI-10');
