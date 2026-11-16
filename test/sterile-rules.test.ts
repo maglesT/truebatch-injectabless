@@ -100,3 +100,17 @@ describe('the sterile rules on the floor', () => {
     expect(r('1')).toMatchObject({ ok: true, check: { pass: false } });
   });
 });
+
+describe('the sterility assurance summary at release', () => {
+  it('TI-29 a round followed by another is not out of limits there (its stop check reads as the rounds going on); a real failure is', async () => {
+    const { summaryOf } = await import('../web/src/release/SterileSummary.js');
+    const block = findBlock({ id: 'seal-check', version: 1 })!;
+    const goingOn = { ok: true, value: '0', unit: '', shown: '', check: { pass: false, level: 'fail', shown: 'Sealing: going on: FAIL' } };
+    const pass = { ok: true, value: '0', unit: 'units', shown: '', check: { pass: true, level: 'pass', shown: 'Defective units: 0 units: within limits' } };
+    const row = (results: object, notYet?: string) => ({ key: { stage: 0, sub: 1, step: 0, round: 1 }, id: '0.1.0.1', results, values: {}, notYet }) as never;
+    const r1 = summaryOf(row({ done: goingOn, defectCheck: pass }, 'done'), block);
+    expect(r1.bad).toBe(false);
+    expect(r1.said.join(' ')).toMatch(/not yet, the rounds go on/);
+    expect(summaryOf(row({ done: goingOn, defectCheck: { ...pass, check: { pass: false, level: 'fail', shown: 'Defective units: 2 units: OUT OF LIMITS' } } }, 'done'), block).bad).toBe(true);
+  });
+});
