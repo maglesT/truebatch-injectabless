@@ -100,8 +100,9 @@ adding anything, look how TrueBatch Tablets does it and copy that.
   grade A no growth). Where Annex 1 sets none (grade D in operation; glove prints in C and D) the plant sets it.
 - Shown with every master in the review screen (checker and QA). The count template of the sterile library checks
   environmental readings against it (phase E); a master may set stricter limits, never looser.
-- **QA confirms the table once**: confirmed by ________ (QA) on ________ (to be filled in when QA has checked it
-  against the plant's copy of Annex 1).
+- **QA confirms the table once** (owner, 16 Nov 2026): the plant's **QA head** checks it against the plant's copy of
+  Annex 1 when the product is installed, as part of the plant's validation, and signs that record with name and
+  date. Not confirmed for the demo.
 
 ## Platform
 - Runs on the Medhanta platform. Core provides people, sign-in, permissions, e-signature re-authentication and master
