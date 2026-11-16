@@ -6,6 +6,7 @@
 import { checkOf, decimalsOf, defaultDecimals, Dec, fmt, HUNDRED, needKind, parse, percent, refuse, run, sameKind, show, shownNumber, to, unitOf, ZERO, type Done, type Outcome, type Parsed, type Q } from './core.js';
 import { checkLimit, type Check, type Limit } from './rounding.js';
 import type { Kind, Unit } from './units.js';
+import { ethanolWw } from './mixing.js';
 
 const MASS: Kind[] = ['mass'];
 const POTENCY: Kind[] = ['IU', 'CFU', 'activity units'];
@@ -24,6 +25,12 @@ export type T8Input = (
   | { readonly mode: 'per area'; readonly perArea: Q; readonly area: Q; readonly count: Q }
   /** Product of two or three recorded values, e.g. tablet volume = length × width × height; Hz × rpm/Hz (equipment record) = rpm. */
   | { readonly mode: 'product'; readonly factors: readonly Q[] }
+  /**
+   * Drug = ratio (mg/mmol) × the amount of lipid measured in this batch: mmol, or mmol/L × `volume` (w1 J0011).
+   * `measured.recorded` must be true: the amount is a result recorded in this batch, not the lipid weighed or the
+   * formula's figure (lipid is lost in sizing and column exchange, w2 J0111). The engine sets it from the field.
+   */
+  | { readonly mode: 'ratio x measured'; readonly ratio: Q; readonly measured: { readonly value: string; readonly unit: string; readonly recorded: boolean }; readonly volume?: Q }
 ) & { readonly unit?: string; readonly decimals?: number; readonly limit?: Limit };
 
 const RATE: Partial<Record<Kind, { rate: string; result: string }>> = {
@@ -69,6 +76,31 @@ export function t8BatchScaling(i: T8Input): Outcome {
       const mg = to(pa, 'mg/cm²').times(to(area, 'cm²')).times(n.v);
       value = to({ v: mg, unit: unitOf('mg'), text: '' }, u);
       line = `${pa.text} × ${area.text} × ${n.text}`;
+    } else if (i.mode === 'ratio x measured') {
+      const r = parse(i.ratio, 'The ratio');
+      needKind(r, ['mass per amount'], 'The ratio');
+      if (i.measured?.recorded !== true) {
+        refuse('The amount of lipid must be a result measured and recorded in this batch (after sizing and column exchange), not the amount weighed or written in the formula: lipid is lost on the way and the drug would be overloaded');
+      }
+      const m = parse({ value: i.measured.value, unit: i.measured.unit }, 'The measured amount');
+      needKind(m, ['amount', 'molar concentration'], 'The measured amount');
+      let mmol: Dec;
+      let mLine: string;
+      if (m.unit.kind === 'molar concentration') {
+        if (i.volume === undefined) refuse(`A measured concentration (${m.text}) needs the volume of the batch it was measured in`);
+        const v = parse(i.volume, 'The batch volume');
+        needKind(v, ['volume'], 'The batch volume');
+        mmol = to(m, 'mmol/L').times(to(v, 'L'));
+        mLine = `${m.text} × ${v.text}`;
+      } else {
+        mmol = to(m, 'mmol');
+        mLine = m.text;
+      }
+      if (r.v.isNegative() || mmol.isNegative()) refuse('The ratio and the measured amount cannot be negative');
+      u = unitOf(i.unit ?? 'g');
+      needKind({ v: ZERO, unit: u, text: '' }, MASS, 'The result unit');
+      value = to({ v: to(r, 'mg/mmol').times(mmol), unit: unitOf('mg'), text: '' }, u);
+      line = `${r.text} × ${mLine} (measured in this batch)`;
     } else if (i.mode === 'product') {
       if (i.factors.length < 2 || i.factors.length > 3) refuse('A product takes two or three values');
       const fs = i.factors.map((f, n) => parse(f, `Value ${n + 1}`));
@@ -134,6 +166,8 @@ export interface T11Input {
   readonly to: Form;
   /** The lot's average MW from its certificate, for the form marked `mwFromLot`. */
   readonly lotMw?: string;
+  /** For a quantity in mmol/L (molar mode) or mEq/L: the volume it is made up to. */
+  readonly volume?: Q;
   /** A salt factor as written in a dossier: refused when the molecular weights do not give it (at its decimals). */
   readonly writtenFactor?: string;
   readonly unit?: string;
@@ -176,6 +210,11 @@ export function t11SaltFactor(i: T11Input): Outcome<T11Extra> {
   return run(() => {
     const q = parse(i.quantity, `The quantity of ${i.from.name}`);
     if (q.unit.kind === 'charge') return milliequivalents(i, q);
+    if (q.unit.kind === 'charge concentration') {
+      const v = madeUpTo(i, q);
+      return milliequivalents(i, { v: to(q, 'mEq/L').times(to(v, 'L')), unit: unitOf('mEq'), text: `${q.text} × ${v.text}` });
+    }
+    if (q.unit.kind === 'molar concentration' || q.unit.kind === 'amount') return molar(i, q);
     needKind(q, MASS, `The quantity of ${i.from.name}`);
     const mw = (f: Form): Dec => {
       if (f.mwFromLot !== true) return parse(f.mw, `The molecular weight of ${f.name}`).v;
@@ -227,6 +266,45 @@ function milliequivalents(i: T11Input, q: Parsed): Done & T11Extra {
   const dp = i.decimals ?? defaultDecimals(u.symbol);
   const shown = `${q.text} ${i.from.name} ÷ ${z} (charge) = ${fmt(q.v.div(z), 3)} mmol; ÷ ${n} per ${i.to.name} unit × ${i.to.mw} = ${show(value, u.symbol, dp)} ${i.to.name}`;
   return { ok: true, value, unit: u.symbol, factor: mwTo.div(n).div(z), form: { name: i.to.name, hydrateOrSolvate: i.to.hydrateOrSolvate === true }, shown, ...checkOf(value, u.symbol, i.limit) };
+}
+
+function madeUpTo(i: T11Input, q: Parsed): Parsed {
+  if (i.volume === undefined) refuse(`A quantity in ${q.unit.symbol} needs the volume it is made up to`);
+  const v = parse(i.volume, 'The volume');
+  needKind(v, ['volume'], 'The volume');
+  if (!v.v.isPositive() || v.v.isZero()) refuse('The volume must be more than zero');
+  return v;
+}
+
+/**
+ * Molar mode (w1 J0002, J0076, J0077): a line in mmol/L × the volume (or in mmol) becomes the mass of the form
+ * weighed = mmol ÷ molecules per unit × its MW. The form weighed must be named with its MW and whether it is the
+ * anhydrous form or a hydrate (master check 33: 9.5-30 % off on the wrong form).
+ */
+function molar(i: T11Input, q: Parsed): Done & T11Extra {
+  if (typeof i.to.mw !== 'string' || i.to.mw.trim() === '') refuse(`A molar line needs the molecular weight of the form weighed (${i.to.name}), anhydrous or the named hydrate`);
+  if (i.to.hydrateOrSolvate === undefined) refuse(`Say whether ${i.to.name} is weighed as the anhydrous form or as a hydrate (whether its molecular weight includes crystal water): a molar line on the wrong form is 9.5-30 % off`);
+  let mmol: Dec;
+  let line: string;
+  if (q.unit.kind === 'molar concentration') {
+    const v = madeUpTo(i, q);
+    mmol = to(q, 'mmol/L').times(to(v, 'L'));
+    line = `${q.text} × ${v.text} = ${shownNumber(mmol, 'mmol')} mmol`;
+  } else {
+    mmol = to(q, 'mmol');
+    line = q.text;
+  }
+  if (mmol.isNegative()) refuse('The quantity cannot be negative');
+  const n = molecules(i.to);
+  const mw = parse(i.to.mw, `The molecular weight of ${i.to.name}`).v;
+  if (!mw.isPositive() || mw.isZero()) refuse('Molecular weights must be more than zero');
+  const u = unitOf(i.unit ?? 'g');
+  needKind({ v: ZERO, unit: u, text: '' }, MASS, 'The result unit');
+  const value = to({ v: mmol.div(n).times(mw), unit: unitOf('mg'), text: '' }, u);
+  const dp = i.decimals ?? defaultDecimals(u.symbol);
+  const hyd = i.to.hydrateOrSolvate;
+  const shown = `${line} ${i.from.name}${n === 1 ? '' : ` ÷ ${n} per ${i.to.name} unit`} × ${i.to.mw} g/mol = ${show(value, u.symbol, dp)} ${i.to.name} (MW ${hyd ? 'includes' : 'without'} water/solvent of crystallisation)`;
+  return { ok: true, value, unit: u.symbol, factor: mw.div(n), form: { name: i.to.name, hydrateOrSolvate: hyd }, shown, ...checkOf(value, u.symbol, i.limit) };
 }
 
 // ---------------------------------------------------------------- C5 Same basis
@@ -342,6 +420,11 @@ export interface T9Input {
   readonly potencyAs?: 'parent' | 'element';
   /** 'use' (default): an assay above 100 % lowers the quantity; 'treat as 100': it does not. */
   readonly assayAbove100?: 'use' | 'treat as 100';
+  /**
+   * Fill excess of a sterile powder (w2 J0120), as a mass ("25 mg") or a % of the standard ("5 %"):
+   * fill weight = (label claim + excess) × 100 ÷ the lot's content. Shown and returned separately; never an overage.
+   */
+  readonly excess?: Q;
   readonly unit?: string;
   readonly decimals?: number;
   readonly limit?: Limit;
@@ -349,6 +432,8 @@ export interface T9Input {
 
 export interface T9Extra {
   readonly assayAsIs: Dec;
+  /** With `excess`: the material weighed for the fill excess, in the result unit (inside `value`). */
+  readonly excessAmount?: Dec;
 }
 
 function isT11(x: unknown): x is FromT11 {
@@ -411,11 +496,28 @@ export function t9PotencyAdjusted(i: T9Input): Outcome<T9Extra> {
       capNote = ' (assay above 100 % taken as 100 %, as the master says)';
     }
     const u = outUnit(std, i.unit);
-    const value = to(std, u).times(HUNDRED).div(used);
+    let exc = ZERO;
+    let excText = '';
+    if (i.excess !== undefined) {
+      const e = parse(i.excess, 'The fill excess');
+      if (e.unit.kind === 'fraction' || e.unit.kind === 'number') {
+        exc = to(std, u).times(percent(i.excess, 'The fill excess').v).div(HUNDRED);
+        excText = `${e.unit.kind === 'number' ? `${e.text} %` : e.text} of ${std.text} = ${shownNumber(exc, u.symbol)} ${u.symbol}`;
+      } else {
+        needKind(e, MASS, 'The fill excess');
+        exc = to(e, u);
+        excText = e.text;
+      }
+      if (exc.isNegative()) refuse('A fill excess cannot be negative');
+    }
+    const value = to(std, u).plus(exc).times(HUNDRED).div(used);
+    const excessAmount = exc.times(HUNDRED).div(used);
     const dp = i.decimals ?? defaultDecimals(u.symbol);
     const parentNote = asParent ? ` (potency ${a.text} stated as the ${i.potencyAs === 'element' ? 'element' : 'parent drug'}: ${isT11(i.standard) ? 'the factor ran from the labelled form down to it' : 'no salt factor applied'})` : '';
-    const shown = `${asIsLine}${std.text} × 100 ÷ ${fmt(used, 3)} % = ${show(value, u.symbol, dp)}${capNote}${parentNote}`;
-    return { ok: true, value, unit: u.symbol, assayAsIs: asIs, shown, ...checkOf(value, u.symbol, i.limit) };
+    const head = i.excess === undefined ? std.text : `(${std.text} + ${excText} fill excess)`;
+    const excNote = i.excess === undefined ? '' : ` (of which ${show(excessAmount, u.symbol, dp)} for the fill excess: not an overage)`;
+    const shown = `${asIsLine}${head} × 100 ÷ ${fmt(used, 3)} % = ${show(value, u.symbol, dp)}${excNote}${capNote}${parentNote}`;
+    return { ok: true, value, unit: u.symbol, assayAsIs: asIs, ...(i.excess === undefined ? {} : { excessAmount }), shown, ...checkOf(value, u.symbol, i.limit) };
   });
 }
 
@@ -609,18 +711,68 @@ export interface T18Input {
    * target). Refused when outside.
    */
   readonly second?: { readonly name: string; readonly content: Q; readonly target: Q; readonly limit: Limit };
+  /**
+   * The content is an ethanol strength in % v/v (w1 J0087): turned into % w/w at 20 °C with the alcohol table of T26
+   * (OIML R 22) before dividing.
+   */
+  readonly scale?: 'ethanol % v/v';
+  /**
+   * Activity units belong to one product or assay (C5, w2 J0138): what the formula's U are ("botulinum toxin type A,
+   * maker's assay") and what the lot's certificate states. When either is given, both must be and must be the same.
+   */
+  readonly unitsOf?: string;
+  readonly lotUnitsOf?: string;
+  /** With a content per volume (mg/mL, IU/mL …): the bulk's density, to give its mass as well. */
+  readonly density?: Q;
   readonly unit?: string;
   readonly decimals?: number;
   readonly limit?: Limit;
 }
 
+/**
+ * A content per volume (I13): what the formula quantity must be, and the unit per mL. ELISA units, PFU and titres have
+ * no amount unit of their own: their formula quantity is a plain number. A titre (log10 per mL) is 10^x per mL.
+ */
+const PER_VOLUME: Partial<Record<Kind, { amount: Kind; per: string }>> = {
+  'mass concentration': { amount: 'mass', per: 'mg/mL' },
+  'IU per volume': { amount: 'IU', per: 'IU/mL' },
+  'activity units per volume': { amount: 'activity units', per: 'U/mL' },
+  'Lf per volume': { amount: 'Lf', per: 'Lf/mL' },
+  'D-antigen units per volume': { amount: 'D-antigen units', per: 'DU/mL' },
+  'ELISA units per volume': { amount: 'number', per: 'EL.U/mL' },
+  'PFU per volume': { amount: 'number', per: 'PFU/mL' },
+  'log titre per volume': { amount: 'number', per: 'log10 CCID50/mL' },
+};
+const UNITS_OF: Kind[] = ['activity units', 'activity units per mass', 'activity units per volume'];
+const linear = (p: Parsed): Dec => (p.unit.kind === 'log titre per volume' ? new Dec(10).pow(p.v) : p.v);
+const sameWords = (a: string, b: string): boolean => a.trim().replace(/\s+/g, ' ').toLowerCase() === b.trim().replace(/\s+/g, ' ').toLowerCase();
+
 const PER_MASS: Partial<Record<Kind, Kind>> = { 'IU per mass': 'IU', 'CFU per mass': 'CFU', 'activity units per mass': 'activity units' };
 
 /** T18 Content-adjusted quantity (any material): pure quantity × 100 ÷ content %, or units ÷ units per gram. */
-export function t18ContentAdjusted(i: T18Input): Outcome<{ readonly second?: { readonly delivered: Dec; readonly percent: Dec; readonly check: Check } }> {
+export function t18ContentAdjusted(i: T18Input): Outcome<{ readonly second?: { readonly delivered: Dec; readonly percent: Dec; readonly check: Check }; readonly mass?: Dec; readonly massUnit?: string }> {
   return run(() => {
     const t = parse(i.target, 'The formula quantity');
     let c = parse(i.content, "The lot's content");
+    if (UNITS_OF.includes(t.unit.kind) || UNITS_OF.includes(c.unit.kind)) {
+      if (i.unitsOf !== undefined || i.lotUnitsOf !== undefined) {
+        if (i.unitsOf === undefined || i.lotUnitsOf === undefined) refuse("Units (U) belong to one product or assay: name both what the formula's units are of and what the lot's units are of");
+        if (!sameWords(i.unitsOf, i.lotUnitsOf)) {
+          refuse(`The lot's units are units of ${i.lotUnitsOf}, but the formula is in units of ${i.unitsOf}: units of one product or assay cannot be used for another (they are not the same amount). Use a lot assayed in the formula's units (same-basis rule C5)`);
+        }
+      }
+    }
+    // An ethanol strength in % v/v becomes % w/w at 20 °C (the alcohol table of T26).
+    const ethanol = (p: Parsed): Parsed => {
+      if (i.scale !== 'ethanol % v/v') {
+        if (p.unit.kind === 'volume fraction') refuse(`A content in % v/v (${p.text}) cannot be used as a % w/w: for ethanol set the ethanol % v/v scale, or give the content in % w/w`);
+        return p;
+      }
+      if (p.unit.kind !== 'volume fraction' && p.unit.kind !== 'fraction') refuse('An ethanol strength is a % v/v');
+      const w = ethanolWw(p.unit.kind === 'volume fraction' ? to(p, '%v/v') : to(p, '%'));
+      return { v: w, unit: unitOf('%w/w'), text: `${p.text}${p.unit.kind === 'volume fraction' ? '' : ' v/v'} (${shownNumber(w, '%')} % w/w at 20 °C, OIML R 22)` };
+    };
+    c = ethanol(c);
     if (i.resultType === 'percent of theoretical') {
       if (i.nominalContent === undefined || i.formulaQuantityIs !== 'dry') refuse('A result in % of theoretical needs the theoretical content (nominal content) and a pure (dry) formula quantity');
       needKind(c, ['fraction'], 'A result in % of theoretical');
@@ -635,11 +787,11 @@ export function t18ContentAdjusted(i: T18Input): Outcome<{ readonly second?: { r
     let line: string;
     if (i.formulaQuantityIs === 'wet') {
       if (i.nominalContent === undefined) refuse('A wet (as supplied) formula quantity needs the nominal content it was written at');
-      needKind(t, MASS, 'A wet formula quantity');
-      const n = parse(i.nominalContent, 'The nominal content');
+      needKind(t, PER_VOLUME[c.unit.kind] === undefined ? MASS : ['volume'], 'A wet formula quantity');
+      const n = ethanol(parse(i.nominalContent, 'The nominal content'));
       sameKind([n, c], 'Nominal and lot content');
       u = outUnit(t, i.unit);
-      value = to(t, u).times(n.v).div(to(c, n.unit));
+      value = to(t, u).times(linear(n)).div(linear({ ...c, v: to(c, n.unit) }));
       line = `${t.text} × ${n.text} ÷ ${c.text}`;
     } else if (c.unit.kind === 'fraction') {
       if (POTENCY.includes(t.unit.kind)) refuse(`${t.text} cannot be turned into a mass with a % content: an amount in IU, CFU or activity units needs the lot's content per gram (for example IU/g)`);
@@ -657,6 +809,21 @@ export function t18ContentAdjusted(i: T18Input): Outcome<{ readonly second?: { r
       needKind({ v: ZERO, unit: u, text: '' }, MASS, 'The result unit');
       value = to({ v: t.v.div(perG), unit: unitOf('g'), text: '' }, u);
       line = `${t.text} ÷ ${c.text}`;
+    } else if (PER_VOLUME[c.unit.kind] !== undefined) {
+      const pv = PER_VOLUME[c.unit.kind] as { amount: Kind; per: string };
+      if (t.unit.kind !== pv.amount) {
+        refuse(
+          pv.amount === 'mass'
+            ? `The lot's content is in ${c.unit.symbol}, so the formula quantity must be a mass; "${t.text}" is not: IU, U, Lf and titres are never turned into a mass`
+            : `The lot's content is in ${c.unit.symbol}, so the formula quantity must be ${pv.amount === 'number' ? 'a plain number of units (for example "3.2e11")' : `in ${pv.amount === 'activity units' ? 'U' : pv.amount === 'D-antigen units' ? 'DU' : pv.amount}`}; "${t.text}" is not`,
+        );
+      }
+      const perMl = c.unit.kind === 'log titre per volume' ? linear(c) : to(c, pv.per);
+      const amount = pv.amount === 'mass' ? to(t, 'mg') : t.v;
+      u = unitOf(i.unit ?? 'mL');
+      needKind({ v: ZERO, unit: u, text: '' }, ['volume'], 'The result unit');
+      value = to({ v: amount.div(perMl), unit: unitOf('mL'), text: '' }, u);
+      line = c.unit.kind === 'log titre per volume' ? `${t.text} ÷ 10^${c.v.toString()} per mL (${c.text})` : `${t.text} ÷ ${c.text}`;
     } else if (c.unit.kind === 'mass per IU') {
       if (t.unit.kind !== 'IU') refuse(`A content in mg/IU needs the formula quantity in IU; "${t.text}" is not`);
       u = unitOf(i.unit ?? 'mg');
@@ -667,7 +834,17 @@ export function t18ContentAdjusted(i: T18Input): Outcome<{ readonly second?: { r
     }
     const dp = i.decimals ?? defaultDecimals(u.symbol);
     let shown = `${line} = ${show(value, u.symbol, dp)}${src}`;
-    if (i.second === undefined) return { ok: true, value, unit: u.symbol, shown, ...checkOf(value, u.symbol, i.limit) };
+    let mass: { mass: Dec; massUnit: string } | undefined;
+    if (i.density !== undefined) {
+      if (u.kind !== 'volume') refuse('A density turns a volume of liquid into its mass: the result here is not a volume');
+      const d = parse(i.density, 'The density');
+      needKind(d, ['density'], 'The density');
+      if (!d.v.isPositive() || d.v.isZero()) refuse('The density must be more than zero');
+      const mu = u.symbol === 'L' || u.symbol === 'm³' ? 'kg' : 'g';
+      mass = { mass: to({ v: to({ v: value, unit: u, text: '' }, 'mL').times(to(d, 'g/mL')), unit: unitOf('g'), text: '' }, mu), massUnit: mu };
+      shown += `; × ${d.text} = ${show(mass.mass, mu, defaultDecimals(mu))}`;
+    }
+    if (i.second === undefined) return { ok: true, value, unit: u.symbol, shown, ...(mass ?? {}), ...checkOf(value, u.symbol, i.limit) };
     const s2 = percent(i.second.content, `The content of ${i.second.name}`);
     const t2 = parse(i.second.target, `The target of ${i.second.name}`);
     needKind(t2, MASS, `The target of ${i.second.name}`);

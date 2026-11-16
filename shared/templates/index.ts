@@ -15,3 +15,4 @@ export { t17LiquidMakeUp } from './liquid.js';
 export { t22SieveAnalysis, t22MixPsd, t23CompactStrength, t24SpecificEnergy, t25AbsoluteHumidity } from './physical.js';
 export { c6StagedTest } from './staged.js';
 export { c7SamplingPlan, codeLetter, plan } from './sampling.js';
+export { i22Count, type I22Input, type CountSample } from './counts.js';
