@@ -83,6 +83,16 @@ adding anything, look how TrueBatch Tablets does it and copy that.
 - The master check: two steps of this master, a name, not the same point twice. The designer has a "Time limits" list
   on the Process tab; the plain-sentence review lists them.
 
+## Engine change 6: an item that expires during a step (built 16 November 2026)
+- Taking an expired item is refused, as in Tablets (TI-12: an MMS lot past its expiry or retest date, a label date
+  typed in the past).
+- A lot's use-by date (expiry or retest, whichever is first) is kept with the step: pulled from MMS with the lot, or
+  typed from the label without the link (`<field>.expiry`). If it has passed when the step is signed done (the item
+  expired while the step was under way), the step needs a deviation note written after the expiry first: the "out of
+  limits needs a deviation note" rule of Tablets (TI-14), on this date. A lot is usable through its use-by day (plant
+  time).
+- The sterilised items' "use by" (TI-17, TI-24) will use the same field when the sterile blocks come (phase E).
+
 ## Platform
 - Runs on the Medhanta platform. Core provides people, sign-in, permissions, e-signature re-authentication and master
   data. Normal platform sign-in (OIDC through core, one person per browser).

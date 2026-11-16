@@ -7,7 +7,11 @@ import { materialLines, type MasterDoc, type Step } from '../master/schema.js';
 import { keyId, stepState, type EventKind, type State, type StepEvent, type StepKey } from './state.js';
 import { c1WithinLimits, convert, Dec, findUnit } from '../templates/index.js';
 import { currentValues, durationId, durations, evaluate, failed, headerValue, HEADER_WORDS, inputChanges, type Current } from './values.js';
-import { handEntered, handFields } from './links.js';
+import { fieldLabel, handEntered, handFields } from './links.js';
+import { PLANT_TZ, plantDate } from '../plant-time.js';
+
+/** The plant's calendar day of a moment (YYYY-MM-DD). */
+const plantDayOf = (t: Date) => t.toLocaleDateString('en-CA', { timeZone: PLANT_TZ });
 
 export interface StepView extends Current {
   key: StepKey;
@@ -287,6 +291,13 @@ export function doneProblems(doc: MasterDoc, v: StepView, now: Date): string[] {
   // The note must come after the last value, or after the last change of an input from another step.
   const since = [...v.events.filter((e) => e.kind === 'value' || e.kind === 'corrected'), ...v.inputChanged].map((e) => e.at).sort((a, b) => a.getTime() - b.getTime()).at(-1);
   if (out.length && !noteAfter(v.events, since)) p.push(`Out of limits: ${out.join(', ')}. Add a deviation note first.`);
+  // Engine change 6: an item that expired while the step was under way (its use-by date, from MMS or typed from the
+  // label, has passed since it was taken: taking an expired one is refused) needs a deviation note written after it.
+  const today = plantDayOf(now);
+  for (const [name, d] of Object.entries(v.values)) {
+    if (!name.endsWith('.expiry') || typeof d !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(d) || d >= today) continue;
+    if (!v.events.some((e) => e.kind === 'note' && plantDayOf(e.at) > d)) p.push(`${fieldLabel(block.fields, name.slice(0, -'.expiry'.length))} ${String(v.values[name.slice(0, -'.expiry'.length)] ?? '')} expired on ${plantDate(d)}, during this step. Add a deviation note first.`);
+  }
   const started = earliest(v.events, 'started');
   if (st.minMinutes && started && now < plus(started, st.minMinutes) && !skipOf(v.events, `min:${v.id}`)) {
     p.push(`The minimum time is ${st.minMinutes} min: the step can be finished from ${plus(started, st.minMinutes).toISOString()}`);

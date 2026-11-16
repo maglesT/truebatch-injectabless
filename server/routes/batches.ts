@@ -119,7 +119,7 @@ async function readValues(app: FastifyInstance, doc: MasterDoc, key: StepKey, ra
       const v = readValue(f, x, '');
       if (typeof v !== 'string') { problems.push((v as { error: string }).error); continue; }
       out[name] = v;
-      pulled = await pullLot(app, doc, step, block, v, current.values, now, PLANT_TZ);
+      pulled = await pullLot(app, doc, step, block, v, current.values, now, PLANT_TZ, name);
     }
     problems.push(...pulled.problems);
     source[name] = pulled.source;
