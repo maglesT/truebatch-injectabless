@@ -72,12 +72,15 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   const material = line && materialLines(doc).find((l) => l.key === line.formula)?.materialItemId;
   const lots = useLinked<{ lotNumber: string }>(block.fields.some((f) => f.kind === 'lot') && material ? `/api/mms/lots?material=${encodeURIComponent(material)}` : null, 'lots');
   // The material's unit in master data, as MMS and the refusals name it: a count is shown as master data names it (nos).
-  const [mdUnit, setMdUnit] = useState<string | null>(null);
+  // The step's values wait for it, so a count never reads "units" first and "nos" a moment later.
+  const [mdOf, setMdUnit] = useState<{ of: string; unit: string | null } | null>(null);
+  const mdUnit = mdOf && mdOf.of === material ? mdOf.unit : null;
+  const unitKnown = !material || mdOf?.of === material;
   useEffect(() => {
-    setMdUnit(null);
     if (!material) return;
     let live = true;
-    void api<{ itemId: string; unit?: string | null }[]>('GET', '/api/master/materials').then((m) => live && setMdUnit(m.find((x) => x.itemId === material)?.unit?.trim() || null), () => {});
+    const known = (unit: string | null) => live && setMdUnit({ of: material, unit });
+    void api<{ itemId: string; unit?: string | null }[]>('GET', '/api/master/materials').then((m) => known(m.find((x) => x.itemId === material)?.unit?.trim() || null), () => known(null));
     return () => { live = false; };
   }, [material]);
   const shownUnit = (f: BlockField) => unitName(unitOf(f, st), mdUnit);
@@ -221,6 +224,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
       </div>
       <DemoSkip me={me} d={d} row={row} reload={() => reload()} />
 
+      {!unitKnown ? <div className="dash-panel" aria-label="Loading the step"><div className="skel skel-line w60" /><div className="skel skel-block" /></div> : (
       <div className="step-grid">
         <div>
           <section className="dash-panel" aria-label="Instruction">
@@ -270,6 +274,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
           <History_ h={history} block={block} />
         </div>
       </div>
+      )}
 
       <div className="action-bar">
         {row.state === 'waiting' && <p className="why">{row.blocked ?? 'This step opens when the step before it is finished.'}</p>}

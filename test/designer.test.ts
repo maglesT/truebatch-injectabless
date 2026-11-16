@@ -6,6 +6,7 @@ import { describeMaster, diffMasters, stepText } from '../web/src/designer/descr
 import { dispensing, workedExample } from '../web/src/designer/example.js';
 import { answerDoc, earlierRefs, neededKind, scaleDoc, stepFrom } from '../web/src/designer/model.js';
 import { sentence, sentenceText } from '../web/src/designer/sentences.js';
+import { stepTitle } from '../shared/engine/batch.js';
 import { defaultDispensingRooms, skeletonList, skeletonStages } from '../web/src/designer/skeletons.js';
 import { tablet, unplaced } from './engine-fixture.js';
 
@@ -107,6 +108,18 @@ describe('master designer', () => {
       message: 'The master weighs but names no dispensing rooms: choose them in the header (rooms of master data)' }]);
     expect(defaultDispensingRooms([{ code: 'RM-101', area: 'Dispensing', active: true }, { code: 'RM-102', area: 'Dispensing', active: false },
       { code: 'RM-301', area: 'Liquid dispensing', active: true }, { code: 'RM-103', area: 'Granulation', active: true }])).toEqual(['RM-101']);
+  });
+
+  it('the plain view titles each step as the floor does and never shows a step\'s internal key', () => {
+    const h = { productItemId: 'p', productCode: 'P', productName: 'Examplol injection', batchSize: '100', batchUnit: 'L' as const, densityGPerMl: '1.02',
+      fillVolumeMl: '10.0', fillExcessMl: '0.5', route: 'aseptic' as const, dispensingRooms: ['RM-101'] };
+    const d = masterSchema.parse({ header: h, formula: [], stages: skeletonStages('liquid-aseptic', h) });
+    d.stages[0]!.steps[3]!.orderAfter = d.stages[0]!.steps[2]!.key;
+    const lines = describeMaster(d).filter((s) => s.key.startsWith('stage:')).flatMap((s) => s.lines.filter((l) => l.key !== 'about'));
+    expect(lines.map((l) => /^\d+\. ([^:]+):/.exec(l.text)?.[1])).toEqual(d.stages.flatMap((s) => s.steps.map((t) => stepTitle(d, t))));
+    for (const l of lines) for (const t of d.stages.flatMap((s) => s.steps)) expect(l.text, l.key).not.toContain(`(${t.key})`);
+    expect(lines.map((l) => l.text).filter((x) => /Order-critical/.test(x)).map((x) => /Order-critical: [^.]*\.[^.]*\./.exec(x)![0]))
+      .toEqual([`Order-critical: after step 3. ${stepTitle(d, d.stages[0]!.steps[2]!)}.`]);
   });
 
   it('a weigh step added from the library starts with the usual tolerance', () => {

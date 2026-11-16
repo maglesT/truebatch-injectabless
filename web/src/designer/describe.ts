@@ -6,6 +6,7 @@ import { batchText, HEADER_WORDS } from '../../../shared/engine/values.js';
 import { placeLabel } from './model.js';
 import { materialLines, type FormulaLine, type MasterDoc, type Stage, type Step } from '../../../shared/master/schema.js';
 import { unitName } from '../../../shared/engine/stock.js';
+import { stepTitle } from '../../../shared/engine/batch.js';
 import { sentence, sentenceText, settingText, slotsOf } from './sentences.js';
 
 export interface Line { key: string; text: string }
@@ -49,12 +50,15 @@ export function stepText(doc: MasterDoc, t: Step, j: number, units?: Units): str
   const calcs = b.calcs.map((c) => sentenceText(doc, b, t.settings, sentence(b, c)));
   const flow = t.flow.kind === 'repeat-until' ? `Repeated until the check "${b.calcs.find((c) => c.name === ((t.flow.kind === 'repeat-until' && t.flow.stop) || b.stop))?.label ?? '(not chosen)'}" passes, at most ${t.flow.maxRounds ?? '?'} rounds${t.everyMinutes ? `, a round every ${t.everyMinutes} minutes` : ''}.`
     : t.flow.kind === 'optional-with-reason' ? 'Optional: it may be skipped with a reason.' : t.flow.kind === 'qa-hold' ? 'QA hold: QA releases it before the next step.' : '';
-  return [`${j + 1}. ${b.name} (${t.key}): ${t.instruction ?? b.instruction}`, ...loose, ...calcs,
+  // A step by its title as on the floor (with its material's name and code), never its internal key.
+  const steps = doc.stages.find((s) => s.steps.includes(t))?.steps ?? [];
+  const after = steps.findIndex((x) => x.key === t.orderAfter);
+  return [`${j + 1}. ${stepTitle(doc, t)}: ${t.instruction ?? b.instruction}`, ...loose, ...calcs,
     `Signed by the operator${t.checker ? ' and checked by a second person' : ''}${t.waitForCheck ? '; the next step waits for the check' : ''}.`,
     t.critical ? 'Critical step.' : '', t.minMinutes ? `Takes at least ${t.minMinutes} minutes.` : '', flow,
     t.everyMinutesLater ? `After ${t.everyMinutesLater.afterMinutes} minutes, a round every ${t.everyMinutesLater.everyMinutes} minutes.` : '',
     t.onlyIf ? `Done only when the ${HEADER_WORDS[t.onlyIf.header]} is ${t.onlyIf.limit.low ? `at least ${t.onlyIf.limit.low}` : ''}${t.onlyIf.limit.low && t.onlyIf.limit.high ? ' and ' : ''}${t.onlyIf.limit.high ? `at most ${t.onlyIf.limit.high}` : ''} ${t.onlyIf.limit.unit}; otherwise left out.` : '',
-    t.orderAfter ? `Order-critical: after step ${t.orderAfter}.` : ''].filter(Boolean).join(' ');
+    t.orderAfter ? `Order-critical: after step ${after < 0 ? '(no longer in this stage)' : `${after + 1}. ${stepTitle(doc, steps[after]!)}`}.` : ''].filter(Boolean).join(' ');
 }
 
 export function describeMaster(doc: MasterDoc, units?: Units): Section[] {
