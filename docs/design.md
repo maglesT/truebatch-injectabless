@@ -116,7 +116,7 @@ adding anything, look how TrueBatch Tablets does it and copy that.
   check (`shared/master/sterile-checks.ts`, each with its library number); the structure the sterile rules need
   (aseptic set-up, filtration and filter tests, samples, interventions log, closing, inspection, freeze-drying steps)
   applies to a master that fills product.
-- People (owner's assumption, CHECK-I1): QA grants "aseptic operator" and "visual inspector"; a stage marked aseptic
+- People (confirmed by the owner, 16 November 2026): QA grants "aseptic operator" and "visual inspector"; a stage marked aseptic
   is only for aseptic operators, visual inspection only for visual inspectors. No training dates are kept here.
 - QC's sign at release states that the release tests (sterility, endotoxin, bioburden) comply as in the QC report and
   records the EM review of the batch (report numbers, the deviation number of each action-limit excursion).
