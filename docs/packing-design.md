@@ -48,8 +48,10 @@ the leaflet, to QA release of the packed batch. Built the Logbook way, as TrueBa
   `db/migrations/0007_batch_fact_manufactured_on.sql`), not its issue date; a batch without one is refused. Without the
   link the batch and its date of manufacture are typed from the tray or case labels ("RELEASED", the product) with a
   second-person check, and QA's review lists them; a typed date in the future is refused. The filled units issued are
-  the batch's good units (`batch_fact_v1.good_quantity`, owner 17 Nov 2026, gap 10), pulled with it and not typed
-  over; typed, as before, without the link or from a TrueBatch Injectables that does not publish them yet.
+  the batch's good units still unpacked (`batch_fact_v1.good_quantity`, owner 17 Nov 2026, gap 10, less the units this
+  app's own packing batches issued from it: signed issues, terminated ones not counted; suite B2), filled in with it;
+  part of them may be issued, more is refused, and a batch with none left is not offered; typed, as before, without
+  the link or from a TrueBatch Injectables that does not publish them yet.
 - **Published for OEE**: `packing_batch_v1` ends with `good_quantity` (the good packs), `good_unit` ('packs') and
   `yield_percent` (the yield in packs), from the finished goods step once it is signed; null until then and while it is
   sent back (`packing/migrations/0109`, `0110`).

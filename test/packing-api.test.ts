@@ -387,22 +387,60 @@ describe('a packing batch from the filled units of a released batch', () => {
     expect(await out()).toEqual({ good_quantity: '985', yield_percent: '98.5' });
   });
 
-  it('gap 10: the filled units issued are the good units TrueBatch Injectables publishes (batch_fact_v1.good_quantity), pulled; a view without the column: typed, as before', async () => {
-    t.master.equipment_.push({ ...item('ln-3', 'LL-03', 'Labelling line 3'), kind: 'equipment', type: 'labelling line', room: 'PK-01' });
+  it('gap 10, suite B2: the filled units issued are the good units still unpacked (batch_fact_v1.good_quantity less what packing batches issued from it), all or part; more is refused; a terminated packing batch gives its units back; without the column or the link: typed, as before', async () => {
+    for (const n of [3, 4, 5, 6, 7]) t.master.equipment_.push({ ...item(`ln-${n}`, `LL-0${n}`, `Labelling line ${n}`), kind: 'equipment', type: 'labelling line', room: 'PK-01' });
     // The stand-in view so far had no good_quantity: every batch above was issued with its units typed.
     await t.owner.unsafe(`alter table ${TB}.batch_fact_v1 add column good_quantity numeric`);
     try {
+      await t.owner.unsafe(`insert into ${TB}.batch_fact_v1 (batch_number, product_code, record_kind, status, issued_at, released, manufactured_on, good_quantity)
+        values ('TI260006', 'PRD-001', 'PROCESSING', 'RELEASED', '2026-11-08 06:00+00', true, '2026-11-08', 9600)`);
+      // TI260001's packing batch above issued 10000 units of it: none left, so it is not offered.
       await t.owner.unsafe(`update ${TB}.batch_fact_v1 set good_quantity = 9600 where batch_number = 'TI260001'`);
-      const picks = (await as('issuer', 'GET', '/api/bulk-batches?product=PRD-001')).json() as { batches: { batchNo: string; goodQuantity: string | null }[] };
-      expect(picks.batches.map((b) => [b.batchNo, b.goodQuantity])).toEqual([['TI260005', null], ['TI260004', null], ['TI260001', '9600']]);
-      expect((await issue({ line: 'ln-3', bulk: 'TI260001', units: '10000' })).json())
-        .toMatchObject({ problems: ['Filled units issued comes from TrueBatch Injectables and cannot be typed over'] });
-      const res = await issue({ line: 'ln-3', bulk: 'TI260001' });
-      expect(res.statusCode, res.body).toBe(200);
-      const s = (await get((res.json() as { id: number }).id)).steps[0]!;
-      expect(s).toMatchObject({ values: { units: { value: '9600', unit: 'units' } }, source: { units: { from: 'truebatch_injectables' } } });
-      expect(s.results.packs).toMatchObject({ ok: true, shown: '9600 units ÷ 10 units = 960 packs' });
+      const picks = async () => ((await as('issuer', 'GET', '/api/bulk-batches?product=PRD-001')).json() as { batches: { batchNo: string; goodQuantity: string | null; remaining: string | null }[] })
+        .batches.map((b) => [b.batchNo, b.goodQuantity, b.remaining]);
+      expect(await picks()).toEqual([['TI260006', '9600', '9600'], ['TI260005', null, null], ['TI260004', null, null]]);
+      expect((await issue({ line: 'ln-3', bulk: 'TI260001' })).json())
+        .toMatchObject({ problems: ['Batch TI260001 has no units left to pack: its 9600 good units are all issued to packing batches.'] });
+      // Part of it: 3000 units; the rest stays to be packed.
+      const part = await issue({ line: 'ln-3', bulk: 'TI260006', units: '3000' });
+      expect(part.statusCode, part.body).toBe(200);
+      const s = (await get((part.json() as { id: number }).id)).steps[0]!;
+      expect(s).toMatchObject({ values: { units: { value: '3000', unit: 'units' } }, source: { units: { from: 'truebatch_injectables' } } });
+      expect(s.results.packs).toMatchObject({ ok: true, shown: '3000 units ÷ 10 units = 300 packs' });
+      expect(await picks()).toContainEqual(['TI260006', '9600', '6600']);
+      // More than is left, or not a whole number of units: refused.
+      expect((await issue({ line: 'ln-4', bulk: 'TI260006', units: '7000' })).json())
+        .toMatchObject({ problems: ['Batch TI260006 has 6600 good units still unpacked (9600 less 3000 already issued for packing): issue at most 6600.'] });
+      expect((await issue({ line: 'ln-4', bulk: 'TI260006', units: '0' })).json()).toMatchObject({ problems: ['Filled units issued: give a whole number from 1 to 6600.'] });
+      // Not typed: all that is left.
+      const rest = await issue({ line: 'ln-4', bulk: 'TI260006' });
+      expect(rest.statusCode, rest.body).toBe(200);
+      const restId = (rest.json() as { id: number }).id;
+      expect((await get(restId)).steps[0]!.values.units).toEqual({ value: '6600', unit: 'units' });
+      expect((await picks()).map((b) => b[0])).not.toContain('TI260006');
+      expect((await issue({ line: 'ln-5', bulk: 'TI260006', units: '1' })).json())
+        .toMatchObject({ problems: ['Batch TI260006 has no units left to pack: its 9600 good units are all issued to packing batches.'] });
+      // A terminated packing batch's units are not counted: they go back to be packed.
+      const b = await get(restId, 'qa1');
+      const end = await as('qa1', 'POST', `/api/batches/${restId}/terminate`, { proof: proofFor('qa1'), contentHash: b.batch.contentHash, reason: 'Issued to the wrong line' });
+      expect(end.statusCode, end.body).toBe(200);
+      expect(await picks()).toContainEqual(['TI260006', '9600', '6600']);
+      expect((await issue({ line: 'ln-5', bulk: 'TI260006', units: '6600' })).statusCode).toBe(200);
+      // No good quantity in the view: typed, as before.
+      const typed = await issue({ line: 'ln-6', bulk: 'TI260004', units: '100' });
+      expect(typed.statusCode, typed.body).toBe(200);
+      expect((await get((typed.json() as { id: number }).id)).steps[0]!.source.units).toBeUndefined();
+      // The link down: the batch and its units typed from the labels, a second person checks them; nothing is compared.
+      await t.owner.unsafe(`revoke select on ${TB}.batch_fact_v1 from ${PACKING_APP_ROLE}`);
+      try {
+        const hand = await issue({ line: 'ln-7', bulk: 'TI260006', units: '20000', mfgDate: '2026-11-08', 'bulk.released': 'yes', 'bulk.product': 'yes' });
+        expect(hand.statusCode, hand.body).toBe(200);
+        expect((await get((hand.json() as { id: number }).id)).steps[0]!).toMatchObject({ values: { units: { value: '20000' } }, source: { bulk: { from: 'hand', state: 'down' } } });
+      } finally {
+        await t.owner.unsafe(`grant select on ${TB}.batch_fact_v1 to ${PACKING_APP_ROLE}`);
+      }
     } finally {
+      await t.owner.unsafe(`delete from ${TB}.batch_fact_v1 where batch_number = 'TI260006'`);
       await t.owner.unsafe(`alter table ${TB}.batch_fact_v1 drop column good_quantity`);
     }
   });
