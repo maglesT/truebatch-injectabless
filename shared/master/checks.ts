@@ -30,6 +30,7 @@ export const plainWords = (m: string) => m
   .replace(/\bF0\d{3}:\s*/g, '')
   .replace(/\s*\(F0\d{3}(?:, F0\d{3})*\)/g, '');
 
+const sameMaterial = (v: SettingValue | undefined, key: string) => typeof v === 'object' && 'formula' in v && v.formula === key;
 /** What stops "Send for review" and approval: an error, or a warning that needs an answer and has none. */
 export const blocking = (p: Problem) => p.level === 'error' || (p.question !== undefined && !p.question.answer);
 
@@ -102,7 +103,7 @@ export function masterChecks(doc: MasterDoc): Problem[] {
       if (!st.checker && (block.gmp || st.critical)) error(p, `${block.gmp ? `A ${block.gmp.replace('line-clearance', 'line clearance')} step` : 'A critical step'} needs a second-person check`, 'TI-08');
       if (st.critical && st.flow.kind === 'optional-with-reason') error(`${p}.flow`, 'A critical step cannot be optional');
       if (st.waitForCheck && !st.checker) warn(p, 'The next step waits for a check this step does not have');
-      for (const bs of block.settings) if (!bs.optional && st.settings[bs.name] === undefined) error(`${p}.settings.${bs.name}`, `${bs.label} is not set`);
+      for (const bs of block.settings) if (!bs.optional && st.settings[bs.name] === undefined) error(`${p}.settings.${bs.name}`, `${bs.label} is not set${bs.kind === 'material' && block.id.startsWith('container-') && !doc.containers?.length ? ': add the containers on the Formula screen first' : ''}`);
       // Engine change 4: a number of readings the step sets is a whole number from 1 to 100.
       for (const f of block.fields) {
         const n = typeof f.count === 'string' ? st.settings[f.count.slice(1)] : undefined;
@@ -124,6 +125,15 @@ export function masterChecks(doc: MasterDoc): Problem[] {
           const needed = value ? kindOf(block, value, st.settings) : i19 ? neededKind(block, name, st.settings) : undefined, has = kindOfUnit(v.unit);
           if (needed && has && needed !== has) error(`${p}.settings.${name}`, `${bs.label}: a ${needed} limit is needed here, not ${has} (${v.unit})`);
         }
+      }
+      // A container issued by its material (container-issue v2 on) and never counted back, in its stage or a later one
+      // (the starting masters count the vials back after filling): all of it would count as used in MMS (whole-suite
+      // run, S19). A warning: the author adds the count back or leaves it knowingly.
+      const issued = block.id === 'container-issue' && block.version > 1 ? st.settings.material : undefined;
+      if (issued && typeof issued === 'object' && 'formula' in issued
+        && !doc.stages.slice(si).some((x) => x.steps.some((y) => y.block.id === 'container-return' && sameMaterial(y.settings.material, issued.formula)))) {
+        const m = materialLines(doc).find((l) => l.key === issued.formula)?.name ?? issued.formula;
+        warn(`${p}.settings.material`, `${m} is issued but never counted back: add 'Count back ${m}' at the end of the stage`);
       }
       // A temperature recorded with optional limits left empty is recorded without a check (as TrueBatch Tablets, 17 Nov
       // 2026): a warning, so the author sets them or leaves them knowingly.

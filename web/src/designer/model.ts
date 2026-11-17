@@ -100,10 +100,17 @@ export function fieldChanges(was: Block, now: Block): { added: string[]; removed
   const has = (b: Block, name: string) => b.fields.some((f) => f.name === name);
   return { added: now.fields.filter((f) => !has(was, f.name)).map((f) => f.label), removed: was.fields.filter((f) => !has(now, f.name)).map((f) => f.label) };
 }
-/** A step moved to another version of its block (run 2, G1): the settings of the same names kept, the block's defaults for the new ones. */
-export function toVersion(t: Step, b: Block): Step {
+/**
+ * A step moved to another version of its block (run 2, G1): the settings of the same names kept, the block's defaults
+ * for the new ones. A container issue's old "what" word (vials, stoppers ...) names the master's container when
+ * exactly one container's name or code has it (whole-suite run, S12); else the designer picks it.
+ */
+export function toVersion(t: Step, b: Block, containers: MasterDoc['containers'] = []): Step {
   const kept = Object.fromEntries(Object.entries(t.settings).filter(([k]) => b.settings.some((x) => x.name === k)));
-  return { ...t, block: { id: b.id, version: b.version }, settings: { ...defaultsOf(b), ...kept } };
+  const word = typeof t.settings.what === 'string' ? t.settings.what.toLowerCase().replace(/s$/, '') : '';
+  const hits = word && b.settings.some((x) => x.name === 'material') && !kept.material
+    ? (containers ?? []).filter((c) => `${c.code} ${c.name}`.toLowerCase().includes(word)) : [];
+  return { ...t, block: { id: b.id, version: b.version }, settings: { ...defaultsOf(b), ...kept, ...(hits.length === 1 ? { material: { formula: hits[0]!.key } } : {}) } };
 }
 
 export const newStage = (name: string, taken: string[]): Stage =>

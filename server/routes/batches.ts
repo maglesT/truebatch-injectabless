@@ -9,13 +9,14 @@ import { handProblem, lineOf, MEDIA_FILL, mediaFillTyped, mfgDateProblem, pullBu
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
 import { masterVersion } from './masters.js';
 import { batchRecordDoc, type RecordInput, type Signature } from '../batch-record.js';
+import type { DeviationRead } from '../links.js';
 import { render, sendPdf } from '../pdf.js';
 import { findBlock } from '../../shared/blocks/index.js';
 import { blocking, masterChecks } from '../../shared/master/checks.js';
 import type { MasterDoc } from '../../shared/master/schema.js';
 import { Dec } from '../../shared/templates/index.js';
 import {
-  ACTIONS, BATCH_ACTIONS, CERTIFICATE, LINK_OF, MATERIAL_USE, batchRefusal, filedKey, inLotUnit, issuedLots, returnProblems, returnsOf, usedQuantity, usesOfLot, stepLabel, stepPlace, stepTitle, handFields, isHand, batchView, doneProblems, evaluate, lateItems, openSteps, parseKey, readValue, refusal, review, stepFields, stepNeeds, timers,
+  ACTIONS, BATCH_ACTIONS, CERTIFICATE, DEVIATION_DONE, deviationStatusWords, LINK_OF, MATERIAL_USE, batchRefusal, filedKey, inLotUnit, issuedLots, returnProblems, returnsOf, usedQuantity, usesOfLot, stepLabel, stepPlace, stepTitle, handFields, isHand, batchView, doneProblems, evaluate, lateItems, openSteps, parseKey, readValue, refusal, review, stepFields, stepNeeds, timers,
   trainingCheck, type Training,
   type Action, type BatchAction, type BatchEvent, type DeviationStatus, type LinkState, type Source, type StageView, type Stored, type StepEvent, type StepKey, type StepView, type Timer, type Value,
 } from '../../shared/engine/index.js';
@@ -102,6 +103,21 @@ export async function deviationsRead(app: FastifyInstance, l: LoadedBatch): Prom
   }
   return { read, link: 'ok' };
 }
+
+/**
+ * Packing (whole-suite run, S24): the open deviations of the bulk batch it packs, by its batch number as Deviations
+ * names batches (deviation_v1, as the release review's "deviations naming this batch"); QA releases the packing batch
+ * only once they are closed there. None for a manufacturing batch; null when the link does not answer (as a note's
+ * deviation, release then waits for nothing more).
+ */
+export async function bulkDeviations(app: FastifyInstance, l: LoadedBatch): Promise<{ bulk: string; open: DeviationRead[] } | null> {
+  const bulk = l.doc.pack ? l.events.map((e) => e.payload.values?.bulk).filter((x): x is string => typeof x === 'string').at(-1) : undefined;
+  if (!bulk) return { bulk: '', open: [] };
+  const r = await app.links.deviations.byBatch(bulk);
+  return r.state === 'ok' ? { bulk, open: r.value.filter((d) => !DEVIATION_DONE.includes(d.status)) } : null;
+}
+const bulkOpen = (b: Awaited<ReturnType<typeof bulkDeviations>>) => (b?.open ?? [])
+  .map((d) => `Deviation ${d.number} of the bulk batch ${b!.bulk} is still open in the Deviations system (${deviationStatusWords(d.status)}): it is closed there first`);
 
 // What a signer is shown of a step, and its hash: the signature is refused if the step changed since (PL-05).
 const stepContent = (batchId: number, v: StepView) => ({ batch: batchId, step: v.id, values: v.values, results: v.results });
@@ -504,7 +520,8 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
     // Deviations that name this batch in the Deviations system but no note of the record links.
     const named = await app.links.deviations.byBatch(l.batch.batchNo);
     const unlinked = named.state === 'ok' ? named.value.filter((d) => !r.deviations.some((x) => x.reference === d.number)) : [];
-    return { status: view(l, dv.read).status, ...r, deviationsLink: dv.link, unlinked, signatures,
+    const bulk = await bulkDeviations(app, l);
+    return { status: view(l, dv.read).status, ...r, deviationsLink: dv.link, unlinked, bulkOpen: bulk?.open.length ? bulk : null, signatures,
       corrections: r.corrections.map((c) => ({ ...c, personName: names.get(c.person) ?? null })),
       hand: r.hand.map((h) => ({ ...h, personName: names.get(h.person) ?? null })),
       trainingTyped: r.trainingTyped.map((h) => ({ ...h, personName: names.get(h.person) ?? null })) };
@@ -600,6 +617,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
           if (!l) throw new StepError(404, 'not_found');
           const no = batchRefusal(action, view(l, (await deviationsRead(app, l)).read), user, b.note);
           if (no) throw new StepError(no.status, no.error, no.problems);
+          if (action === 'release') { const p = bulkOpen(await bulkDeviations(app, l)); if (p.length) throw new StepError(409, 'not_ready', p); }
           if (signer && b.contentHash !== batchHash(l)) throw new StepError(409, 'content_changed', ['The batch record changed since you opened it.']);
           if (action === 'qc-approve' && !l.doc.pack && !b.emReview) throw new StepError(400, 'invalid', ['emReview: the EM review of the batch is needed for QC approval']);
           // Terminate: what went back to stores unused of each lot the batch used; material_use_v1 gives it back to MMS.

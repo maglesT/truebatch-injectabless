@@ -86,6 +86,10 @@ the leaflet, to QA release of the packed batch. Built the Logbook way, as TrueBa
   that clearance is not refused because the line is dirty), `step_name` at the end of both, quantities in the material's
   master-data unit (a count in e.g. nos), and `deviation_note_v1` with TrueBatch Injectables' columns (source_ref
   `truebatch_injectables_packing:note:<id>`), so the Deviations system files packing's notes too (late periodic checks).
+  **The bulk batch's open deviations** (whole-suite run, S24): QA's review lists the deviations the Deviations system
+  still has open for the bulk batch packed (`deviation_v1` by its batch number, as the review's "deviations naming this
+  batch"; `server/routes/batches.ts` bulkDeviations), and release waits until they are closed there. Without the link,
+  release waits for nothing more (as a note's deviation).
   `0104` (owner, 16 Nov 2026): `material_use_v1.quantity` is what the batch used of the lot: the quantity issued less
   what the reconciliation of the same material returned to stores uncoded, once that reconciliation is signed done
   (before it, the quantity issued). Destroyed and batch-coded material stays used. MMS takes the quantity off the lot,

@@ -90,6 +90,7 @@ beforeAll(async () => {
     author: ['truebatch_injectables.master.author'], checker: ['truebatch_injectables.master.check'], quality: ['truebatch_injectables.master.approve'], quality2: ['truebatch_injectables.master.approve'],
     issuer: ['truebatch_injectables.batch.issue'], asha: ['truebatch_injectables.batch.operate', 'truebatch_injectables.batch.check'], ravi: ['truebatch_injectables.batch.check'],
     meera: ['truebatch_injectables.qa.release'], mona: ['truebatch_injectables.qa.release', 'truebatch_injectables.batch.operate'],
+    sam: ['truebatch_injectables.batch.supervise'], quinn: ['truebatch_injectables.qc.approve'],
   } as const;
   for (const [name, perms] of Object.entries(people)) {
     ids[name] = await seedUser(t.owner, name, [...perms]);
@@ -576,7 +577,7 @@ describe('the views TrueBatch publishes', () => {
     expect(facts.length).toBe(batches.length);
     const notes = await t.owner.unsafe(`select source_ref, step, note, reference, status from ${r}.deviation_note_v1 where reference is not null order by note_id`);
     expect(notes.map((n) => [n.reference, n.status])).toEqual([['DEV-26-0001', 'open'], ['DEV-PAPER-7', 'closed']]);
-    expect(notes[0]!.source_ref).toMatch(/^truebatch:note:\d+$/);
+    expect(notes[0]!.source_ref).toMatch(/^truebatch_injectables:note:\d+$/);
     // A deviation filed from a note is titled with where it was written, in words, not the master's keys.
     expect(notes[0]!.step).toBe('Stage 0 › Check a value against limits: pH');
   });
@@ -770,9 +771,10 @@ describe('the views TrueBatch publishes', () => {
     await e(b1, 0, 1, 0, 'started', { where: 'Binder solution › Weigh a material: Povidone K30' }, '2026-11-15 08:00+00');
     await e(b1, 0, 1, 0, 'value', { values: { room, balance: bal } }, '2026-11-15 08:01+00');
     await e(b1, 0, 1, 0, 'done', {}, '2026-11-15 08:05+00');
-    // The balance the weighing names is no use (shared by the batches weighing on it); the room is.
+    // The balance the weighing names is no use (shared by the batches weighing on it); the room is, from the time it was
+    // recorded on the step, not the step's start (whole-suite run, S17: a room refused until its cleaning was done).
     expect(await rows('EQ-USE-1')).toEqual([
-      { equipment_code: 'RM-104', step: 'binder/weigh-pvp', step_name: 'Binder solution › Weigh a material: Povidone K30', started_at: new Date('2026-11-15T08:00:00Z'), ended_at: null }]);
+      { equipment_code: 'RM-104', step: 'binder/weigh-pvp', step_name: 'Binder solution › Weigh a material: Povidone K30', started_at: new Date('2026-11-15T08:01:00Z'), ended_at: null }]);
     // The binder preparation closes: the granulation, still to run, may run in RM-104 (its area), so the room stays in use by the
     // batch, not dirty.
     await closed(b1, 0, '2026-11-15 08:30+00');
@@ -786,7 +788,7 @@ describe('the views TrueBatch publishes', () => {
     // Its step is the one that named it last (17 Nov 2026 run, F41): the Logbook's "last used by … (stage › step)".
     const last = `${doc.stages[1]!.key}/${doc.stages[1]!.steps[1]!.key}`;
     expect(await rows('EQ-USE-1')).toMatchObject([{ equipment_code: 'RM-104', step: last, step_name: `${doc.stages[1]!.name} › ${doc.stages[1]!.steps[1]!.key}`,
-      started_at: new Date('2026-11-15T08:00:00Z'), ended_at: null }]);
+      started_at: new Date('2026-11-15T08:01:00Z'), ended_at: null }]);
     // Dirty after the last stage that names it.
     await closed(b1, 1, '2026-11-15 10:00+00');
     expect(await ends('EQ-USE-1')).toEqual([['RM-104', new Date('2026-11-15T10:00:00Z')]]);
@@ -794,7 +796,7 @@ describe('the views TrueBatch publishes', () => {
     // Another batch in the same room is another use; rejected before its stages closed, its use ends then.
     await e(b2, 0, 1, 0, 'started', {}, '2026-11-15 11:00+00');
     await e(b2, 0, 1, 0, 'value', { values: { room, balance: bal } }, '2026-11-15 11:01+00');
-    expect(await rows('EQ-USE-2')).toMatchObject([{ equipment_code: 'RM-104', started_at: new Date('2026-11-15T11:00:00Z'), ended_at: null }]);
+    expect(await rows('EQ-USE-2')).toMatchObject([{ equipment_code: 'RM-104', started_at: new Date('2026-11-15T11:01:00Z'), ended_at: null }]);
     expect(await ends('EQ-USE-1')).toEqual([['RM-104', new Date('2026-11-15T10:00:00Z')]]);
     await t.owner`insert into batch_events (batch_id, kind, payload, person_id, at) values (${b2}, 'rejected', '{}', ${u!.id}, '2026-11-15 12:00+00')`;
     expect(await ends('EQ-USE-2')).toEqual([['RM-104', new Date('2026-11-15T12:00:00Z')]]);
@@ -952,6 +954,34 @@ describe('gap 6: the deviation number Deviations gave a note written without one
     expect(pdf).toContain('OPEN: waiting for classification in the Deviations system');
     await t.owner.unsafe(`update ${S.dv}.deviation_v1 set status = 'closed', closed_at = now() where number = 'DEV-2026-0040'`);
     expect((await devs()).deviations).toMatchObject([{ reference: 'DEV-2026-0040', open: false, status: 'closed' }]);
+  });
+
+  it('whole-suite run, S14: QA release through the API is refused while the deviation Deviations filed from a note of this batch is open; closed there, it goes through', async () => {
+    const c = await issue(small([{ steps: [{}, yieldStep] }]));
+    await act('asha', c.id, '0.1.0.1', 'start');
+    await record(c.id, '0.1.0.1', { reading: '6.0' });
+    expect((await sign('asha', c.id, '0.1.0.1', 'done')).statusCode).toBe(200);
+    // The note written on the step, without a number (as TI260014's refused room).
+    expect((await act('asha', c.id, '0.1.0.1', 'note', { text: 'Room refused at line clearance' })).statusCode).toBe(200);
+    await act('asha', c.id, '0.1.1.1', 'start');
+    await record(c.id, '0.1.1.1', { output: '0.099', samples: '0.000', rejects: '0.001' });
+    expect((await sign('asha', c.id, '0.1.1.1', 'done')).statusCode).toBe(200);
+    expect((await sign('ravi', c.id, '0.1.1.1', 'check')).statusCode).toBe(200);
+    const batchSign = async (who: string, action: string, extra: object = {}) => as(who, 'POST', `/api/batches/${c.id}/${action}`,
+      { proof: proofFor(who), contentHash: ((await as('meera', 'GET', `/api/batches/${c.id}`)).json() as { batch: { contentHash: string } }).batch.contentHash, ...extra });
+    expect((await batchSign('sam', 'production-approve')).statusCode).toBe(200);
+    expect((await batchSign('quinn', 'qc-approve', { reportNo: 'QC-26-0045', emReview: 'EM-26-0045: no excursion' })).statusCode).toBe(200);
+    // Deviations files it from the note (its source_ref names the note): open, so release waits.
+    const [n] = await t.owner<{ id: number }[]>`select id::int from step_events where batch_id = ${c.id} and kind = 'note'`;
+    await t.owner.unsafe(`insert into ${S.dv}.deviation_v1 (number, status, batch, batch_norm, title, source_ref) values
+      ('DEV-2026-0045', 'classification', '${c.batchNo}', '${c.batchNo.toLowerCase()}', 'Room refused', 'truebatch_injectables:note:${n!.id}')`);
+    const held = await batchSign('meera', 'release');
+    expect(held.statusCode).toBe(409);
+    expect(held.json()).toMatchObject({ problems: ['Deviation DEV-2026-0045 (Stage 0 › Check a value against limits: pH) is still open in the Deviations system (waiting for classification): it is closed there first'] });
+    // The view names the note by the same ref Deviations filed it under (S22).
+    expect(await t.owner.unsafe(`select source_ref from ${t.schema}_report.deviation_note_v1 where note_id = $1`, [n!.id])).toEqual([{ source_ref: `truebatch_injectables:note:${n!.id}` }]);
+    await t.owner.unsafe(`update ${S.dv}.deviation_v1 set status = 'closed', closed_at = now() where number = 'DEV-2026-0045'`);
+    expect((await batchSign('meera', 'release')).statusCode).toBe(200);
   });
 
   it('release is refused while the filed deviation is open (the server passes it in under the note)', () => {

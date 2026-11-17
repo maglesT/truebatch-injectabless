@@ -115,7 +115,7 @@ describe('master designer', () => {
       settings: { expected: { header: 'units' }, enoughLimit: { low: '102.0', unit: '%' }, unit: 'units' } });
     expect(lyo[1]!.steps.find((t) => t.key === 'issue-vials')!.settings.material).toBeUndefined();
     const doc = masterSchema.parse({ header: header('aseptic'), formula: [], stages: lyo });
-    expect(masterChecks(doc).filter((p) => p.message === 'Container or closure is not set').map((p) => p.path)).toHaveLength(6);
+    expect(masterChecks(doc).filter((p) => p.message === 'Container or closure is not set: add the containers on the Formula screen first').map((p) => p.path)).toHaveLength(6);
     expect(lyo.find((s) => s.startsAfter)).toMatchObject({ kind: 'preparation', startsAfter: 'filling/fill', roomTypes: [] });
     // The bulk yield on the batch mass by the density (engine change 1); the units from the header.
     expect(lyo[0]!.steps.at(-1)!.settings.theoretical).toEqual({ header: 'batchMass' });
@@ -299,6 +299,33 @@ describe('master designer', () => {
     expect(v2).toMatchObject({ name: 'Issue the seals', block: { id: 'container-issue', version: 3 }, settings: { expected: { header: 'units' }, enoughLimit: { low: '102.0', unit: '%' }, unit: 'units' } });
     expect(v2.settings.what).toBeUndefined();
     expect(fieldChanges(findBlock({ id: 'container-issue', version: 1 })!, latestBlock('container-issue')!)).toEqual({ added: [], removed: ['Count returned to stores at the end'] });
+  });
+
+  it('whole-suite run, S12: the update names the container its old "what" word names, when exactly one of the master\'s containers has it', () => {
+    const v1 = { ...stepFrom(findBlock({ id: 'container-issue', version: 1 })!, []), name: 'Issue the vials', settings: { what: 'vials', expected: { header: 'units' as const } } };
+    const vial = { key: 'vial', materialItemId: 'm1', code: 'PM-VIAL5', name: 'Glass vial 5 mL' }, stopper = { key: 'stp', materialItemId: 'm2', code: 'PM-STP20', name: 'Rubber stopper 20 mm' };
+    expect(toVersion(v1, latestBlock('container-issue')!, [vial, stopper]).settings.material).toEqual({ formula: 'vial' });
+    // None, or two that have the word: the designer picks it (the master check says it is not set).
+    expect(toVersion(v1, latestBlock('container-issue')!, [stopper]).settings.material).toBeUndefined();
+    expect(toVersion(v1, latestBlock('container-issue')!, [vial, { ...vial, key: 'vial2', code: 'PM-VIAL10', name: 'Glass vial 10 mL' }]).settings.material).toBeUndefined();
+    expect(toVersion(v1, latestBlock('container-issue')!).settings.material).toBeUndefined();
+  });
+
+  it('whole-suite run, S12 and S19: no containers on the Formula screen says where to add them; a container issued and never counted back is a warning', () => {
+    const h = { productItemId: 'p', productCode: 'P', productName: 'Examplol injection', batchSize: '100', batchUnit: 'L' as const, densityGPerMl: '1.0',
+      fillVolumeMl: '2.0', fillExcessMl: '0.1', route: 'aseptic' as const };
+    const doc = masterSchema.parse({ header: h, formula: [], stages: skeletonStages('lyo-aseptic', h) });
+    const messages = (d: typeof doc) => masterChecks(d).map((p) => p.message);
+    expect(messages(doc)).toContain('Container or closure is not set: add the containers on the Formula screen first');
+    // The starting master counts every container back (after filling): no warning.
+    const material = (k: string) => ({ material: { formula: k } });
+    const named = { ...doc, containers: [{ key: 'vial', materialItemId: 'm1', code: 'PM-VIAL5', name: 'Glass vial 5 mL' }],
+      stages: doc.stages.map((st) => ({ ...st, steps: st.steps.map((t) => (t.block.id.startsWith('container-') && (t.name ?? '').includes('vial') ? { ...t, settings: { ...t.settings, ...material('vial') } } : t)) })) };
+    expect(messages(named).filter((m) => m.includes('never counted back'))).toEqual([]);
+    // Without its count back (a designer update of a version 1 issue): a warning, not an error.
+    const noBack = { ...named, stages: named.stages.map((st) => ({ ...st, steps: st.steps.filter((t) => !(t.block.id === 'container-return' && (t.name ?? '').includes('vial'))) })) };
+    expect(masterChecks(noBack).filter((p) => p.message.includes('never counted back')).map((p) => [p.level, p.message]))
+      .toEqual([['warning', "Glass vial 5 mL is issued but never counted back: add 'Count back Glass vial 5 mL' at the end of the stage"]]);
   });
 
   it('calculation checks: the author answers a warning; the answer is kept in the master and shown in the review and changes views', () => {

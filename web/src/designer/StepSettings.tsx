@@ -45,7 +45,7 @@ export function StepSettings({ doc, si, ti, onChange }: { doc: MasterDoc; si: nu
         const c = fieldChanges(block, newer);
         return <p className="notice small" role="status">A newer version of this block is available (version {newer.version}
           {c.added.length ? `: it also records ${c.added.join(', ')}` : ''}{c.removed.length ? `${c.added.length ? ';' : ':'} it no longer records ${c.removed.join(', ')}` : ''}).{' '}
-          <button type="button" className="link dark" onClick={() => onChange(toVersion(step, newer))}>Update to version {newer.version}</button> (the settings of the same names are kept)</p>;
+          <button type="button" className="link dark" onClick={() => onChange(toVersion(step, newer, doc.containers))}>Update to version {newer.version}</button> (the settings of the same names are kept)</p>;
       })()}
       <label>Name of the step (as people read it)<input value={step.name ?? ''} placeholder={stepTitle(doc, { ...step, name: undefined })}
         onChange={(e) => { const { name: _, ...rest } = step; onChange(e.target.value ? { ...rest, name: e.target.value } : rest); }} /></label>
