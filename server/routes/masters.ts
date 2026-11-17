@@ -9,7 +9,7 @@ import { BLOCKS } from '../../shared/blocks/index.js';
 import { blocking, masterChecks } from '../../shared/master/checks.js';
 import { masterSchema, type MasterDoc, type MasterState } from '../../shared/master/schema.js';
 import { isHand, type Source } from '../../shared/engine/links.js';
-import { CHANGE_STEPS, approvedChange, namesProduct } from '../links.js';
+import { CHANGE_STEPS, approvedChange, namesProduct, titleNames } from '../links.js';
 
 // Master versions: the model, the table, the draft routes, and the review and approval workflow (TI-02). A version
 // leaves draft only through that workflow (or, in tests, the database owner).
@@ -255,14 +255,15 @@ function reviewRoutes(app: FastifyInstance, sql: Sql) {
     };
   });
 
-  // QA-approved change controls in QMS, for the approval's pick list (pull, don't type).
-  // Only those that name the version's product (or name no product: offered with a warning).
+  // QA-approved change controls in QMS, for the approval's pick list (pull, don't type): those whose products or title
+  // name the version's product (run 2, G14); when none does, those that name no product (offered with a warning).
   app.get<{ Querystring: { version?: string } }>('/api/change-controls', reviewer, async (req) => {
     const id = parseId(String(req.query.version ?? ''));
     const v = id === null ? undefined : await masterVersion(sql, id);
     const r = await app.links.qms.approved();
-    const changes = r.state === 'ok' ? r.value.map((c) => ({ ...c, names: v ? namesProduct(c, v.doc.header) : 'yes' })).filter((c) => c.names !== 'no') : [];
-    return { link: r.state, changes };
+    const all = r.state === 'ok' ? r.value.map((c) => ({ ...c, names: v ? namesProduct(c, v.doc.header) : 'yes' })).filter((c) => c.names !== 'no') : [];
+    const ours = all.filter((c) => c.names === 'yes' || (v && titleNames(c, v.doc.header.productCode)));
+    return { link: r.state, changes: ours.length ? ours : all };
   });
 
   app.post<{ Params: { id: string } }>('/api/master-versions/:id/comments', reviewer, async (req, reply) => {

@@ -92,6 +92,17 @@ export function stepFrom(block: Block, taken: string[]): Step {
     ...(block.periodic ? { everyMinutes: Math.min(block.periodic.maxMinutes, 30) } : {}) };
 }
 
+/** What a newer version of a block records that the older does not, and what it no longer records (field labels). */
+export function fieldChanges(was: Block, now: Block): { added: string[]; removed: string[] } {
+  const has = (b: Block, name: string) => b.fields.some((f) => f.name === name);
+  return { added: now.fields.filter((f) => !has(was, f.name)).map((f) => f.label), removed: was.fields.filter((f) => !has(now, f.name)).map((f) => f.label) };
+}
+/** A step moved to another version of its block (run 2, G1): the settings of the same names kept, the block's defaults for the new ones. */
+export function toVersion(t: Step, b: Block): Step {
+  const kept = Object.fromEntries(Object.entries(t.settings).filter(([k]) => b.settings.some((x) => x.name === k)));
+  return { ...t, block: { id: b.id, version: b.version }, settings: { ...DEFAULT_SETTINGS[b.id], ...kept } };
+}
+
 export const newStage = (name: string, taken: string[]): Stage =>
   ({ key: newKey(name, taken), name, kind: 'normal', roomTypes: [], machineTypes: [], role: '', uses: [], steps: [] });
 

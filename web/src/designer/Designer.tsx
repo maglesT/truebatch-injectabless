@@ -7,7 +7,7 @@ import { blocking, masterChecks } from '../../../shared/master/checks.js';
 import { placeChecks } from '../../../shared/master/places.js';
 import { masterSchema, type MasterDoc } from '../../../shared/master/schema.js';
 import { CheckPanel, type OnAnswer } from './CheckPanel.js';
-import { FormulaTable } from './Formula.js';
+import { Containers, FormulaTable } from './Formula.js';
 import { HeaderFields } from './Header.js';
 import { answerDoc, placeOf, type Place } from './model.js';
 import { Preview } from './Preview.js';
@@ -62,7 +62,9 @@ export function Designer({ me, versionId, onBack, onOpen }: { me: Me; versionId:
     try { await saveVersion(versionId, p.data); setSave(latest.current === d ? { kind: 'saved' } : { kind: 'pending' }); }
     catch (e) { setSave({ kind: 'error', message: e instanceof ApiError ? e.message || e.code : String(e) }); }
   };
-  const change = (next: MasterDoc) => {
+  // A change, or a change worked out from the latest document (a move clicked twice before the list is drawn again).
+  const change = (to: MasterDoc | ((d: MasterDoc) => MasterDoc)) => {
+    const next = typeof to === 'function' ? to(latest.current ?? doc!) : to;
     setDoc(next); latest.current = next;
     if (!editable) return;
     setSave({ kind: 'pending' });
@@ -106,6 +108,7 @@ export function Designer({ me, versionId, onBack, onOpen }: { me: Me; versionId:
               : <HeaderFields header={doc.header} products={md.products} rooms={md.rooms} onChange={(header) => change({ ...doc, header })} />}</div>}
             {tab === 'formula' && doc.pack && <PackMaterials doc={doc} md={md} onChange={change} />}
             {tab === 'formula' && !doc.pack && <FormulaTable doc={doc} onChange={change} md={md} masters={others} selected={place.line} onSelect={(line) => setPlace({ tab: 'formula', line })} problems={problems ?? []} onAnswer={onAnswer} />}
+            {tab === 'formula' && !doc.pack && <Containers doc={doc} md={md} onChange={change} />}
             {tab === 'process' && <Process doc={doc} onChange={change} md={md} place={place} onPlace={setPlace} editable={!!editable} />}
           </fieldset>
           {tab === 'preview' && <Preview doc={doc} />}

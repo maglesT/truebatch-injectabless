@@ -13,7 +13,7 @@ import { sieve } from './sieve.js';
 import { stageYield } from './stage-yield.js';
 import { subBatchCombine } from './sub-batch-combine.js';
 import { weigh } from './weigh.js';
-import { containerIssue } from './container-issue.js';
+import { containerIssue, containerIssue2, containerReturn } from './container-issue.js';
 import { bulkIssue } from './bulk-issue.js';
 import { cartonCheck } from './carton-check.js';
 import { codingCheck } from './coding-check.js';
@@ -39,7 +39,7 @@ export const BLOCKS: readonly Block[] = [
   weigh, charge, mix, check, lineClearance, subBatchCombine, qaSample, stageYield, blendUniformity, sieve, dryConstant,
   ...Object.values(common),
   ...Object.values(special),
-  containerIssue,
+  containerIssue, containerIssue2, containerReturn,
   // TrueBatch Injectables Packing, in the order of a packing record (forming and leak test: a blister pack only).
   bulkIssue, packMaterialIssue, packClearance, lineSetup, visionChallenge, serialReceived, codingCheck, formingCheck, leakTest, onlineInspection,
   cartonCheck, serialSample, finishedGoods, printedReconciliation, serialReconciliation, destruction, packClearanceAfter,

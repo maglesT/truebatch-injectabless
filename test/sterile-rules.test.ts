@@ -114,6 +114,18 @@ describe('the sterility assurance summary at release', () => {
     expect(summaryOf(row({ done: goingOn, defectCheck: { ...pass, check: { pass: false, level: 'fail', shown: 'Defective units: 2 units: OUT OF LIMITS' } } }, 'done'), block).bad).toBe(true);
   });
 
+  it('run 2 G8: the summary names the isolator or RABS and the capping machine used, with their Logbook status as the step recorded it', async () => {
+    const { summaryOf } = await import('../web/src/release/SterileSummary.js');
+    const { latestBlock } = await import('../shared/blocks/index.js');
+    const iso = { itemId: 'i', code: 'EQS-ISO-01', name: 'Filling isolator', version: 1, type: 'Isolator', room: 'RM-207', area: 'Aseptic filling' };
+    const row = (values: object, source: object) => ({ key: { stage: 0, sub: 1, step: 0, round: 1 }, id: '0.1.0.1', results: {}, values, source }) as never;
+    expect(summaryOf(row({ isolator: iso, people: 'yes' }, { isolator: { from: 'logbook', asOf: null, shown: 'EQS-ISO-01: clean' } }), latestBlock('aseptic-ready')).said[0])
+      .toBe('Isolator or RABS: EQS-ISO-01 · Filling isolator (Logbook at use: EQS-ISO-01: clean)');
+    const cap = { ...iso, code: 'EQS-CAP-01', name: 'Vial capping machine', type: 'Capping machine' };
+    expect(summaryOf(row({ capper: cap }, { capper: { from: 'hand', link: 'logbook', state: 'down' } }), latestBlock('seal-check')).said[0])
+      .toBe('Capping machine: EQS-CAP-01 · Vial capping machine (Logbook down at use: its status answered by hand)');
+  });
+
   it('a short duration reads in minutes or seconds, not as a long raw figure (17 Nov 2026 run, F23)', async () => {
     const { shortTime } = await import('../web/src/release/SterileSummary.js');
     expect(shortTime('Settle plate exposure: 0.0002777… h rounded to 0 decimals (as the limit is written) = 0 h'))

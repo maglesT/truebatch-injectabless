@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { connect, type Sql } from '../server/db.js';
 import { links, namesProduct, type Links } from '../server/links.js';
 import { findBlock } from '../shared/blocks/index.js';
+import { masterSchema } from '../shared/master/schema.js';
 import { batchRefusal, batchView, fieldLabel, handFields, type BatchEvent } from '../shared/engine/index.js';
 import { call, freshApp, handLabels, login, proofFor, seedUser, TEST_DATABASE_URL, type TestApp } from './helpers.js';
 import { at, ev, small, tablet, placed } from './engine-fixture.js';
@@ -217,6 +218,24 @@ describe('TI-11 Logbook: equipment and rooms fit for use', () => {
     expect((await stepOf(c.id, '0.1.0.1')).source.isolator).toMatchObject({ from: 'logbook', shown: 'RAB-01: clean' });
   });
 
+  it('TI-11 run 2 G6: the isolator or RABS (as any machine) stands in the room this stage\'s line clearance names, not in another room of its area', async () => {
+    t.master.rooms_.push({ ...item('rm-a1', 'ASF-01', 'Aseptic filling room (vials)'), area: 'aseptic filling', grade: 'B' },
+      { ...item('rm-a2', 'ASF-02', 'Aseptic filling room (syringes)'), area: 'aseptic filling', grade: 'B' });
+    t.master.equipment_.push({ ...item('eq-iso2', 'ISO-02', 'Filling isolator'), kind: 'equipment', type: 'Isolator', room: 'ASF-01' },
+      { ...item('eq-rab2', 'RAB-02', 'RABS over the syringe line'), kind: 'equipment', type: 'RABS', room: 'ASF-02' });
+    await t.owner.unsafe(`insert into ${S.lb}.equipment_status_v1 (master_id, code, kind, state, fit_for_use, blockers, warnings, checked_at, cleaned_at, cleaned_by) values
+      ('rm-a1', 'ASF-01', 'area', 'clean', true, '{}', '{}', now(), now(), 'CLEANER ONE'), ('eq-iso2', 'ISO-02', 'equipment', 'clean', true, '{}', '{}', now(), null, null),
+      ('eq-rab2', 'RAB-02', 'equipment', 'clean', true, '{}', '{}', now(), null, null)`);
+    const c = await issue(small([{ roomTypes: ['aseptic filling'], steps: [{ block: { id: 'line-clearance', version: 1 }, checker: true, settings: {} },
+      { block: { id: 'aseptic-ready', version: 3 }, checker: false, settings: {} }, yieldStep] }]));
+    await act('asha', c.id, '0.1.0.1', 'start');
+    expect((await record(c.id, '0.1.0.1', { room: 'rm-a1', previousRemoved: 'yes', noOther: 'yes' })).statusCode).toBe(200);
+    expect((await sign('asha', c.id, '0.1.0.1', 'done')).statusCode).toBe(200);
+    await act('asha', c.id, '0.1.1.1', 'start');
+    expect(await problems(record(c.id, '0.1.1.1', { isolator: 'eq-rab2' }))).toEqual(['RAB-02 stands in ASF-02, not in ASF-01, where this stage\'s line clearance was done']);
+    expect((await record(c.id, '0.1.1.1', { isolator: 'eq-iso2' })).statusCode).toBe(200);
+  });
+
   it('TI-11 a machine fit for use is pulled with its status: no label questions, no extra check', async () => {
     expect((await record(b.id, '0.1.1.1', { machine: 'eq-str', speed: '300' })).statusCode).toBe(200);
     const s = await stepOf(b.id, '0.1.1.1');
@@ -272,6 +291,14 @@ describe('TI-12 MMS: only released, in-date lots of the material; certificate va
     ['API-ASIS', "MMS gives the assay of lot API-ASIS on the as is basis; the master's line is on the dried basis."],
   ])('TI-12 lot %s is refused: %s', async (lot, why) => {
     expect(await problems(record(b.id, '0.1.0.1', { lot }))).toContain(why);
+  });
+
+  it('TI-12 run 2 G9: a container issue (version 2) names its container from master data: another material\'s lot is refused', async () => {
+    const doc = small([{ steps: [{ block: { id: 'container-issue', version: 2 }, checker: true, settings: { material: { formula: 'vial' }, expected: { header: 'units' } } }, yieldStep] }]);
+    const c = await issue({ ...doc, containers: [{ key: 'vial', materialItemId: 'mat-lac', code: 'MAT-002', name: 'Glass vial 3 mL' }] });
+    await act('asha', c.id, '0.1.0.1', 'start');
+    expect(await problems(record(c.id, '0.1.0.1', { lot: 'API-OK' }))).toContain('Lot API-OK is MAT-001 in MMS, not MAT-002 Glass vial 3 mL.');
+    expect((await record(c.id, '0.1.0.1', { lot: 'LAC-1' })).statusCode).toBe(200);
   });
 
   it('TI-13 a released lot brings its assay and LOD from MMS (pull only): they cannot be typed', async () => {
@@ -466,8 +493,17 @@ describe('TI-02 QMS: a new master version needs a QA-approved change control', (
 
   it('TI-02 only a change control naming the master\'s product is offered and accepted; one naming no product is taken with a warning', async () => {
     const { id, review } = await draft();
-    const picks = (await as('quality', 'GET', `/api/change-controls?version=${id}`)).json() as { changes: { number: string; names: string }[] };
-    expect(picks.changes.map((c) => [c.number, c.names])).toEqual([['CC-2026-0005', 'none'], ['CC-2026-0001', 'yes']]);
+    const picks = async () => ((await as('quality', 'GET', `/api/change-controls?version=${id}`)).json() as { changes: { number: string; names: string }[] }).changes.map((c) => [c.number, c.names]);
+    // Run 2, G14: those that name the product (by QMS's products, or the code in the title); when none does, those that
+    // name no product. Another product whose code starts with this one's (a pack of it) does not name it.
+    expect(await picks()).toEqual([['CC-2026-0001', 'yes']]);
+    const set = (products: string | null, title: string) => t.owner.unsafe(`update ${S.qms}.change_v1 set products = $1, title = $2 where number = 'CC-2026-0001'`, [products, title]);
+    try {
+      await set('PRD-001-C5 carton of 5', 'New supplier of lactose');
+      expect(await picks()).toEqual([['CC-2026-0005', 'none']]);
+      await set(null, 'PRD-001: new supplier of lactose');
+      expect(await picks()).toEqual([['CC-2026-0001', 'none']]);
+    } finally { await set('PRD-001', 'New supplier of lactose'); }
     expect((await review('quality', 'approve', { changeControl: 'CC-2026-0004' })).json()).toMatchObject({ error: 'other_product',
       message: 'CC-2026-0004 is for FG-PCM500 Paracetamol 500 mg tablets in QMS, not for PRD-001 Examplol 100 mg film-coated tablets: pick the change control of this product.' });
     expect((await review('quality', 'approve', { changeControl: 'CC-2026-0005' })).statusCode).toBe(200);
@@ -475,7 +511,7 @@ describe('TI-02 QMS: a new master version needs a QA-approved change control', (
     expect(e!.payload.source.changeControl.shown).toMatch(/QMS names no product: QA checked that it covers PRD-001$/);
     const c = (products: string | null) => ({ number: 'CC', status: 'closed', title: null, qaApprovedAt: 'x', products });
     const prd = { productCode: 'FG-ATV20', productName: 'Atorvastatin calcium tablets 20 mg' };
-    expect([c('fg-atv20, FG-ATV40'), c('ATORVASTATIN CALCIUM TABLETS 20 MG'), c('FG-ATV200'), c(' '), c(null)].map((x) => namesProduct(x, prd))).toEqual(['yes', 'yes', 'no', 'none', 'none']);
+    expect([c('fg-atv20, FG-ATV40'), c('ATORVASTATIN CALCIUM TABLETS 20 MG'), c('FG-ATV200'), c('FG-ATV20-C5 carton'), c(' '), c(null)].map((x) => namesProduct(x, prd))).toEqual(['yes', 'yes', 'no', 'no', 'none', 'none']);
   });
 
   it('TI-02 QMS down: the number is typed, and another person makes the version effective', async () => {
@@ -613,6 +649,33 @@ describe('the views TrueBatch publishes', () => {
     // At the end, the count returned unused (a correction of the signed step): MMS gets the rest back.
     await e(0, 'corrected', { values: { returned: n('150') }, results: {}, reason: 'Count returned at the end' }, '2026-11-17 18:00+00');
     expect(await rows()).toMatchObject([{ lot_number: 'P26-0012', quantity: '9650', unit: 'units', status: 'corrected' }]);
+  });
+
+  it('run 2 G9 G10 material_use_v1: a version 2 issue names its material (code and id); its count back, once signed, is taken off; a version 1 issue as before', async () => {
+    const [u] = await t.owner<{ id: number }[]>`select id::int from users order by id limit 1`;
+    const material = { formula: 'vial' };
+    const doc = { ...small([{ steps: [{ block: { id: 'container-issue', version: 2 }, checker: true, settings: { material, expected: { header: 'units' } } },
+      { block: { id: 'container-return', version: 1 }, checker: true, settings: { material } }] }]),
+      containers: [{ key: 'vial', materialItemId: 'mat-vial', code: 'PM-VIAL5', name: 'Glass vial 3 mL' }] };
+    const [v] = await t.owner<{ id: number }[]>`insert into master_versions (version_no, doc, created_by) values (1, ${t.owner.json(doc as never)}, ${u!.id}) returning id::int`;
+    const [b] = await t.owner<{ id: number }[]>`insert into batches (batch_no, master_version_id, issued_by) values ('MAT-USE-4', ${v!.id}, ${u!.id}) returning id::int`;
+    const e = (step: number, kind: string, payload: object, at: string) => t.owner`insert into step_events (batch_id, stage, sub, step, round, kind, payload, person_id, at)
+      values (${b!.id}, 0, 1, ${step}, 1, ${kind}, ${t.owner.json(payload as never)}, ${u!.id}, ${at})`;
+    const n = (value: string) => ({ value, unit: 'units' });
+    await e(0, 'value', { values: { lot: 'P26-0012', issued: n('16000') }, results: {} }, '2026-11-17 08:05+00');
+    await e(0, 'done', {}, '2026-11-17 08:06+00');
+    const rows = async () => t.owner.unsafe(`select lot_number, material_code, material_master_id, quantity::text, unit, data_as_of from ${rep()}.material_use_v1 where batch_number = 'MAT-USE-4'`);
+    expect(await rows()).toEqual([{ lot_number: 'P26-0012', material_code: 'PM-VIAL5', material_master_id: 'mat-vial', quantity: '16000', unit: 'units', data_as_of: new Date('2026-11-17T08:06:00Z') }]);
+    // The count back recorded, not signed yet: still all issued; signed: the rest goes back to the lot's stock in MMS.
+    await e(1, 'value', { values: { returned: n('375') }, results: {} }, '2026-11-17 18:00+00');
+    expect(await rows()).toMatchObject([{ quantity: '16000' }]);
+    await e(1, 'done', {}, '2026-11-17 18:01+00');
+    expect(await rows()).toEqual([{ lot_number: 'P26-0012', material_code: 'PM-VIAL5', material_master_id: 'mat-vial', quantity: '15625', unit: 'units', data_as_of: new Date('2026-11-17T18:01:00Z') }]);
+    // The app counts the same (shared/engine/stock.ts).
+    const { openSteps, materialUses } = await import('../shared/engine/index.js');
+    const events = (await t.owner<{ stage: number; sub: number; step: number; round: number; kind: string; payload: object; at: Date; id: number }[]>`
+      select id::int, stage, sub, step, round, kind, payload, at from step_events where batch_id = ${b!.id} order by id`).map((x) => ({ ...x, person: u!.id }));
+    expect(materialUses(masterSchema.parse(doc), openSteps(masterSchema.parse(doc), events as never, new Date('2026-11-18T00:00:00Z')).steps).map((x) => x.quantity)).toEqual([n('15625')]);
   });
 
   it('equipment_use_v1: one use per batch and machine or room, open across the stages of the batch that name it or may run in its room; another batch, another use; a balance, none', async () => {

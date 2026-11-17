@@ -37,6 +37,15 @@ export const asepticReady2: Block = {
   fields: [{ name: 'isolator', label: 'Isolator or RABS', kind: 'machine', types: ['isolator', 'rabs'] }, ...asepticReady.fields],
 };
 
+// 24, version 3 (owner, 17 Nov 2026, run 2 finding G7): no typed "glove integrity test passed": the Logbook decides the
+// glove test (and the decontamination) through the isolator or RABS field. The line's media fill stays typed.
+export const asepticReady3: Block = {
+  ...asepticReady2, version: 3,
+  instruction: 'Before aseptic work: the isolator or RABS fit for use in the Logbook (its glove test and decontamination), people in grade A/B qualified, the line\'s media fill in date, sterilised items within their use-by, grade A airflow and pressure as specified, and the aseptic assembly done.',
+  fields: asepticReady2.fields.filter((f) => f.name !== 'gloves'),
+  calcs: [observe('ready', 'Ready for aseptic work', ['people', 'airflow', 'assembly'])],
+};
+
 // 25. Isolator or RABS decontamination (VHP): the cycle, the H2O2 at the end of aeration, indicators; its use-by.
 export const isolatorDecon: Block = {
   id: 'isolator-decon', version: 1, name: 'Isolator or RABS decontamination', checker: true,
