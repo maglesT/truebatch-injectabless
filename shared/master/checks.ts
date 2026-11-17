@@ -180,6 +180,22 @@ function formulaChecks(doc: MasterDoc, out: Problem[], error: (path: string, mes
   formulaSums(doc, error);
   calculationChecks(doc, out);
   sterileChecks(doc, (path, key, message, options, needsReason = false) => askOf(doc, out, path, key, message, options, needsReason), error);
+  // Owner, 17 Nov 2026: a fill's mean fill-weight limits contain the master's own fill target (a syringe master once had a
+  // vial's limits, and every needle of its first batch was out of limits).
+  const fh = doc.header;
+  if (fh.fillVolumeMl && fh.densityGPerMl) {
+    const target = new Dec(fh.fillVolumeMl).plus(fh.fillExcessMl ?? '0').times(fh.densityGPerMl);
+    doc.stages.forEach((s, si) => s.steps.forEach((t, ti) => {
+      const l = t.settings.meanLimit;
+      if (!['fill', 'ffs-run'].includes(t.block.id) || !l || typeof l !== 'object' || !('unit' in l)) return;
+      const k = ({ g: '1', kg: '1000', mg: '0.001' } as Record<string, string>)[l.unit];
+      if (!k) return;
+      const low = l.low !== undefined ? new Dec(l.low).times(k) : undefined, high = l.high !== undefined ? new Dec(l.high).times(k) : undefined;
+      if ((low && target.lt(low)) || (high && target.gt(high))) {
+        out.push({ level: 'warning', path: `stages[${si}].steps[${ti}].settings.meanLimit`, message: `The mean fill weight limits (${l.low ?? '…'} to ${l.high ?? '…'} ${l.unit}) do not contain the fill target ${target.toFixed(3)} g (${fh.fillVolumeMl} mL fill + ${fh.fillExcessMl ?? '0'} mL excess × ${fh.densityGPerMl} g/mL): check they are this product's limits` });
+      }
+    }));
+  }
 }
 
 const nominal = (l: FormulaLine) => (l.adjust?.content?.resultType === 'percent of theoretical' ? SAMPLE.assay : l.adjust?.content?.nominalContent ?? SAMPLE.assay);

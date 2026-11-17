@@ -114,3 +114,13 @@ describe('a limit of the wrong kind', () => {
     expect(masterChecks(one('terminal-sterilise', { medium: 'moist heat', lethalityLimit: { low: '15', unit: 'F-min' } })).filter((p) => /limit is needed/.test(p.message))).toEqual([]);
   });
 });
+
+describe('fill-weight limits and the fill target', () => {
+  it('the master check warns when a fill\'s mean fill-weight limits do not contain the fill target (owner, 17 Nov 2026)', () => {
+    // header: 10.0 mL + 0.5 mL excess × 1.012 g/mL = 10.626 g
+    const warns = (meanLimit: object) => masterChecks(one('fill', { needles: '2', band: '2', meanLimit })).filter((p) => /do not contain the fill target/.test(p.message));
+    expect(warns({ low: '10.500', high: '10.750', unit: 'g' })).toEqual([]);
+    expect(warns({ low: '2.130', high: '2.200', unit: 'g' })).toEqual([expect.objectContaining({ level: 'warning', path: 'stages[0].steps[0].settings.meanLimit' })]);
+    expect(warns({ low: '0.0105', high: '0.0108', unit: 'kg' })).toEqual([]);
+  });
+});
