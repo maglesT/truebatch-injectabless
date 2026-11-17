@@ -94,6 +94,7 @@
 .step-row.st-done_awaiting_check .n { background: #e0a800; color: #fff; }
 .step-row.st-waiting { color: var(--muted); }
 .step-row small { display: block; color: var(--muted); font-size: .84rem; }
+.step-row small.dev-open { color: var(--bad); font-weight: 600; }
 .step-row .go { color: var(--brand); font-size: 1.3rem; }
 
 /* Step screen */

@@ -7,7 +7,7 @@ import {
 } from '../api-floor.js';
 import { fieldLabel as labelOf, PROVIDER_NAME } from '../../../shared/engine/links.js';
 import { stepLabel } from '../../../shared/engine/batch.js';
-import { deviationStatusWords } from '../../../shared/engine/release.js';
+import { deviationNumber, deviationStatusWords } from '../../../shared/engine/release.js';
 import { BatchHeader } from '../floor/BatchScreen.js';
 import { ReasonDialog } from '../floor/ReasonDialog.js';
 import { terminatedText } from './Terminate.js';
@@ -25,7 +25,7 @@ interface Review {
   late: { timer: TimerRow; notes: FloorEvent[] }[];
   outOfLimits: { step: string; calc: string; shown: string; notes: FloorEvent[] }[];
   inputChanged: { step: string; changes: FloorEvent[] }[];
-  deviations: { note: number; step: string; reference: string; text: string; open: boolean; filed?: boolean; status?: string; closedAt?: string | null; closed?: { personName: string; at: string; payload: { reason?: string } } }[];
+  deviations: { note: number; step: string; reference: string; text: string; open: boolean; status?: string; closedAt?: string | null; filed?: boolean; typed?: boolean; closed?: { personName: string; at: string; payload: { reason?: string } } }[];
   // Owner 15 Nov 2026: every value typed by hand because a link was absent or down, and the Deviations link's state.
   hand: (Extract<Source, { from: 'hand' }> & { step: string; field: string; event: number; personName: string | null; at: string })[];
   unlinked: { number: string; status: string; title: string | null }[];
@@ -68,6 +68,8 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
 
   const doc = d.master.doc;
   const name = (step: string) => stepName(d, step);
+  // A note's deviation number: the one written with it, or the one Deviations filed from it (read live).
+  const numberOf = (n: { id: number; payload: { reference?: string } }) => r.deviations.find((x) => x.note === n.id)?.reference ?? n.payload.reference;
   // Server messages name steps by their position; people see the step's name.
   const plain = (t: string) => words(t.replace(/(?:step|Step) \S+ \((\d+\.\d+\.\d+\.\d+)\)|\(step (\d+\.\d+\.\d+\.\d+)\)/g, (m, a, b) => (a ? `step ${name(a)}` : `(${name(b)})`)));
   const fieldLabel = (step: string, field: string) => fieldOf(d, blocks, step, field);
@@ -124,15 +126,15 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
           <li key={e.id}><b>{name(idOf(e))}</b><span>{e.payload.reason}</span><small>{e.personName}, {plainClock(e.at)}</small></li>))}</Group>
         <Group title="Late: timers that ran over" empty="No timer ran over.">{r.late.map((l) => (
           <li key={l.timer.id} className={l.notes.length ? '' : 'bad'}><b>{l.timer.label}</b><span>Due {plainClock(l.timer.at)}</span>
-            <small>{l.notes.length ? l.notes.map((n) => `${n.payload.reference ? `${n.payload.reference}: ` : ''}${n.payload.text} (${n.personName})`).join(' · ') : 'No deviation note'}</small></li>))}</Group>
+            <small>{l.notes.length ? l.notes.map((n) => `${numberOf(n) ? `${numberOf(n)}: ` : ''}${n.payload.text} (${n.personName})`).join(' · ') : 'No deviation note'}</small></li>))}</Group>
         <Group title="Out of limits" empty="Every value was within its limits.">{r.outOfLimits.map((o, i) => (
           <li key={i} className="bad"><b>{name(o.step)}</b><span>{words(o.shown)}</span>
-            <small>{o.notes.length ? o.notes.map((n) => `Note${n.payload.reference ? ` ${n.payload.reference}` : ''}: ${n.payload.text} (${n.personName}, ${plainClock(n.at)})`).join(' · ') : 'No note'}</small></li>))}</Group>
+            <small>{o.notes.length ? o.notes.map((n) => `Note${numberOf(n) ? ` ${numberOf(n)}` : ''}: ${n.payload.text} (${n.personName}, ${plainClock(n.at)})`).join(' · ') : 'No note'}</small></li>))}</Group>
         {r.inputChanged.length > 0 && <Group title="Worked out again after an input changed" empty="">{r.inputChanged.map((x) => (
           <li key={x.step}><b>{name(x.step)}</b><small>{x.changes.map((e) => `${e.personName}, ${plainClock(e.at)}`).join(' · ')}</small></li>))}</Group>}
         <Group title="Deviation notes" empty="No deviation note has a deviation number.">{r.deviations.map((x) => (
-          <li key={x.note} className={x.open ? 'bad' : 'ok'}><b>{x.reference} · {name(x.step)}</b><span>{x.text}</span>
-            <small>{x.filed ? 'Filed from this note by Deviations · ' : ''}{x.status ? `${deviationStatusWords(x.status)} in the Deviations system${x.closedAt ? `, ${plainClock(x.closedAt)}` : ''}` : x.open ? 'Open: QA closes it before release' : `Closed by ${x.closed?.personName}, ${plainClock(x.closed?.at ?? '')}: ${x.closed?.payload.reason ?? ''}`}</small>
+          <li key={x.note} className={x.open ? 'bad' : 'ok'}><b>{deviationNumber(x)} · {name(x.step)}</b><span>{x.text}</span>
+            <small>{x.status ? `${deviationStatusWords(x.status)} in the Deviations system${x.closedAt ? `, ${plainClock(x.closedAt)}` : ''}` : x.open ? 'Open: QA closes it before release' : `Closed by ${x.closed?.personName}, ${plainClock(x.closed?.at ?? '')}: ${x.closed?.payload.reason ?? ''}`}</small>
             {x.open && !x.status && !decided && can(me, 'qa.release') && <button onClick={() => setClosing(x)}>Close the deviation…</button>}</li>))}</Group>
         {r.unlinked.length > 0 && <Group title="Deviations naming this batch that no note links" empty="">{r.unlinked.map((x) => (
           <li key={x.number} className="bad"><b>{x.number}</b><span>{x.title}</span><small>{deviationStatusWords(x.status)} in the Deviations system</small></li>))}</Group>}

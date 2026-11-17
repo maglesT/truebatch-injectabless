@@ -1,5 +1,5 @@
 // Starts TrueBatch Injectables Packing with its built UI on a fresh schema of the test database, for its browser journey,
-// with a stand-in for TrueBatch Injectables' batch_fact_v1 (one released batch of filled vials). Master data is an in-memory stand-in.
+// with a stand-in for TrueBatch Injectables' batch_fact_v1 (two released batches of filled vials, with their good units). Master data is an in-memory stand-in.
 // The Logbook's equipment_status_v1 is stood in too, knowing line LL-01 only (dirty); its link is down (no grant) until
 // the journey grants it for its pick-list check (e2e/packing.spec.ts).
 import { connect } from '../server/db.js';
@@ -17,8 +17,9 @@ await globalSetup();
 const owner = connect(TEST_DATABASE_URL);
 await owner.unsafe(`drop schema if exists ${S} cascade; drop schema if exists ${S}_report cascade; drop schema if exists ${S}_tb cascade; drop schema if exists ${S}_lb cascade; create schema ${S}; create schema ${S}_tb; create schema ${S}_lb;
   create table ${S}_tb.batch_fact_v1 (batch_number text, product_code text, record_kind text, status text, issued_at timestamptz, completed_at timestamptz, released boolean,
-    read_at timestamptz default now(), data_as_of timestamptz default now(), manufactured_on date);
-  insert into ${S}_tb.batch_fact_v1 values ('TI260001', 'PRD-001', 'PROCESSING', 'RELEASED', '2026-11-02 06:00+00', '2026-11-08 06:00+00', true, now(), now(), '2026-11-03');
+    read_at timestamptz default now(), data_as_of timestamptz default now(), manufactured_on date, good_quantity numeric);
+  insert into ${S}_tb.batch_fact_v1 values ('TI260001', 'PRD-001', 'PROCESSING', 'RELEASED', '2026-11-02 06:00+00', '2026-11-08 06:00+00', true, now(), now(), '2026-11-03', 10000),
+    ('TI260002', 'PRD-001', 'PROCESSING', 'RELEASED', '2026-11-04 06:00+00', '2026-11-09 06:00+00', true, now(), now(), '2026-11-05', 6000);
   grant usage on schema ${S}_tb to ${PACKING_APP_ROLE}; grant select on all tables in schema ${S}_tb to ${PACKING_APP_ROLE};
   create table ${S}_lb.equipment_status_v1 (master_id text, code text, kind text, state text, fit_for_use boolean, blockers text[], warnings text[], in_use_batch text,
     cleaned_at timestamptz, cleaned_by text, checked_at timestamptz default now(), read_at timestamptz default now(), data_as_of timestamptz default now());

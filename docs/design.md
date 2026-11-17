@@ -216,10 +216,13 @@ answering) or **ok**.
   Deviations' automatic filing as a deviation whose `source_ref` is `<product>:note:<note id>`
   (`truebatch_injectables:note:…`, `truebatch_injectables_packing:note:…`). While the link answers, the batch reads
   `deviation_v1` by that source_ref (`server/links.ts` bySourceRefs; no new view, no new read) and the note becomes a
-  linked deviation with that number: the step's history says "Deviation note DEV-2026-0040 (waiting for
-  classification)", the release screen and the PDF list it with its status, it is no longer "a deviation naming this
-  batch that no note links", and release waits until Deviations has it closed, as for a number picked on the note.
-  Down or absent: the note stays a note, and a number is typed on a note as before (QA closes it by hand).
+  linked deviation with that number (`shared/engine/release.ts` filedKey, deviationText, deviationNumber, as TrueBatch
+  Tablets): the step row, the step's history, the batch alerts and approval list say "Deviation DEV-2026-0040 (filed
+  in Deviations from this note) · waiting for classification (Deviations)", the release screen and the PDF list it
+  with its status, it is no longer "a deviation naming this batch that no note links", and release waits until
+  Deviations has it closed, as for a number picked on the note. Down or absent: the filed number is not shown (never
+  stale), the note stays a note, and a number is typed on a note as before, marked "(typed by hand)" (QA closes it by
+  hand).
 - **QMS** (`change_v1`, planned): the change control at approval must exist and be QA-approved, in a step of
   `CHANGE_STEPS`, and its products must name the master's product (code or name, without case); one that names no
   product is taken with a warning to QA. By hand: another person makes the version effective.
@@ -278,7 +281,8 @@ answering) or **ok**.
   unless the master says otherwise; over sub-batches the yield of their total). Null until the step is signed, and
   for a master without a reconciliation of units. TrueBatch Injectables Packing publishes the same three at the end
   of `packing_batch_v1` (`packing/migrations/0109`): the finished goods step's good packs, `packs`, and its yield in
-  packs, once it is signed. Packing's issue pulls the filled units issued from `good_quantity` with the batch (gap
+  packs, once it is signed. Null again while the step is sent back (`0018`, packing `0110`, as TrueBatch Tablets),
+  its current value once it is signed again. Packing's issue pulls the filled units issued from `good_quantity` with the batch (gap
   10; read through to_jsonb, so a TrueBatch Injectables from before reads as none and the units are typed as before);
   without the link they are typed from the labels, with the batch, as before.
 - **QA terminates a batch** (owner, 16 Nov 2026): a batch still in production (before production approval) that

@@ -6,13 +6,13 @@ import {
   type BatchDetail, type Block, type Deviation, type BlockField, type FloorEvent, type History, type PickItem, type Step, type StepRow, type Stored,
 } from '../api-floor.js';
 import { Alerts } from './BatchScreen.js';
+import { deviationText } from '../../../shared/engine/release.js';
 import { FieldInput } from './Fields.js';
 import { DemoSkip } from './DemoSkip.js';
 import { ReasonDialog } from './ReasonDialog.js';
 import { FillingPanel } from './FillingPanel.js';
 import { CERTIFICATE, fieldLabel, handEntered, LINK_OF } from '../../../shared/engine/links.js';
 import { askedFields, cutShort, notYetText } from '../../../shared/engine/batch.js';
-import { deviationStatusWords } from '../../../shared/engine/release.js';
 import { lineQuantity, stepFields } from '../../../shared/engine/values.js';
 import { plantText } from '../../../shared/plant-time.js';
 import { needsText, stepNeeds } from '../../../shared/engine/state.js';
@@ -299,7 +299,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
               })}</div>
             </section>
           )}
-          <History_ h={history} block={block} devs={d.batch.deviations} />
+          <History_ h={history} block={block} deviations={d.batch.deviations} />
         </div>
       </div>
       )}
@@ -444,16 +444,14 @@ function StageSummary({ d, blocks, row }: { d: BatchDetail; blocks: Block[]; row
   );
 }
 
-// A note's deviation: its number and its status in the Deviations system ("DEV-2026-0040 (waiting for classification)"),
-// the number Deviations gave a note written without one included (gap 6).
-const devText = (d: Deviation | undefined) => (d ? ` ${d.reference}${d.status ? ` (${deviationStatusWords(d.status)})` : ''}` : '');
-function History_({ h, block, devs }: { h: History | null; block: Block; devs: Deviation[] }) {
+function History_({ h, block, deviations }: { h: History | null; block: Block; deviations: Deviation[] }) {
   if (!h) return <section className="dash-panel"><div className="skel skel-line w30" /><div className="skel skel-line w60" /></section>;
   const fields = (e: FloorEvent) => Object.keys(e.payload.values ?? {}).map((k) => fieldLabel(block.fields, k)).join(', ');
   const what = (e: FloorEvent) => ({
     started: 'Started', value: `Recorded ${fields(e)}`, done: 'Signed: performed', checked: 'Signed: verified (second person)', sent_back: `Sent back: “${e.payload.reason}”`,
     corrected: `Corrected ${fields(e)}: “${e.payload.reason}”`, not_applicable: `Not applicable: “${e.payload.reason}”`, late: 'Ran over its time (recorded by the server)',
-    note: `Deviation note${devText(devs.find((x) => x.note === e.id)) || (e.payload.reference ? ` ${e.payload.reference}` : '')}: “${e.payload.text}”`, qa_released_hold: 'QA released the hold',
+    // The deviation's number and status, read live: the one written with the note, or the one Deviations filed from it.
+    note: `Deviation note${((x) => (x ? ` ${deviationText(x)}` : e.payload.reference ? ` ${e.payload.reference}` : ''))(deviations.find((x) => x.note === e.id))}: “${e.payload.text}”`, qa_released_hold: 'QA released the hold',
     demo_wait_skipped: `DEMO: wait skipped by ${e.personName ?? '—'} at ${plainClock(e.at)}: ${String(e.payload.label ?? '')}`,
   })[e.kind];
   return (

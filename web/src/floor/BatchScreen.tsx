@@ -10,6 +10,7 @@ import {
 import { StepScreen } from './StepScreen.js';
 import { DemoSkip } from './DemoSkip.js';
 import { FillingPanel } from './FillingPanel.js';
+import { deviationText } from '../../../shared/engine/release.js';
 import { Terminate, terminatedText } from '../release/Terminate.js';
 import './floor.css';
 
@@ -115,7 +116,8 @@ function Overview({ d, blocks, now, reload }: { d: BatchDetail; blocks: Block[];
               <button key={s.id} className={`step-row st-${s.state}`} onClick={() => go(stepLink(d.batch.id, s.id))}>
                 <span className="n">{s.key.step + 1}</span>
                 <span>{title(s)}{(rounds || stage.kind === 'sub-batch') && <small>{stage.kind === 'sub-batch' ? `Sub-batch ${s.key.sub}` : ''}{rounds ? ` Round ${s.key.round}` : ''}</small>}
-                  {s.blocked && !d.batch.terminated && <small>{s.blocked}</small>}</span>
+                  {s.blocked && !d.batch.terminated && <small>{s.blocked}</small>}
+                  {d.batch.deviations.filter((x) => x.step === s.id).map((x) => <small key={x.note} className={x.open ? 'dev-open' : undefined}>Deviation {deviationText(x)}</small>)}</span>
                 <span className={`chip ${s.needsResign ? 'chip-warn' : stateLabel(s.state, d.batch.terminated)[1]}`}>{s.needsResign ? 'Sign again' : stateLabel(s.state, d.batch.terminated)[0]}</span>
                 <span className="go" aria-hidden="true">›</span>
               </button>
@@ -160,7 +162,7 @@ export function Alerts({ d, blocks, now, only }: { d: BatchDetail; blocks: Block
     if (s.state === 'done_awaiting_check') items.push({ tone: 'warn', tag: 'Waiting for check', text: title(s.key), sub: 'A second person checks this step on their own device', step: s.id });
     if (s.inputChanged.length) items.push({ tone: 'warn', tag: 'Input changed', text: title(s.key), sub: 'A value this step used was corrected: sign it again', step: s.id });
   }
-  for (const v of d.batch.deviations.filter((x) => x.open)) items.push({ tone: 'bad', tag: 'Open deviation', text: `${v.reference}: ${v.text}`, step: v.step });
+  for (const v of d.batch.deviations.filter((x) => x.open)) items.push({ tone: 'bad', tag: 'Open deviation', text: `${deviationText(v)}: ${v.text}`, step: v.step });
   const shown = only ? items.filter((x) => x.step === only) : items;
   if (!shown.length) return only ? null : <p className="all-good"><span aria-hidden="true">✓</span> No alerts on this batch.</p>;
   return (
@@ -218,7 +220,7 @@ function Approval({ d, blocks, reload }: { d: BatchDetail; blocks: Block[]; relo
         </ul>
         {d.batch.deviations.length > 0 && (<>
           <h3>Deviation notes</h3>
-          <ul className="checklist-plain">{d.batch.deviations.map((x) => <li key={x.note} className={x.open ? 'no' : 'ok'}><i>{x.open ? '!' : '✓'}</i><span><b>{x.reference}</b> {x.text} · {x.open ? 'open (QA closes it before release)' : 'closed'}</span></li>)}</ul>
+          <ul className="checklist-plain">{d.batch.deviations.map((x) => <li key={x.note} className={x.open ? 'no' : 'ok'}><i>{x.open ? '!' : '✓'}</i><span><b>{deviationText(x)}</b> {x.text}{x.open && !x.status ? ' (QA closes it before release)' : ''}</span></li>)}</ul>
         </>)}
         {d.batch.status === 'in production' && problems.length > 0 && (
           <div className="notice" role="note"><p><b>Not ready for production approval yet:</b></p><ul>{problems.map((p, i) => <li key={i}>{p}</li>)}</ul></div>

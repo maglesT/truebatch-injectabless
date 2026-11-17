@@ -91,7 +91,9 @@ export async function pullLot(app: FastifyInstance, doc: MasterDoc, st: Step, bl
 
 /**
  * Packing: a batch TrueBatch Injectables has RELEASED, of this pack's product (its filled, inspected units); its date of
- * manufacture (the date its first processing step started, batch_fact_v1.manufactured_on) comes with it.
+ * manufacture (the date its first processing step started, batch_fact_v1.manufactured_on) comes with it, and so do the
+ * units issued (its good units, batch_fact_v1.good_quantity; owner 17 Nov 2026: pull, don't type). Without a good
+ * quantity (not given by its view) the units are typed.
  */
 export async function pullBulk(app: FastifyInstance, doc: MasterDoc, block: Block, batchNo: string): Promise<Pulled> {
   const r = await app.links.truebatch_injectables.batch(batchNo);
@@ -105,9 +107,8 @@ export async function pullBulk(app: FastifyInstance, doc: MasterDoc, block: Bloc
   const source: Source = { from: 'truebatch_injectables', asOf: b.dataAsOf, shown: `TrueBatch Injectables batch ${batchNo}: ${b.status}, ${b.productCode ?? '—'}, manufactured ${b.mfgDate ?? '—'}` };
   const out: Pulled = { source, values: {}, sources: {}, problems };
   if (b.mfgDate && block.fields.some((x) => x.name === 'mfgDate')) { out.values.mfgDate = b.mfgDate; out.sources.mfgDate = source; }
-  // Gap 10 (owner, 17 Nov 2026): the filled units received are the batch's good units (batch_fact_v1.good_quantity);
-  // typed, as before, from a TrueBatch Injectables that does not give them yet.
-  if (b.goodQuantity !== null && block.fields.some((x) => x.name === 'units')) { out.values.units = { value: b.goodQuantity, unit: 'units' }; out.sources.units = source; }
+  const units = block.fields.find((x) => x.name === 'units');
+  if (b.goodQuantity && units) { out.values.units = { value: b.goodQuantity, unit: units.unit ?? 'units' }; out.sources.units = { ...source, shown: `${source.shown}, ${b.goodQuantity} good units` }; }
   return out;
 }
 

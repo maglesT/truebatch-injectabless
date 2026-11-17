@@ -3,7 +3,7 @@ import { connect, type Sql } from '../server/db.js';
 import { links, namesProduct, type Links } from '../server/links.js';
 import { findBlock } from '../shared/blocks/index.js';
 import { masterSchema } from '../shared/master/schema.js';
-import { batchRefusal, batchView, fieldLabel, handFields, type BatchEvent } from '../shared/engine/index.js';
+import { batchRefusal, batchView, deviationText, fieldLabel, filedKey, handFields, type BatchEvent } from '../shared/engine/index.js';
 import { call, freshApp, handLabels, login, proofFor, seedUser, TEST_DATABASE_URL, type TestApp } from './helpers.js';
 import { at, ev, small, tablet, placed } from './engine-fixture.js';
 import { inLogbook } from '../shared/engine/picks.js';
@@ -920,7 +920,7 @@ describe('the aseptic set-up: the line\'s media fill from Qualification (owner, 
 
 describe('gap 6: the deviation number Deviations gave a note written without one (owner, 17 Nov 2026)', () => {
   let b: { id: number; batchNo: string };
-  type Dev = { note: number; reference: string; open: boolean; status?: string; filed?: boolean };
+  type Dev = { note: number; reference: string; open: boolean; status?: string; filed?: boolean; typed?: boolean };
   const devs = async () => ((await as('meera', 'GET', `/api/batches/${b.id}`)).json() as { batch: { deviations: Dev[]; deviationsLink: string } }).batch;
   beforeAll(async () => {
     b = await issue(small([{ steps: [{ checker: true }, yieldStep] }]));
@@ -934,7 +934,9 @@ describe('gap 6: the deviation number Deviations gave a note written without one
     await t.owner.unsafe(`insert into ${S.dv}.deviation_v1 (number, status, batch, batch_norm, title, source_ref) values
       ('DEV-2026-0040', 'classification', '${b.batchNo}', '${b.batchNo.toLowerCase()}', 'Stirrer stopped', 'truebatch_injectables:note:${n!.id}'),
       ('DEV-2026-0041', 'closed', 'OTHER2', 'other2', 'Tablets note of the same id', 'truebatch:note:${n!.id}')`);
-    expect((await devs()).deviations).toMatchObject([{ note: n!.id, reference: 'DEV-2026-0040', filed: true, open: true, status: 'classification' }]);
+    const d = (await devs()).deviations;
+    expect(d).toMatchObject([{ note: n!.id, reference: 'DEV-2026-0040', filed: true, open: true, status: 'classification' }]);
+    expect(deviationText(d[0]!)).toBe('DEV-2026-0040 (filed in Deviations from this note) · waiting for classification (Deviations)');
     const r = (await as('meera', 'GET', `/api/batches/${b.id}/review`)).json() as { deviations: Dev[]; unlinked: { number: string }[] };
     expect(r.deviations.map((d) => d.reference)).toEqual(['DEV-2026-0040']);
     // It is the note's deviation, no longer one "no note links".
@@ -945,7 +947,8 @@ describe('gap 6: the deviation number Deviations gave a note written without one
     // The batch record names it.
     const l = (await loadBatch(t.sql, b.id))!;
     const pdf = JSON.stringify(batchRecordDoc({ ...await recordInput(t.sql, l), deviationsRead: (await deviationsRead(t.app, l)).read }, 'QA'));
-    expect(pdf).toContain('"DEV-2026-0040"');
+    expect(pdf).toContain('"DEV-2026-0040 (filed in Deviations from this note)"');
+    expect(pdf).toContain('deviation DEV-2026-0040 (filed in Deviations from this note) · waiting for classification (Deviations): Stirrer stopped for 2 minutes');
     expect(pdf).toContain('OPEN: waiting for classification in the Deviations system');
     await t.owner.unsafe(`update ${S.dv}.deviation_v1 set status = 'closed', closed_at = now() where number = 'DEV-2026-0040'`);
     expect((await devs()).deviations).toMatchObject([{ reference: 'DEV-2026-0040', open: false, status: 'closed' }]);
@@ -958,19 +961,31 @@ describe('gap 6: the deviation number Deviations gave a note written without one
     const approved: BatchEvent[] = [{ id: 1, kind: 'production_approved', payload: {}, person: 3, at: at(5) }, { id: 2, kind: 'qc_approved', payload: { reportNo: 'QC-1' }, person: 4, at: at(6) }];
     const qa = { id: 9, permissions: ['truebatch_injectables.qa.release'] };
     const release = (read: Map<string, { status: string; closedAt: null; number?: string }> | null) => batchRefusal('release', batchView(doc, events, approved, at(10), read), qa)?.problems ?? null;
-    expect(release(new Map([[`note:${note.id}`, { status: 'investigation', closedAt: null, number: 'DEV-2026-0040' }]])))
+    expect(release(new Map([[filedKey(note.id), { status: 'investigation', closedAt: null, number: 'DEV-2026-0040' }]])))
       .toEqual(['Deviation DEV-2026-0040 (Stage 0 › Check a value against limits: pH) is still open in the Deviations system (under investigation): it is closed there first']);
-    expect(release(new Map([[`note:${note.id}`, { status: 'closed', closedAt: null, number: 'DEV-2026-0040' }]]))).toBeNull();
+    expect(release(new Map([[filedKey(note.id), { status: 'closed', closedAt: null, number: 'DEV-2026-0040' }]]))).toBeNull();
     // Deviations down or absent: the note stays a note, as today (QA links a number by hand on a new note).
     expect(release(null)).toBeNull();
   });
 
-  it('Deviations down: the number is not read; a note keeps its typed number, as before', async () => {
+  it('Deviations down: the filed number is not shown (never stale); a number typed with a note says "typed by hand"', async () => {
     await cut(S.dv);
     try {
+      expect((await devs())).toMatchObject({ deviationsLink: 'down', deviations: [] });
+      expect((await act('mona', b.id, '0.1.0.1', 'note', { text: 'Second stop', reference: 'DEV-PAPER-9' })).statusCode).toBe(200);
       const d = await devs();
-      expect(d.deviationsLink).toBe('down');
-      expect(d.deviations).toEqual([]);
+      expect(d.deviations).toMatchObject([{ reference: 'DEV-PAPER-9', open: true, typed: true }]);
+      expect(d.deviations[0]!.filed).toBeUndefined();
+      expect(deviationText(d.deviations[0]!)).toBe('DEV-PAPER-9 (typed by hand) · open');
     } finally { await restore(S.dv); }
+  });
+
+  it('the batch record PDF shows the number and status on the step where the note was written, and a typed number as typed by hand', async () => {
+    const l = (await loadBatch(t.sql, b.id))!;
+    const note = l.events.find((e) => e.kind === 'note' && !e.payload.reference)!;
+    const pdf = JSON.stringify(batchRecordDoc({ ...await recordInput(t.sql, l), deviationsRead: new Map([[filedKey(note.id), { status: 'capa', closedAt: null, number: 'DEV-2026-0040' }]]) }, 'QA'));
+    expect(pdf).toContain('deviation DEV-2026-0040 (filed in Deviations from this note) · waiting for its CAPA (Deviations): Stirrer stopped for 2 minutes');
+    expect(pdf).toContain('deviation DEV-PAPER-9 (typed by hand) · open: Second stop');
+    expect(pdf).toContain('OPEN: waiting for its CAPA in the Deviations system');
   });
 });
