@@ -66,7 +66,8 @@ export function Process({ doc, onChange, md, place, onPlace, editable }: {
     setSteps(steps); select(si, at); setLibrary(false); setQ('');
   };
   const roles = [...new Set(doc.stages.map((s) => s.role).filter(Boolean)
-    .concat(['Production operator', 'Granulation operator', 'Compression operator', 'Coating operator', 'Packing operator', 'Packing supervisor', 'Warehouse officer']))];
+    .concat(['Dispensing officer', 'Compounding operator', 'Washing operator', 'Aseptic operator', 'Sterilisation operator', 'Filling operator',
+      'Visual inspector', 'QC microbiologist', 'Packing operator', 'Warehouse officer', 'Packing supervisor']))];
   const machineTypes = [...new Set(md.equipment.filter((e) => e.active && e.type).map((e) => e.type!))].sort();
   // Rooms are allowed by their area, or one by one by their code (not every room of an area in every block).
   const areas = [...[...new Set(md.rooms.filter((r) => r.active && r.area).map((r) => r.area!))].sort(), ...md.rooms.filter((r) => r.active).map((r) => r.code).sort()];
