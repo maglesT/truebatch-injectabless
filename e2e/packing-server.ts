@@ -41,7 +41,7 @@ master.materials_.push({ ...item('pm-lbl', 'PM-101', 'Vial label'), category: 'p
 master.equipment_.push({ ...item('ln-1', 'LL-01', 'Labelling line 1'), kind: 'equipment', type: 'labelling line', room: 'PK-01' },
   { ...item('ln-2', 'LL-02', 'Labelling line 2'), kind: 'equipment', type: 'labelling line', room: 'PK-01' });
 // The line stands in a packing room (the packing stages allow the Packing area).
-master.rooms_.splice(0, master.rooms_.length, { ...item('rm-pk1', 'PK-01', 'Packing hall 1'), area: 'Packing', grade: 'D' });
+master.rooms_.splice(0, master.rooms_.length, { ...item('rm-pk1', 'PK-01', 'Packing hall 1'), area: 'Sterile packing', grade: 'D' });
 
 const sql = connect(TEST_DATABASE_URL, { role: PACKING_APP_ROLE, searchPath: S });
 const bulk = connect(TEST_DATABASE_URL, { role: PACKING_APP_ROLE, link: true });

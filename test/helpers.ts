@@ -59,7 +59,7 @@ export interface FakeMaster extends Master {
   rooms_: MasterRoom[];
   cut: boolean;
 }
-const ROOMS = [['DSP-01', 'Dispensing'], ['GRN-01', 'Granulation'], ['CMP-01', 'Compression'], ['COT-01', 'Coating'], ['PK-01', 'Packing'], ['PK-02', 'Packing']] as const;
+const ROOMS = [['DSP-01', 'Dispensing'], ['GRN-01', 'Granulation'], ['CMP-01', 'Compression'], ['COT-01', 'Coating'], ['PK-01', 'Sterile packing'], ['PK-02', 'Sterile packing']] as const;
 export function fakeMaster(): FakeMaster {
   const read = <T>(rows: () => T[]) => async () => { if (m.cut) throw new ConnectionOff(); return rows().map((r) => ({ ...r })); };
   const m: FakeMaster = {
