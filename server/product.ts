@@ -1,7 +1,11 @@
 import { PERMISSIONS } from './auth.js';
+import type { SignOn } from './signon.js';
 
-// The product this server runs: TrueBatch Injectables, on the Medhanta platform (own tile, licence, permissions,
-// database and sign-on client).
+// The products this server runs (owner, 17 Nov 2026): TrueBatch Injectables, and TrueBatch Injectables Packing, a
+// separate product on the platform (own tile, licence, permissions, database and sign-on client) that shares this
+// server, its engine, templates, signatures, audit trail, links and screens. Inside the app every permission is known
+// by its TrueBatch Injectables code (server/auth.ts): a product's own codes in core's token are read as those
+// (truebatch_injectables_packing.batch.operate is truebatch_injectables.batch.operate), and every other code is ignored.
 export interface Product {
   // The platform name of the product, its database and its sign-on client (lower case and _ only, as the platform's
   // manifest check requires).
@@ -14,3 +18,13 @@ export interface Product {
 }
 
 export const INJECTABLES: Product = { id: 'truebatch_injectables', name: 'TrueBatch Injectables', permissions: PERMISSIONS, batchPrefix: 'TI' };
+
+/** The product's own codes from core, as the app's codes; any other code is dropped. */
+export const ownCodes = (p: Product, codes: string[]) => codes.filter((c) => c in p.permissions).map((c) => `${INJECTABLES.id}${c.slice(p.id.length)}`);
+
+/** Core's sign-on, with the product's codes read as the app's (who someone is still comes from core only). */
+export function productSignOn(s: SignOn, p: Product): SignOn {
+  if (p.id === INJECTABLES.id) return s;
+  const own = <T extends { permissions: string[] }>(i: T): T => ({ ...i, permissions: ownCodes(p, i.permissions) });
+  return { ...s, exchange: async (code, verifier) => own(await s.exchange(code, verifier)), refresh: async (token) => own(await s.refresh(token)) };
+}

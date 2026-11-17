@@ -12,10 +12,13 @@ import { answerDoc, placeOf, type Place } from './model.js';
 import { Preview } from './Preview.js';
 import { Process } from './Process.js';
 import { Review } from './Review.js';
+import { PackFields, PackMaterials } from './Pack.js';
 import { product } from '../product.js';
 
 export type Tab = 'header' | 'formula' | 'process' | 'preview' | 'review';
-const TABS: [Tab, string][] = [['header', 'Header'], ['formula', 'Formula'], ['process', 'Process'], ['preview', 'Calculation preview'], ['review', 'Review and approval']];
+// A packing master: the pack and its packing materials instead of the header and formula, and no calculation preview.
+const TABS: [Tab, string][] = product.packing ? [['header', 'Pack'], ['formula', 'Packing materials'], ['process', 'Process'], ['review', 'Review and approval']]
+  : [['header', 'Header'], ['formula', 'Formula'], ['process', 'Process'], ['preview', 'Calculation preview'], ['review', 'Review and approval']];
 type Save = { kind: 'saved' | 'saving' | 'pending' } | { kind: 'invalid' | 'error'; message: string };
 
 const FIELD: Record<string, string> = { mg: 'mg per mL', batchSize: 'batch size', densityGPerMl: 'density', fillVolumeMl: 'nominal fill', fillExcessMl: 'fill excess', name: 'name', key: 'key', holdHours: 'hold time', count: 'number of sub-batches' };
@@ -96,8 +99,10 @@ export function Designer({ me, versionId, onBack, onOpen }: { me: Me; versionId:
       <div className="designer">
         <div className="d-main">
           <fieldset className="plain" disabled={!editable}>
-            {tab === 'header' && <div className="card"><HeaderFields header={doc.header} products={md.products} rooms={md.rooms} onChange={(header) => change({ ...doc, header })} /></div>}
-            {tab === 'formula' && <FormulaTable doc={doc} onChange={change} md={md} masters={others} selected={place.line} onSelect={(line) => setPlace({ tab: 'formula', line })} problems={problems ?? []} onAnswer={onAnswer} />}
+            {tab === 'header' && <div className="card">{doc.pack ? <PackFields header={doc.header} pack={doc.pack} products={md.products} onChange={(header, pack) => change({ ...doc, header, pack })} />
+              : <HeaderFields header={doc.header} products={md.products} rooms={md.rooms} onChange={(header) => change({ ...doc, header })} />}</div>}
+            {tab === 'formula' && doc.pack && <PackMaterials doc={doc} md={md} onChange={change} />}
+            {tab === 'formula' && !doc.pack && <FormulaTable doc={doc} onChange={change} md={md} masters={others} selected={place.line} onSelect={(line) => setPlace({ tab: 'formula', line })} problems={problems ?? []} onAnswer={onAnswer} />}
             {tab === 'process' && <Process doc={doc} onChange={change} md={md} place={place} onPlace={setPlace} editable={!!editable} />}
           </fieldset>
           {tab === 'preview' && <Preview doc={doc} />}

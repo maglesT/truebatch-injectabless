@@ -5,17 +5,18 @@
  */
 import type { BlockField } from '../blocks/format.js';
 
-export const PROVIDERS = ['deviations', 'qms', 'logbook', 'mms'] as const;
+// truebatch_injectables: TrueBatch Injectables' published batches, read by TrueBatch Injectables Packing.
+export const PROVIDERS = ['deviations', 'qms', 'logbook', 'mms', 'truebatch_injectables'] as const;
 export type Provider = (typeof PROVIDERS)[number];
 export type LinkState = 'absent' | 'down' | 'ok';
-export const PROVIDER_NAME: Record<Provider, string> = { deviations: 'Deviations', qms: 'QMS', logbook: 'Logbook', mms: 'MMS' };
+export const PROVIDER_NAME: Record<Provider, string> = { deviations: 'Deviations', qms: 'QMS', logbook: 'Logbook', mms: 'MMS', truebatch_injectables: 'TrueBatch Injectables' };
 
 /** Pulled through a link (with what was read, PL-07), or typed by hand while the link was absent or down. */
 export type Source = { from: 'hand'; link: Provider; state: 'absent' | 'down' } | { from: Provider; asOf: string | null; shown: string };
 export const isHand = (s: Source | undefined): s is Extract<Source, { from: 'hand' }> => s?.from === 'hand';
 
 /** The link that gives a field kind's value. */
-export const LINK_OF: Partial<Record<BlockField['kind'], Provider>> = { lot: 'mms', machine: 'logbook', room: 'logbook' };
+export const LINK_OF: Partial<Record<BlockField['kind'], Provider>> = { lot: 'mms', machine: 'logbook', room: 'logbook', bulk: 'truebatch_injectables' };
 /** Certificate values that come with an MMS lot. */
 export const CERTIFICATE: Record<string, string> = { assay: 'assay', water: 'water', lod: 'lod', content: 'content' };
 
@@ -37,6 +38,10 @@ const QUESTIONS: Partial<Record<BlockField['kind'], (f: BlockField) => BlockFiel
     yes(`${f.name}.released`, `${f.label}: the label says RELEASED (approved by QC)`),
     { name: `${f.name}.expiry`, label: `${f.label}: expiry or retest date on the label, whichever is first`, kind: 'text', date: true },
     { name: `${f.name}.report`, label: `${f.label}: QC report or certificate number of the values typed`, kind: 'text', optional: true },
+  ],
+  bulk: (f) => [
+    yes(`${f.name}.released`, `${f.label}: the tray or case labels say RELEASED (QA) for this batch number`),
+    yes(`${f.name}.product`, `${f.label}: the labels name the product packed in this pack`),
   ],
 };
 

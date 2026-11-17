@@ -3,6 +3,14 @@ import type { Permission } from '../server/auth.js';
 // Overridable so two working copies can run their browser tests side by side.
 export const E2E_PORT = Number(process.env.E2E_PORT ?? 8291);
 export const E2E_SCHEMA = process.env.E2E_SCHEMA ?? 'e2e';
+// TrueBatch Injectables Packing's browser journey: its own server, schema and people (packing codes from core).
+export const E2E_PACKING_PORT = Number(process.env.E2E_PACKING_PORT ?? E2E_PORT + 1);
+export const E2E_PACKING_SCHEMA = `${E2E_SCHEMA}_packing`;
+const pk = (...c: string[]) => c.map((x) => `truebatch_injectables_packing.${x}` as const);
+export const PACKING_USERS = {
+  pauthor: pk('master.author'), pcheck: pk('master.check'), pqa: pk('master.approve', 'qa.release'), pqa2: pk('master.approve'),
+  piss: pk('batch.issue'), pop: pk('batch.operate'), pchk: pk('batch.check'), psup: pk('batch.supervise'), pqc: pk('qc.approve'),
+};
 // Invented test people and the TrueBatch permissions core gives them.
 export const USERS: Record<string, Permission[]> = {
   op1: ['truebatch_injectables.batch.operate'],

@@ -3,7 +3,7 @@
 import type { Block } from '../../../shared/blocks/index.js';
 import { findBlock } from '../../../shared/blocks/index.js';
 import { refsIn } from '../../../shared/blocks/format.js';
-import type { Limit, MasterDoc, SettingValue } from '../../../shared/master/schema.js';
+import { materialLines, type Limit, type MasterDoc, type SettingValue } from '../../../shared/master/schema.js';
 import { HEADER_LABEL, unitLabel } from './model.js';
 
 export type Part = string | { setting: string } | { field: string } | { calc: string } | { prev: string };
@@ -11,9 +11,9 @@ type Calc = Block['calcs'][number];
 
 // Packing: the master's pack facts and the batch facts recorded at issue, in words.
 const FACTS: Record<string, string> = {
-  'pack.unitsPerPack': 'the tablets per pack', 'pack.packsPerCarton': 'the packs per carton', 'pack.shelfLifeMonths': 'the approved shelf life',
+  'pack.unitsPerPack': 'the units per pack', 'pack.packsPerCarton': 'the packs per carton', 'pack.shelfLifeMonths': 'the approved shelf life',
   'pack.expiryRule': 'the expiry rule', 'pack.type': 'the pack type', 'pack.destination': 'the destination', 'pack.gtin': 'the pack GTIN', 'pack.mrp': 'the MRP of the master',
-  'batch.bulk': 'the bulk batch number', 'batch.mfgDate': 'the date of manufacture of the bulk', 'batch.tablets': 'the bulk tablets issued',
+  'batch.bulk': 'the batch number of the filled units', 'batch.mfgDate': 'the date of manufacture of the filled units', 'batch.units': 'the filled units issued',
   'batch.packs': 'the theoretical packs', 'batch.line': 'the packing line',
 };
 
@@ -78,8 +78,8 @@ export function sentence(block: Block, c: Calc): Part[] {
         ...(outer ? [', and none outside ± ', p(outer.plusMinusPercent), ' %'] : []), '.'];
     }
     case 'C4': return [`${String(a.question)}: the answer must be "${(a.expected as string[]).join('" or "')}".`];
-    case 'C8': return [p(a.printed), ' must match ', a.kind === 'expiry' ? 'the expiry worked out from the date of manufacture of the bulk and the approved shelf life' : p(a.expected), '.'];
-    case 'C9': return ['Each of ', p(a.codes), ' must carry the pack GTIN, the bulk batch number and the expiry, with a serial not read before in this batch.'];
+    case 'C8': return [p(a.printed), ' must match ', a.kind === 'expiry' ? 'the expiry worked out from the date of manufacture of the filled units and the approved shelf life' : p(a.expected), '.'];
+    case 'C9': return ['Each of ', p(a.codes), ' must carry the pack GTIN, the batch number and the expiry, with a serial not read before in this batch.'];
     case 'F2': return [p(a.current), ' must not differ by more than ', p((a.limit as { maxChange: unknown }).maxChange), ' from the previous round.'];
     default: {
       // The inputs it is worked out from, then the limits it must meet.
@@ -111,7 +111,9 @@ export function settingText(doc: MasterDoc, v: SettingValue | undefined): string
   if (typeof v === 'string') return v.trim() === '' ? '(none)' : v;
   if ('unit' in v) return limitText(v);
   if ('formula' in v) {
-    const l = doc.formula.find((x) => x.key === v.formula);
+    const l = materialLines(doc).find((x) => x.key === v.formula);
+    // A packing material by its name and code, as in the master's packing materials.
+    if (l && 'perPack' in l) return `${l.name} (${l.code})`;
     return `the batch quantity of ${l?.name || v.formula}${v.adjusted ? ', adjusted for the lot' : ''}`;
   }
   if ('header' in v) return HEADER_LABEL[v.header].label;

@@ -5,7 +5,7 @@ import { audit } from '../audit.js';
 import { parseId, requirePermission, type SessionUser } from '../auth.js';
 import { usableItem } from '../master.js';
 import { dispensingRooms, machineRefusal, roomRefusal } from '../../shared/engine/picks.js';
-import { handProblem, lineOf, pullItem, pullLot, pulledWords } from '../pull.js';
+import { handProblem, lineOf, mfgDateProblem, pullBulk, pullItem, pullLot, pulledWords } from '../pull.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
 import { masterVersion } from './masters.js';
 import { batchRecordDoc, type RecordInput, type Signature } from '../batch-record.js';
@@ -123,7 +123,7 @@ async function readValues(app: FastifyInstance, doc: MasterDoc, key: StepKey, ra
       const v = readValue(f, x, '');
       if (typeof v !== 'string') { problems.push((v as { error: string }).error); continue; }
       out[name] = v;
-      pulled = await pullLot(app, doc, step, block, v, current.values, now, PLANT_TZ, name);
+      pulled = f.kind === 'bulk' ? await pullBulk(app, doc, block, v) : await pullLot(app, doc, step, block, v, current.values, now, PLANT_TZ, name);
     }
     problems.push(...pulled.problems);
     source[name] = pulled.source;
@@ -151,7 +151,8 @@ async function readValues(app: FastifyInstance, doc: MasterDoc, key: StepKey, ra
     const v = readValue(f, x, typeof setting === 'string' ? setting : '');
     if (typeof v === 'object' && !Array.isArray(v) && 'error' in v) { problems.push(v.error); continue; }
     // Engine change 6: an item past its use-by date is refused when recorded.
-    const no = typeof v !== 'string' ? null : name.includes('.') || f.useBy ? handProblem({ ...f, name: f.useBy ? `${f.name}.expiry` : f.name }, v, now, PLANT_TZ) : null;
+    const no = typeof v !== 'string' ? null : name.includes('.') || f.useBy ? handProblem({ ...f, name: f.useBy ? `${f.name}.expiry` : f.name }, v, now, PLANT_TZ)
+      : name === 'mfgDate' && block.packing ? mfgDateProblem(f, v, now, PLANT_TZ) : null;
     if (no) problems.push(no);
     else out[name] = v as Value;
   }
@@ -175,8 +176,9 @@ const BODIES: Record<Action, z.ZodTypeAny> = {
 const BATCH_BODIES: Record<BatchAction, z.ZodTypeAny> = {
   'production-approve': signBody,
   // TI-21, TI-26, TI-27: the QC report(s) of the release tests (sterility, endotoxin, bioburden) and the EM review of the
-  // batch's processing window: its report numbers, and the Deviations number of every action-limit excursion.
-  'qc-approve': signBody.extend({ reportNo: z.string().trim().min(1).max(60), emReview: z.string().trim().min(1).max(500) }),
+  // batch's processing window: its report numbers, and the Deviations number of every action-limit excursion (a packing
+  // batch has no EM review: its QC approval is the finished packed product tested and complying).
+  'qc-approve': signBody.extend({ reportNo: z.string().trim().min(1).max(60), emReview: z.string().trim().min(1).max(500).optional() }),
   release: signBody,
   reject: signBody.extend({ reason }),
   // Per lot the batch used: how much went back to stores unused (stock.ts issuedLots, returnProblems).
@@ -188,6 +190,39 @@ const LAST_EVENTS = 5;
 const NAMES = Object.keys(ACTIONS) as Action[];
 const BATCH_NAMES = Object.keys(BATCH_ACTIONS) as BatchAction[];
 const flowOf = (doc: MasterDoc, k: StepKey) => doc.stages[k.stage]!.steps[k.step]!.flow.kind;
+const FIRST: StepKey = { stage: 0, sub: 1, step: 0, round: 1 };
+/**
+ * Packing (TI-P2, TI-P7): a master whose first step is recorded at issue (the line, the released batch of filled units,
+ * the units issued) is issued with those values, read as any step's values are (pulled while a link answers, else
+ * typed with the label questions and checked by a second person). One active packing order per line: a line with a
+ * batch still in production takes no other.
+ */
+async function issueValues(app: FastifyInstance, tx: Tx, doc: MasterDoc, raw: Record<string, unknown> | undefined, now: Date) {
+  const block = findBlock(doc.stages[0]!.steps[0]!.block)!;
+  const current = openSteps(doc, [], now).steps[0]!;
+  const typed = await readValues(app, doc, FIRST, raw ?? {}, now, current, '');
+  const needed = [...block.atIssue!.map((n) => block.fields.find((f) => f.name === n)!), ...handFields(block.fields, typed.source)];
+  const missing = needed.filter((f) => !f.optional && typed.values[f.name] === undefined).map((f) => `${f.label} is not recorded`);
+  const results = evaluate(doc, [], FIRST, typed.values);
+  const refused = Object.values(results).flatMap((r) => (r.ok ? [] : [r.message]));
+  if (missing.length || refused.length) throw new StepError(400, 'invalid_values', [...missing, ...refused]);
+  const field = block.fields.find((f) => f.kind === 'machine')?.name ?? '';
+  const line = typed.values[field] as { itemId: string; code: string } | undefined;
+  if (line) {
+    await tx`select pg_advisory_xact_lock(hashtext(${`line:${line.itemId}`}))`;
+    const others = await tx<{ id: number }[]>`
+      select distinct e.batch_id::int as id from step_events e
+      where e.stage = 0 and e.step = 0 and e.round = 1 and e.kind in ('value', 'corrected') and e.payload->'values'->${field}->>'itemId' = ${line.itemId}
+        and not exists (select 1 from batch_events x where x.batch_id = e.batch_id and x.kind in ('production_approved', 'released', 'rejected'))`;
+    for (const { id } of others) {
+      const l = (await loadBatch(tx, id))!;
+      if (view(l).status === 'in production' && (openSteps(l.doc, l.events, l.now).steps[0]!.values[field] as { itemId?: string } | undefined)?.itemId === line.itemId) {
+        throw new StepError(409, 'line_in_use', [`Line ${line.code} has an active packing order: batch ${l.batch.batchNo} (${l.doc.header.productCode}) is still being packed. One packing order per line.`]);
+      }
+    }
+  }
+  return { ...typed, results };
+}
 const context = (doc: MasterDoc, v: StepView, user: SessionUser) => ({ state: v.state, events: v.events, flow: flowOf(doc, v.key), user,
   needs: stepNeeds(doc.stages[v.key.stage], findBlock(doc.stages[v.key.stage]!.steps[v.key.step]!.block)) });
 
@@ -289,7 +324,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
 
   // TI-03: issue a batch from an effective master version, with the next number of the year (never reused).
   app.post('/api/batches', { preHandler: requirePermission('truebatch_injectables.batch.issue') }, async (req, reply) => {
-    const b = z.object({ masterVersionId: z.number().int().positive(), proof: z.string().min(1).max(2000) }).safeParse(req.body);
+    const b = z.object({ masterVersionId: z.number().int().positive(), proof: z.string().min(1).max(2000), values: z.record(z.unknown()).optional() }).safeParse(req.body);
     if (!b.success) return reply.code(400).send({ error: 'invalid' });
     const user = req.user!;
     try {
@@ -302,6 +337,8 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
         // So does one approved before it had to name its dispensing rooms: its balances are those of the Dispensing area.
         const errors = masterChecks(v.doc).filter((p) => blocking(p) && !(p.rule === 'TI-11' && (p.path.endsWith('.roomTypes') || p.path === 'header.dispensingRooms')));
         if (errors.length) throw new StepError(409, 'master_has_errors', errors.map((p) => `${p.path}: ${p.message}`));
+        const atIssue = findBlock(v.doc.stages[0]?.steps[0]?.block ?? { id: '', version: 0 })?.atIssue;
+        const facts = atIssue ? await issueValues(app, tx, v.doc, b.data.values, (await tx<{ now: Date }[]>`select now() as now`)[0]!.now) : null;
         const [c] = await tx<{ n: number; yy: string }[]>`
           insert into batch_counters (year, last_no) values (extract(year from now() at time zone ${PLANT_TZ})::int, 1)
           on conflict (year) do update set last_no = batch_counters.last_no + 1
@@ -309,9 +346,18 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
         const batchNo = `${app.batchPrefix}${c!.yy}${String(c!.n).padStart(4, '0')}`;
         const [row] = await tx<{ id: number }[]>`
           insert into batches (batch_no, master_version_id, issued_by) values (${batchNo}, ${v.id}, ${user.id}) returning id::int`;
-        const content = { batchNo, masterVersionId: v.id, masterId: v.masterId, versionNo: v.versionNo, product: v.doc.header.productCode };
+        const content = { batchNo, masterVersionId: v.id, masterId: v.masterId, versionNo: v.versionNo, product: v.doc.header.productCode, ...(facts ? { facts: facts.values } : {}) };
         await sign(tx, { signer, objectType: 'batch', objectId: row!.id, meaning: 'issued', content, shownHash: contentHash('batch', row!.id, content) });
         await audit(tx, { actorId: user.id, action: 'batch.issued', objectType: 'batch', objectId: row!.id, new: content });
+        if (facts) {
+          // The batch facts are the first step's values, by the issuer: the step is then finished on the floor.
+          const payload = { values: facts.values, results: facts.results, uses: [], ...(Object.keys(facts.source).length ? { source: facts.source } : {}) };
+          for (const [kind, p] of [['started', { where: stepPlace(v.doc, { stage: 0, sub: 1, step: 0, round: 1 }) }], ['value', payload]] as const) {
+            const [e] = await tx<{ id: number }[]>`insert into step_events (batch_id, stage, sub, step, round, kind, payload, person_id)
+              values (${row!.id}, 0, 1, 0, 1, ${kind}, ${tx.json(p as never)}, ${user.id}) returning id::int`;
+            await audit(tx, { actorId: user.id, action: `step.${kind}`, objectType: 'batch', objectId: row!.id, new: { step: '0.1.0.1', event: e!.id, ...p } });
+          }
+        }
         return { id: row!.id, batchNo };
       });
     } catch (e) {
@@ -437,13 +483,19 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
     return { link: r.state, items: r.state === 'ok' ? r.value : [] };
   });
 
+  // Packing: the batches TrueBatch Injectables has released of a product, for the issue's pick list (pull, don't type).
+  app.get<{ Querystring: { product?: string } }>('/api/bulk-batches', { preHandler: requirePermission('truebatch_injectables.batch.issue') }, async (req) => {
+    const r = await app.links.truebatch_injectables.released(String(req.query.product ?? ''));
+    return { link: r.state, batches: r.state === 'ok' ? r.value.map((b) => ({ batchNo: b.batchNo, mfgDate: b.mfgDate })) : [] };
+  });
+
   // TI-22: the batch record as a PDF: a complete copy with its values, calculations, changes, notes and signatures.
   app.get<{ Params: { id: string } }>('/api/batches/:id/pdf', anyUser, async (req, reply) => {
     const id = parseId(req.params.id);
     const l = id === null ? null : await loadBatch(sql, id);
     if (!l) return reply.code(404).send({ error: 'not_found' });
     const def = batchRecordDoc({ ...await recordInput(sql, l, app.master), deviationsRead: (await deviationsRead(app, l)).read }, req.user!.fullName, new Date(), app.demo);
-    return sendPdf(reply, `batch-record-${l.batch.batchNo}`, await render(def));
+    return sendPdf(reply, `${l.doc.pack ? 'packing' : 'batch'}-record-${l.batch.batchNo}`, await render(def));
   });
 
   // Production approval, QC approval, release or rejection (each an e-signature), QA terminating a batch (a signed
@@ -465,6 +517,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
           const no = batchRefusal(action, view(l, (await deviationsRead(app, l)).read), user, b.note);
           if (no) throw new StepError(no.status, no.error, no.problems);
           if (signer && b.contentHash !== batchHash(l)) throw new StepError(409, 'content_changed', ['The batch record changed since you opened it.']);
+          if (action === 'qc-approve' && !l.doc.pack && !b.emReview) throw new StepError(400, 'invalid', ['emReview: the EM review of the batch is needed for QC approval']);
           // Terminate: what went back to stores unused of each lot the batch used; material_use_v1 gives it back to MMS.
           const issued = action === 'terminate' ? issuedLots(l.doc, openSteps(l.doc, l.events, l.now).steps) : [];
           const wrong = returnProblems(issued, b.returns ?? []);

@@ -63,7 +63,21 @@ export function stepText(doc: MasterDoc, t: Step, j: number, units?: Units): str
 
 export function describeMaster(doc: MasterDoc, units?: Units): Section[] {
   const h = doc.header;
-  return [
+  const p = doc.pack;
+  // A packing master (TI-P1) in packing words: the pack and its packing materials, no formula.
+  const top: Section[] = p ? [
+    { key: 'header', title: 'Pack', lines: [
+      { key: 'product', text: `Pack product ${h.productCode}, ${h.productName}.` },
+      { key: 'bulk', text: `Packs the filled units of ${p.bulkCode}, ${p.bulkName} (a released TrueBatch Injectables batch).` },
+      { key: 'batch', text: `Standard packing batch ${h.batchSize} filled units.` },
+      { key: 'pack', text: `${p.type[0]!.toUpperCase()}${p.type.slice(1)} of ${p.unitsPerPack} units; ${p.packsPerCarton} packs per carton.` },
+      { key: 'expiry', text: `Approved shelf life ${p.shelfLifeMonths} months; expiry ${p.expiryRule === 'same month' ? 'month of manufacture + shelf life' : 'month of manufacture + shelf life − 1'}.` },
+      { key: 'market', text: `For ${p.destination}${p.mrp ? `; MRP Rs. ${p.mrp} per pack` : ''}.` },
+      ...(p.serialisation ? [{ key: 'serialisation', text: `Serialisation checked${p.gtin ? `; pack GTIN ${p.gtin}` : ''}.` }] : []),
+    ] },
+    { key: 'formula', title: 'Packing materials', lines: p.materials.map((m) => ({ key: m.key,
+      text: `${m.name} (${m.code}), ${m.kind}: ${m.perPack} ${unitName(m.unit, units?.get(m.materialItemId))} per pack${m.printed ? '; printed, issued with a second person and reconciled' : ''}${m.coded ? '; coded with the batch details' : ''}.` })) },
+  ] : [
     { key: 'header', title: 'Header', lines: [
       { key: 'product', text: `Product ${h.productCode}, ${h.productName}.` },
       { key: 'batch', text: `Batch ${batchText(doc)}; formula per ${h.batchUnit === 'units' ? 'unit' : 'mL'}.` },
@@ -71,6 +85,9 @@ export function describeMaster(doc: MasterDoc, units?: Units): Section[] {
     ] },
     { key: 'formula', title: 'Formula', lines: doc.formula.map((l) => ({ key: l.key,
       text: `${l.name} (${l.code}), ${ROLE[l.role]}: ${l.mg === undefined ? 'to volume (q.s.)' : `${l.mg} mg per ${h.batchUnit === 'units' ? 'unit' : 'mL'}`}${l.labelClaim ? ` (label claim ${l.labelClaim})` : ''}${l.batchQuantity ? ` (batch quantity written as ${l.batchQuantity})` : ''}${adjustText(doc, l)}.` })) },
+  ];
+  return [
+    ...top,
     // Engine change 5: the time limits (TI-17), only when there are some.
     ...(doc.timeLimits?.length ? [{ key: 'time-limits', title: 'Time limits', lines: doc.timeLimits.map((l) => ({ key: l.key,
       text: `${l.name}: at most ${l.hours} h from the ${l.from.at} of ${l.from.step.replace('/', ' › ')} to the ${l.to.at} of ${l.to.step.replace('/', ' › ')}; an overrun needs a deviation note.` })) }] : []),

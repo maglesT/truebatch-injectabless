@@ -6,7 +6,9 @@ import { createMaster, getVersion, STATE_LABEL, type MasterData, type MasterRow,
 import { CLAIM_PER, masterSchema, type MasterDoc } from '../../../shared/master/schema.js';
 import { headerValue } from '../../../shared/engine/values.js';
 import { scaleDoc } from './model.js';
-import { defaultDispensingRooms, skeletonList, skeletonStages } from './skeletons.js';
+import { defaultDispensingRooms, packingStages, PACKING_SKELETON, skeletonList, skeletonStages } from './skeletons.js';
+import { NEW_PACK, PackFields } from './Pack.js';
+import { product as app } from '../product.js';
 import { ChipSet, Decimal, Picker } from './ui.js';
 
 type Header = MasterDoc['header'];
@@ -76,11 +78,14 @@ export function NewMaster({ md, masters, copyOf, onCreated, onCancel }: {
   md: MasterData; masters: MasterRow[]; copyOf?: MasterRow; onCreated: (id: number) => void; onCancel: () => void;
 }) {
   // A new master starts with the rooms of the Dispensing area as its dispensing rooms (a copy: those it names).
-  const [header, setHeader] = useState<Header>({ dispensingRooms: defaultDispensingRooms(md.rooms),
-    ...(copyOf?.header ?? { productItemId: '', productCode: '', productName: '', batchSize: '', batchUnit: 'L' }) });
-  // The starting masters of the route chosen in the header (all of them before one is chosen).
-  const skeletons = skeletonList(header.route);
-  const [start, setStart] = useState<Start>(copyOf ? { kind: 'copy', versionId: copyOf.id } : { kind: 'skeleton', id: skeletonList()[0]!.id });
+  // A packing master: a batch in filled units, no dispensing rooms.
+  const [header, setHeader] = useState<Header>({ ...(app.packing ? {} : { dispensingRooms: defaultDispensingRooms(md.rooms) }),
+    ...(copyOf?.header ?? { productItemId: '', productCode: '', productName: '', batchSize: '', batchUnit: app.packing ? 'units' : 'L' }) });
+  // The starting masters of the route chosen in the header (all of them before one is chosen); packing: its own.
+  const skeletons = app.packing ? [PACKING_SKELETON] : skeletonList(header.route);
+  const [start, setStart] = useState<Start>(copyOf ? { kind: 'copy', versionId: copyOf.id } : { kind: 'skeleton', id: skeletons[0]!.id });
+  // A packing master: the pack (TI-P1), copied with the master it is copied from.
+  const [pack, setPack] = useState(app.packing ? NEW_PACK : undefined);
   const [source, setSource] = useState<MasterDoc | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -88,6 +93,7 @@ export function NewMaster({ md, masters, copyOf, onCreated, onCancel }: {
     if (start.kind !== 'copy') return setSource(null);
     void getVersion(start.versionId).then((v) => {
       setSource(v.doc);
+      if (v.doc.pack) setPack(v.doc.pack);
       // A copy keeps the source's unit, density and fill; only the batch size may change (its quantities then scale).
       const { productItemId: _p, productCode: _c, productName: _n, batchSize, ...rest } = v.doc.header;
       setHeader((h) => ({ ...h, ...rest, batchSize: h.batchSize || batchSize }));
@@ -97,12 +103,13 @@ export function NewMaster({ md, masters, copyOf, onCreated, onCancel }: {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
-    let doc: MasterDoc = { header, formula: [], stages: [] };
+    let doc: MasterDoc = { header, formula: [], stages: [], ...(pack ? { pack } : {}) };
     if (start.kind === 'skeleton' && !skeletons.some((k) => k.id === start.id)) return setError('Choose a starting master for this route.');
-    if (start.kind === 'skeleton') doc.stages = skeletonStages(start.id, header);
-    if (start.kind === 'copy' && source) doc = { ...scaleDoc(source, header.batchSize), header: { ...header, batchUnit: source.header.batchUnit } };
+    if (start.kind === 'skeleton') doc.stages = pack ? packingStages(pack) : skeletonStages(start.id, header);
+    if (start.kind === 'copy' && source) doc = { ...scaleDoc(source, header.batchSize), header: { ...header, batchUnit: source.header.batchUnit }, ...(pack ? { pack } : {}) };
     const parsed = masterSchema.safeParse(doc);
     if (!header.productItemId) return setError('Pick the product.');
+    if (pack && !pack.bulkItemId) return setError('Pick the product packed (the filled units).');
     if (!parsed.success) return setError(parsed.error.issues.map((i) => `${i.path.at(-1) === 'batchSize' ? 'Batch size' : i.path.join('.')}: ${i.message}`).join('; '));
     setBusy(true);
     try {
@@ -117,7 +124,8 @@ export function NewMaster({ md, masters, copyOf, onCreated, onCancel }: {
     <div className="overlay" role="dialog" aria-modal="true" aria-label={copyOf ? 'Copy a master' : 'New master'}>
       <form className="card dialog wide" onSubmit={submit}>
         <h2>{copyOf ? `Copy ${copyOf.header.productCode} version ${copyOf.versionNo}` : 'New master'}</h2>
-        <HeaderFields header={header} onChange={setHeader} products={md.products} rooms={md.rooms} />
+        {pack ? <PackFields header={header} pack={pack} products={md.products} onChange={(h, p) => { setHeader(h); setPack(p); }} />
+          : <HeaderFields header={header} onChange={setHeader} products={md.products} rooms={md.rooms} />}
         <fieldset className="checklist">
           <legend>Start from</legend>
           {skeletons.map((s) => (
