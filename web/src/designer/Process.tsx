@@ -73,6 +73,8 @@ export function Process({ doc, onChange, md, place, onPlace, editable }: {
   const machineTypes = [...new Set(md.equipment.filter((e) => e.active && e.type).map((e) => e.type!))].sort();
   // Rooms are allowed by their area, or one by one by their code (not every room of an area in every block).
   const areas = [...[...new Set(md.rooms.filter((r) => r.active && r.area).map((r) => r.area!))].sort(), ...md.rooms.filter((r) => r.active).map((r) => r.code).sort()];
+  // A room reads with its name and area (as the header's dispensing rooms); an area says it is every room of it (run 3, H2).
+  const roomText = (o: string) => { const r = md.rooms.find((x) => x.code === o); return r ? `${r.code} · ${r.name}${r.area ? ` (${r.area})` : ''}` : `${o} (area: any room of it)`; };
   // A stage with steps is removed after the app's own question (never the browser's confirm box).
   const [removing, setRemoving] = useState<number | null>(null);
   const removeStage = (i: number) => { setStages(doc.stages.filter((_, j) => j !== i)); select(Math.max(0, i - 1)); setRemoving(null); };
@@ -167,7 +169,7 @@ export function Process({ doc, onChange, md, place, onPlace, editable }: {
         {stage && ti !== undefined ? (
           <StepSettings key={`${si}/${stage.steps[ti]!.key}`} doc={doc} si={si} ti={ti} onChange={(t) => setSteps(stage.steps.map((x, k) => (k === ti ? t : x)))} />
         ) : stage ? (
-          <StageForm doc={doc} si={si} stage={stage} onChange={putStage} roles={roles} machineTypes={machineTypes} areas={areas} />
+          <StageForm doc={doc} si={si} stage={stage} onChange={putStage} roles={roles} machineTypes={machineTypes} areas={areas} roomText={roomText} />
         ) : null}
       </div>
     </div>
@@ -176,8 +178,8 @@ export function Process({ doc, onChange, md, place, onPlace, editable }: {
   );
 }
 
-function StageForm({ doc, si, stage, onChange, roles, machineTypes, areas }: {
-  doc: MasterDoc; si: number; stage: Stage; onChange: (s: Stage) => void; roles: string[]; machineTypes: string[]; areas: string[];
+function StageForm({ doc, si, stage, onChange, roles, machineTypes, areas, roomText }: {
+  doc: MasterDoc; si: number; stage: Stage; onChange: (s: Stage) => void; roles: string[]; machineTypes: string[]; areas: string[]; roomText: (o: string) => string;
 }) {
   const earlier = doc.stages.slice(0, si).filter((s) => s.produces);
   return (
@@ -200,7 +202,7 @@ function StageForm({ doc, si, stage, onChange, roles, machineTypes, areas }: {
         <datalist id="roles">{roles.map((r) => <option key={r} value={r} />)}</datalist>
       </div>
       {/* TI-11: the machines and rooms the floor is offered stand in these rooms (balances also in a dispensing area). */}
-      <ChipSet label="Rooms this stage may run in (an area, or a room)" values={stage.roomTypes} options={areas} onChange={(roomTypes) => onChange({ ...stage, roomTypes })}
+      <ChipSet label="Rooms this stage may run in (an area, or a room)" values={stage.roomTypes} options={areas} text={roomText} onChange={(roomTypes) => onChange({ ...stage, roomTypes })}
         empty="None chosen yet: choose the rooms (needed when the stage works machines or names a room)" />
       <ChipSet label="Allowed machine types" values={stage.machineTypes} options={machineTypes} onChange={(machineTypes) => onChange({ ...stage, machineTypes })} empty="Any machine type" />
       <fieldset className="checklist">

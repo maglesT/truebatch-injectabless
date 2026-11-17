@@ -1,13 +1,14 @@
 // Starting masters by injectable type and route (plan 4d): the usual stages and steps, as data. Settings that depend
 // on the product (which material a step weighs, its limits, the cycle) are left for the author; the master check lists
-// them. A stage worked in a room starts with line clearance (TI-10); a stage starts with the rooms it
-// usually runs in, by the usual area names (TI-11). Each starting master already has the steps the sterile rules of its
+// them. A stage worked in a room starts with line clearance (TI-10); a stage starts with the areas it usually runs in,
+// and each area of master data with exactly one room becomes that room (run 3, H1 and H2: the master names the line's own
+// room; with several rooms the author picks it, and the master check asks). Each starting master already has the steps the sterile rules of its
 // route need (TI-23 to TI-31), so the master check shows only what is the product's own.
 import { latestBlock } from '../../../shared/blocks/index.js';
 import type { MasterDoc, Pack, SettingValue, Stage, Step } from '../../../shared/master/schema.js';
 
 type Route = NonNullable<MasterDoc['header']['route']>;
-import { stepFrom } from './model.js';
+import { newKey, stepFrom } from './model.js';
 
 type Header = MasterDoc['header'];
 interface StepPlan { block: string; key?: string; name?: string; checker?: boolean; settings?: (h: Header) => Record<string, SettingValue> }
@@ -33,8 +34,8 @@ const compounding = (end: StepPlan[] = []): StagePlan => ({ key: 'compounding', 
 const components: StagePlan = { key: 'components', name: 'Containers and closures', kind: 'preparation', role: 'Washing operator', rooms: ['Vial washing', 'Depyrogenation', 'Component preparation', 'Sterilisation'],
   produces: ['clean, depyrogenated containers and sterile closures', 72],
   steps: [issue('vials'), issue('stoppers'), s('component-wash', 'wash-vials', 'Wash the vials'), s('depyrogenate'), s('sterilise', 'stoppers', 'Sterilise the stoppers')] };
-const asepticFill = (between: StepPlan[], o: { fill?: StepPlan[]; close?: StepPlan[]; uses?: string[]; back?: string[] } = {}): StagePlan => ({
-  key: 'filling', name: 'Aseptic filling', role: 'Aseptic operator', rooms: ['Aseptic filling', 'Lyophilisation', 'Capping'], aseptic: true, uses: o.uses ?? ['compounding', 'components'],
+const asepticFill = (between: StepPlan[], o: { fill?: StepPlan[]; close?: StepPlan[]; uses?: string[]; back?: string[]; rooms?: string[] } = {}): StagePlan => ({
+  key: 'filling', name: 'Aseptic filling', role: 'Aseptic operator', rooms: o.rooms ?? ['Aseptic filling', 'Capping'], aseptic: true, uses: o.uses ?? ['compounding', 'components'],
   // The interventions log and the clean-air checks open with the set-up and run beside the filling (what follows a fill
   // waits for the filling to finish).
   steps: [s('aseptic-ready'), s('interventions'), s('em-filling'), s('transfer-in'), ...(o.fill ?? [s('fill')]), ...between,
@@ -43,10 +44,14 @@ const asepticFill = (between: StepPlan[], o: { fill?: StepPlan[]; close?: StepPl
 // Aseptic blow-fill-seal (owner, 17 Nov 2026): the machine forms its containers from plastic granules issued by weight
 // from an MMS lot (the container issue in kg, as Packing issues a material by weight) and weighed back at the end; it
 // closes them itself (no stoppers or seals) and the leak test is in inspection.
-const granules: StepPlan = { block: 'container-issue', key: 'issue-granules', name: 'Issue the plastic granules', settings: () => ({ unit: 'kg', expected: '' }) };
-const granulesBack: StepPlan = { block: 'container-return', key: 'back-granules', name: 'Weigh back the plastic granules', settings: () => ({ unit: 'kg' }) };
+// A form-fill-seal bag line issues its plastic film or granules the same way (run 3, H3).
+const plastic = (key: string, what: string): [StepPlan, StepPlan] => [
+  { block: 'container-issue', key: `issue-${key}`, name: `Issue the ${what}`, settings: () => ({ unit: 'kg', expected: '' }) },
+  { block: 'container-return', key: `back-${key}`, name: `Weigh back the ${what}`, settings: () => ({ unit: 'kg' }) }];
+const [granules, granulesBack] = plastic('granules', 'plastic granules');
 const bfs: StagePlan = { key: 'filling', name: 'Aseptic blow-fill-seal', role: 'Aseptic operator', rooms: ['Aseptic filling'], aseptic: true, uses: ['compounding'],
   steps: [s('aseptic-ready'), s('interventions'), s('em-filling'), granules, s('ffs-run'), s('qa-sample', 'sterility', 'Sterility and endotoxin samples'), granulesBack, s('unit-reconcile')] };
+const [film, filmBack] = plastic('plastic', 'plastic film or granules');
 // Sterile powder (owner, 17 Nov 2026): the sterile drug substance is weighed in the sterile dispensing area, as any
 // formula material, in a preparation stage as the containers are (no yield: the filling stage reconciles the units); no
 // compounding and no filtration.
@@ -54,8 +59,8 @@ const dispensing: StagePlan = { key: 'dispensing', name: 'Sterile dispensing', k
   steps: [s('weigh', 'weigh-api', 'Weigh the sterile powder')] };
 const resultsLater = (after: string): StagePlan => ({ key: 'results', name: 'Results later (EM plates, bioburden)', kind: 'preparation', role: 'QC microbiologist', rooms: [],
   startsAfter: after, steps: [s('incubated-results', 'plates', 'EM plates read')] });
-const terminal = (fillName: string, fill: StepPlan[], uses: string[], parts: string[] = []): StagePlan[] => [
-  { key: 'filling', name: fillName, role: 'Filling operator', rooms: ['Aseptic filling', 'Capping'], uses, steps: [s('filtration-clarifying'), ...fill, ...parts.map(back), s('unit-reconcile')] },
+const terminal = (fillName: string, fill: StepPlan[], uses: string[], after: StepPlan[], rooms: string[]): StagePlan[] => [
+  { key: 'filling', name: fillName, role: 'Filling operator', rooms, uses, steps: [s('filtration-clarifying'), ...fill, ...after, s('unit-reconcile')] },
   { key: 'sterilisation', name: 'Terminal sterilisation', role: 'Sterilisation operator', rooms: ['Sterilisation'],
     steps: [s('terminal-sterilise'), s('qa-sample', 'sterility', 'Sterility and endotoxin samples (each load)'), s('unit-reconcile')] },
 ];
@@ -73,12 +78,14 @@ const SKELETONS: { id: string; route?: Route; name: string; text: string; stages
   {
     id: 'liquid-terminal', route: 'terminal', name: 'Liquid in vials or ampoules, terminally sterilised',
     text: 'Compounding, clarifying filtration, filling and closing, autoclave loads with the sterility samples, leak test and inspection.',
-    stages: [compounding(), components, ...terminal('Filling', [s('fill'), issue('seals'), s('seal-check')], ['compounding', 'components'], VIAL_PARTS), inspection([s('leak-test-100')])],
+    stages: [compounding(), components, ...terminal('Filling', [s('fill'), issue('seals'), s('seal-check')], ['compounding', 'components'], VIAL_PARTS.map(back), ['Aseptic filling', 'Capping']), inspection([s('leak-test-100')])],
   },
   {
     id: 'bag-terminal', route: 'terminal', name: 'Bags or bottles (large volume), form-fill-seal, terminally sterilised',
     text: 'Compounding, clarifying filtration, form-fill-seal, autoclave loads with the sterility samples, leak test and inspection.',
-    stages: [compounding(), ...terminal('Form-fill-seal', [s('ffs-run')], ['compounding']), inspection([s('leak-test-100')])],
+    // The machine forms, fills and seals the bag (no capping room). Master data has no area of its own for a terminally
+    // sterilised large-volume line: its form-fill-seal room is one of the filling rooms, so the author picks it there.
+    stages: [compounding(), ...terminal('Form-fill-seal', [film, s('ffs-run')], ['compounding'], [filmBack], ['Aseptic filling']), inspection([s('leak-test-100')])],
   },
   {
     id: 'liquid-aseptic', route: 'aseptic', name: 'Liquid in vials, sterile filtered and aseptically filled',
@@ -88,12 +95,12 @@ const SKELETONS: { id: string; route?: Route; name: string; text: string; stages
   {
     id: 'lyo-aseptic', route: 'aseptic', name: 'Freeze-dried vials, aseptic',
     text: 'As the aseptic liquid, with the vials partly stoppered, loaded, freeze-dried, stoppered and unloaded before capping.',
-    stages: [compounding(filtrationSteps), components, asepticFill([s('lyo-load'), s('lyo-cycle'), s('lyo-unload')]), resultsLater('filling/fill'), inspection()],
+    stages: [compounding(filtrationSteps), components, asepticFill([s('lyo-load'), s('lyo-cycle'), s('lyo-unload')], { rooms: ['Aseptic filling', 'Lyophilisation', 'Capping'] }), resultsLater('filling/fill'), inspection()],
   },
   {
     id: 'syringe-aseptic', route: 'aseptic', name: 'Prefilled syringes or cartridges, aseptic',
     text: 'Compounding and sterile filtration, ready-to-use tubs into grade A, filling and plunger placement, the plunger check, inspection.',
-    stages: [compounding(filtrationSteps), asepticFill([s('plunger-check')], { fill: [issue('syringes'), issue('plungers'), s('rtu-tubs'), s('fill')], close: [], uses: ['compounding'], back: ['syringes', 'plungers'] }),
+    stages: [compounding(filtrationSteps), asepticFill([s('plunger-check')], { fill: [issue('syringes'), issue('plungers'), s('rtu-tubs'), s('fill')], close: [], uses: ['compounding'], back: ['syringes', 'plungers'], rooms: ['Aseptic filling'] }),
       resultsLater('filling/fill'), inspection([s('leak-test-100')])],
   },
   {
@@ -123,17 +130,25 @@ const SKELETONS: { id: string; route?: Route; name: string; text: string; stages
 export const skeletonList = (route?: Route) => SKELETONS.filter((k) => !route || !k.route || k.route === route || (route === 'both' && k.route === 'aseptic'))
   .map(({ id, name, text }) => ({ id, name, text }));
 
-/** The dispensing rooms a new master starts with (TI-11): the active rooms whose area is exactly "Sterile dispensing" (an injectable is
- *  weighed in the sterile dispensing booth; the plain "Dispensing" area is the tablet one). The author adds or removes rooms in the header. */
-export const defaultDispensingRooms = (rooms: readonly { code: string; area: string | null; active: boolean }[]) =>
-  rooms.filter((r) => r.active && r.area === 'Sterile dispensing').map((r) => r.code);
+type MdRoom = { code: string; area: string | null; active: boolean };
+/** A starting master's rooms (run 3, H1 and H2): an area of master data with exactly one active room becomes that room;
+ *  an area with several stays, and the master check asks the author to pick the line's room (shared/master/places.ts). */
+export const ownRooms = (areas: readonly string[], rooms: readonly MdRoom[]) => areas.map((a) => {
+  const of = rooms.filter((r) => r.active && r.area === a);
+  return of.length === 1 ? of[0]!.code : a;
+});
 
-/** The stages of a starting master for this header. */
-export function skeletonStages(id: string, h: Header): Stage[] {
+/** The dispensing rooms a new master starts with (TI-11), by the same rule: the sterile dispensing room when master data
+ *  has exactly one (an injectable is weighed in the sterile dispensing booth; the plain "Dispensing" area is the tablet
+ *  one); with several, none: the author picks them in the header (the master check asks until then). */
+export const defaultDispensingRooms = (rooms: readonly MdRoom[]) => ownRooms(['Sterile dispensing'], rooms).filter((c) => rooms.some((r) => r.code === c));
+
+/** The stages of a starting master for this header; `rooms`: master data's rooms (an area with one room becomes that room). */
+export function skeletonStages(id: string, h: Header, rooms: readonly MdRoom[] = []): Stage[] {
   const sk = SKELETONS.find((x) => x.id === id);
   if (!sk) return [];
   return sk.stages.map((p) => ({
-    key: p.key, name: p.name, kind: p.kind ?? 'normal', roomTypes: p.rooms ?? [], machineTypes: [], role: p.role, uses: p.uses ?? [],
+    key: p.key, name: p.name, kind: p.kind ?? 'normal', roomTypes: ownRooms(p.rooms ?? [], rooms), machineTypes: [], role: p.role, uses: p.uses ?? [],
     ...(p.produces ? { produces: { name: p.produces[0], holdHours: p.produces[1] } } : {}),
     ...(p.aseptic ? { aseptic: true } : {}), ...(p.startsAfter ? { startsAfter: p.startsAfter } : {}),
     steps: [...(p.rooms?.length ? [{ block: 'line-clearance' }] : []), ...p.steps].reduce<Step[]>((steps, sp) => {
@@ -143,6 +158,31 @@ export function skeletonStages(id: string, h: Header): Stage[] {
       return [...steps, { ...base, ...(sp.key ? { key: sp.key } : {}), ...(sp.name ? { name: sp.name } : {}), settings, ...(sp.checker ? { checker: true } : {}) }];
     }, []),
   }));
+}
+
+/**
+ * Adds a weighing for each excipient of the formula that no step weighs yet (run 3, H6: a starting master weighs the drug
+ * substance; the demo's liquid masters weigh every excipient after it), as withMaterialSteps adds the packing materials'
+ * steps: each a copy of the master's first weighing, its target the excipient, placed after the last weighing of that stage.
+ */
+export function withWeighSteps(doc: MasterDoc): MasterDoc {
+  const target = (t: Step) => (t.settings.target as { formula?: string } | undefined)?.formula;
+  const weighs = doc.stages.flatMap((st) => st.steps.filter((t) => t.block.id === 'weigh'));
+  const first = doc.stages.findIndex((st) => st.steps.some((t) => t.block.id === 'weigh'));
+  const missing = doc.formula.filter((l) => l.role === 'excipient' && !weighs.some((t) => target(t) === l.key));
+  if (first < 0 || !missing.length) return doc;
+  const stages = doc.stages.map((st) => ({ ...st, steps: [...st.steps] }));
+  const steps = stages[first]!.steps;
+  const base = steps.find((t) => t.block.id === 'weigh')!;
+  const at = steps.map((t) => t.block.id).lastIndexOf('weigh') + 1;
+  const taken = steps.map((t) => t.key);
+  steps.splice(at, 0, ...missing.map((l) => {
+    const key = newKey(`weigh-${l.key}`, taken);
+    taken.push(key);
+    const { name: _, ...copy } = base;
+    return { ...copy, key, settings: { ...base.settings, target: { formula: l.key } } };
+  }));
+  return { ...doc, stages };
 }
 
 // TrueBatch Injectables Packing: the packing record for a pack and its materials. Issue to the line (the filled units of

@@ -15,7 +15,7 @@ import { askedFields, cutShort, notYetText } from '../../../shared/engine/batch.
 import { lineQuantity, stepFields } from '../../../shared/engine/values.js';
 import { plantText } from '../../../shared/plant-time.js';
 import { needsText, stepNeeds } from '../../../shared/engine/state.js';
-import { clearedRooms, dispensingRooms, emptyNote, inLogbook, machineRefusal, roomRefusal } from '../../../shared/engine/picks.js';
+import { dispensingRooms, emptyNote, inLogbook, machineRefusal, roomRefusal } from '../../../shared/engine/picks.js';
 import { materialLines, type FormulaLine, type PackMaterial } from '../../../shared/master/schema.js';
 import { perPackText, unitName } from '../../../shared/engine/stock.js';
 
@@ -114,15 +114,13 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   // What each machine or room field offers: as the server accepts it (shared/engine/picks.ts), and while the Logbook
   // is linked only what the Logbook has; an empty picker says what is left out and why.
   const logbook = useLogbookItems(block.fields.some((f) => f.kind === 'machine' || f.kind === 'room'));
-  // A machine stands in the room this stage's line clearance was done in, when it stands in that room's area (run 2, G6).
-  const cleared = clearedRooms(d.steps.filter((x) => x.id !== row.id), row.key.stage);
   const fits = (f: BlockField) => (f.kind === 'room' ? md.room.filter((r) => r.active && !roomRefusal(stage, r))
-    : f.kind === 'machine' ? md.machine.filter((m) => m.active && !machineRefusal(stage, f, m, md.room, dispensingRooms(doc, md.room), cleared)) : []);
+    : f.kind === 'machine' ? md.machine.filter((m) => m.active && !machineRefusal(stage, f, m, md.room, dispensingRooms(doc, md.room))) : []);
   const pickOf = (f: BlockField) => inLogbook(fits(f), logbook);
   const picksFor = (f: BlockField) => pickOf(f).offered;
   // An empty picker says why (once master data is read) and what the Logbook leaves out; one with choices says nothing.
   const mdRead = md.room.length > 0 && (md.machine.length > 0 || !block.fields.some((x) => x.kind === 'machine'));
-  const noteFor = (f: BlockField) => [mdRead && !fits(f).length ? emptyNote(stage, f, md.machine, md.room, dispensingRooms(doc, md.room), cleared) : null, pickOf(f).note];
+  const noteFor = (f: BlockField) => [mdRead && !fits(f).length ? emptyNote(stage, f, md.machine, md.room, dispensingRooms(doc, md.room)) : null, pickOf(f).note];
 
   const post = (action: string, body: object = {}, key = row.id) => api('POST', `/api/batches/${d.batch.id}/steps/${key}/${action}`, body);
   const run = async (fn: () => Promise<unknown>) => {

@@ -253,7 +253,9 @@ export const componentWash: Block = {
   id: 'component-wash', version: 1, name: 'Wash containers, stoppers or parts', checker: false,
   instruction: 'Wash the components or parts in the washer; check the final rinse and look at them.',
   fields: [
-    { name: 'washer', label: 'Washer', kind: 'machine', types: ['wash', 'processor'] },
+    // A washing machine or washer only (run 3, H9: "Wash the vials" took the stopper processor, and "processor" also
+    // matched a fluid bed processor). The same field, so the same version, as the filter test's tester types.
+    { name: 'washer', label: 'Washer', kind: 'machine', types: ['washing machine', 'washer'] },
     { name: 'lot', label: 'Component lot', kind: 'lot', optional: true }, num('count', 'Components or parts washed', 'units'),
     text('printout', 'Cycle printout reference'), num('conductivity', 'Final rinse conductivity', 'µS/cm', true),
     text('siliconeLot', 'Silicone emulsion lot (when siliconised)', true), yes('visual', 'Clean, no particles, not damaged'),

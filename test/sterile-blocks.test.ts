@@ -97,6 +97,10 @@ describe('the sterile blocks of the injectables library', () => {
     expect(usedQuantity(doc, st, { lot: 'LDPE-26-004', issued: kg('255.0') }, {}, [back])).toEqual(kg('242.5'));
     expect(stepFrom(latestBlock('container-issue')!, []).settings).toEqual({ expected: { header: 'units' }, unit: 'units' });
     expect(stepFrom(latestBlock('container-return')!, []).settings).toEqual({ unit: 'units' });
+    // Run 3, H7: its words fit a weight as a count (the unit shows with the quantity).
+    const b = latestBlock('container-issue')!;
+    expect([...b.settings.map((x) => x.label), ...b.fields.map((f) => f.label), ...b.calcs.map((c) => c.label)].filter((l) => /unit|count/i.test(l))).toEqual(['Unit']);
+    expect(b.settings.find((x) => x.name === 'enoughLimit')!.label).toBe('Quantity issued, in % of the quantity expected');
   });
 
   it('TI-13 make-up: the batch weight to reach is the batch volume × density, the reading within ± 0.5 %', () => {

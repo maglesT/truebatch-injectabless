@@ -221,7 +221,7 @@ describe('TI-11 Logbook: equipment and rooms fit for use', () => {
     expect((await stepOf(c.id, '0.1.0.1')).source.isolator).toMatchObject({ from: 'logbook', shown: 'RAB-01: clean' });
   });
 
-  it('TI-11 run 2 G6: the isolator or RABS (as any machine) stands in the room this stage\'s line clearance names, not in another room of its area', async () => {
+  it('TI-11 run 3 H2, H10: a stage names its line\'s room: the line clearance takes only that room, and the isolator or RABS (as any machine) stands in it', async () => {
     t.master.rooms_.push({ ...item('rm-a1', 'ASF-01', 'Aseptic filling room (vials)'), area: 'aseptic filling', grade: 'B' },
       { ...item('rm-a2', 'ASF-02', 'Aseptic filling room (syringes)'), area: 'aseptic filling', grade: 'B' });
     t.master.equipment_.push({ ...item('eq-iso2', 'ISO-02', 'Filling isolator'), kind: 'equipment', type: 'Isolator', room: 'ASF-01' },
@@ -229,13 +229,14 @@ describe('TI-11 Logbook: equipment and rooms fit for use', () => {
     await t.owner.unsafe(`insert into ${S.lb}.equipment_status_v1 (master_id, code, kind, state, fit_for_use, blockers, warnings, checked_at, cleaned_at, cleaned_by) values
       ('rm-a1', 'ASF-01', 'area', 'clean', true, '{}', '{}', now(), now(), 'CLEANER ONE'), ('eq-iso2', 'ISO-02', 'equipment', 'clean', true, '{}', '{}', now(), null, null),
       ('eq-rab2', 'RAB-02', 'equipment', 'clean', true, '{}', '{}', now(), null, null)`);
-    const c = await issue(small([{ roomTypes: ['aseptic filling'], steps: [{ block: { id: 'line-clearance', version: 1 }, checker: true, settings: {} },
+    const c = await issue(small([{ roomTypes: ['ASF-01'], steps: [{ block: { id: 'line-clearance', version: 1 }, checker: true, settings: {} },
       { block: { id: 'aseptic-ready', version: 3 }, checker: false, settings: {} }, yieldStep] }]));
     await act('asha', c.id, '0.1.0.1', 'start');
+    expect(await problems(record(c.id, '0.1.0.1', { room: 'rm-a2' }))).toEqual(['ASF-02 is not one of the rooms this stage allows (ASF-01)']);
     expect((await record(c.id, '0.1.0.1', { room: 'rm-a1', previousRemoved: 'yes', noOther: 'yes' })).statusCode).toBe(200);
     expect((await sign('asha', c.id, '0.1.0.1', 'done')).statusCode).toBe(200);
     await act('asha', c.id, '0.1.1.1', 'start');
-    expect(await problems(record(c.id, '0.1.1.1', { isolator: 'eq-rab2' }))).toEqual(['RAB-02 stands in ASF-02, not in ASF-01, where this stage\'s line clearance was done']);
+    expect(await problems(record(c.id, '0.1.1.1', { isolator: 'eq-rab2' }))).toEqual(['RAB-02 stands in ASF-02 (aseptic filling), not in a room this stage allows (ASF-01): the master names the rooms each stage runs in']);
     expect((await record(c.id, '0.1.1.1', { isolator: 'eq-iso2' })).statusCode).toBe(200);
   });
 

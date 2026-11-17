@@ -48,11 +48,15 @@ export const containerReturn: Block = {
 // blow-fill-seal machine forms its containers from). material_use_v1 and the stock check take the step's unit as they
 // are. Version 2 and version 1 stay for the recorded batches.
 const UNIT = { name: 'unit', label: 'Unit', kind: 'text' as const, options: ['units', 'kg'] };
+// Its words are for a count or a weight alike (run 3, H7: "Units expected" read wrong for granules in kg); only the
+// words changed, the fields did not, so it stays version 3.
+const QUANTITY_WORDS: Record<string, string> = { expected: 'Quantity expected', enoughLimit: 'Quantity issued, in % of the quantity expected' };
 export const containerIssue3: Block = {
   ...containerIssue2, version: 3,
   instruction: 'Issue the container, closure or granules shown from a released lot of it; count or weigh them. What is left at the end is counted or weighed back in its own step.',
   fields: containerIssue2.fields.map((f) => (f.name === 'issued' ? { ...f, label: 'Quantity issued', unit: '$unit' } : f)),
-  settings: [...containerIssue2.settings, UNIT],
+  settings: [...containerIssue2.settings.map((x) => (QUANTITY_WORDS[x.name] ? { ...x, label: QUANTITY_WORDS[x.name]! } : x)), UNIT],
+  calcs: containerIssue2.calcs.map((c) => (c.name === 'enough' ? { ...c, label: 'Quantity issued against the quantity expected' } : c)),
 };
 export const containerReturn2: Block = {
   ...containerReturn, version: 2,

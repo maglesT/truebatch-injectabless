@@ -141,8 +141,8 @@ adding anything, look how TrueBatch Tablets does it and copy that.
   master's packing materials), so the floor offers MMS lots of that material and refuses another material's lot. What
   is left is counted back in its own step (`container-return`, as Packing's printed reconciliation), never by
   re-opening the signed issue; `material_use_v1` (`db/migrations/0015`) gives MMS issued less that count once it is
-  signed, with the material code. A machine stands in the room the stage's line clearance named when it stands in that
-  room's area (two lines share the area "Aseptic filling"). The release summary names the machines a step used with
+  signed, with the material code. (Run 3 replaced the rule on the line clearance's room by the stage's own rooms:
+  see "Where machines are".) The release summary names the machines a step used with
   their Logbook status at use. The designer offers "update to version N" for a step of an older block (settings of
   the same names kept), asks before removing a step, moves steps by their key, and the changes view ignores a step's
   new number and names the fields a newer block version records. The change control list offers those naming the
@@ -177,6 +177,19 @@ adding anything, look how TrueBatch Tablets does it and copy that.
   value here (the certificate values are numbers in %: assay, water, LOD, content). Cleaning between products (an
   antibiotic line) is the Logbook's: a machine or room the Logbook says is not clean is refused (TI-11) and line
   clearance takes its cleaning from it.
+- **Run 3 findings** (17 Nov 2026; no new mechanism, no block version): the bag starting master issues its plastic
+  film or granules by kg from an MMS lot and weighs it back, as the blow-fill-seal one (`container-issue` 3,
+  `container-return` 2), and its form-fill-seal stage names only the Aseptic filling area (no capping; master data has
+  no area of its own for a terminally sterilised large-volume line, and its room RM-219 is in Aseptic filling). The
+  aseptic filling stage names Lyophilisation only for freeze-dried vials, Capping only where seals are put on. The
+  Formula screen adds a weighing for each excipient no step weighs yet (a copy of the master's first weighing, after
+  the last one of that stage), as the packing materials' steps are added. `container-issue` 3 is worded for a count
+  or a weight ("Quantity expected", "Quantity issued, in % of the quantity expected"); the washer of `component-wash`
+  is a washing machine or washer, never a stopper processor (types of the same field, same version, as the filter
+  test's tester). The release's sterility summary lists the fill rounds (`fill`, `ffs-run`, `powder-fill`). A
+  correction counts once per field a person changed: the values a link gives with it (a room's cleaning facts, a
+  lot's certificate values) stay in the step's history but are not listed again. The density is asked only for a
+  batch in L or kg.
 
 ## Platform
 - Runs on the Medhanta platform. Core provides people, sign-in, permissions, e-signature re-authentication and master
@@ -267,6 +280,17 @@ answering) or **ok**.
   of a step's type stands in the rooms its stage allows, naming where the machines of that type stand: the floor's
   picker would be empty. A warning, not ⛔: master data changes without a new master version, and the floor checks it
   again; an empty picker on the floor says why (as TrueBatch Tablets, 17 Nov 2026).
+  **A stage names its line's own room** (run 3, H2, owner 17 Nov 2026; no format change: a stage's rooms were already
+  areas or room codes). Two lines share an area (the vial, syringe and bag filling rooms are all "Aseptic filling"), so
+  a stage that names only the area would let its line clearance take another line's room. A starting master names the
+  usual areas; when the master is made, an area of master data with exactly one active room becomes that room, and an
+  area of several stays: the master check warns "<stage>: pick the line's room" until the author picks it in the stage
+  settings (the room list shows each room's name and area). The dispensing rooms follow the same rule: a new master
+  starts with the sterile dispensing room when master data has exactly one, else none (⛔ until the author picks).
+  On the floor the line clearance offers only the stage's rooms, and every machine has one rule: it stands in a room
+  the stage names (by code or by area), and a refusal says where it stands and that the master names the stage's
+  rooms (H10). The earlier rule (a machine of the cleared room's area stands in that room, run 2 G6) is gone: it held
+  only within one area, so a washer or capper of another area passed while a filler was refused.
 - **What the master check reports** (as TrueBatch Tablets, 17 Nov 2026): everything the plain view would show as not
   set (a required setting, a hold time, a stage's responsible role); an optional setting left empty is left out of
   the plain view's sentences, as the engine leaves it out. A temperature recorded with its optional limits left empty

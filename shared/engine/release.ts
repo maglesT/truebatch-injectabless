@@ -8,7 +8,7 @@ import type { MasterDoc } from '../master/schema.js';
 import { openSteps, outOfLimits, stepLabel, timers, type StepView, type Timer } from './batch.js';
 import { keyId, parseKey, type State, type StepEvent } from './state.js';
 import { failed } from './values.js';
-import { isHand, type Source } from './links.js';
+import { isHand, LINK_OF, type Source } from './links.js';
 import type { Returned } from './stock.js';
 
 export const BATCH_EVENT_KINDS = ['production_approved', 'qc_approved', 'released', 'rejected', 'deviation_closed'] as const;
@@ -132,7 +132,13 @@ export function review(doc: MasterDoc, events: readonly StepEvent[], batchEvents
   const { steps } = openSteps(doc, events, now);
   const notes = (s: StepView) => s.events.filter((e) => e.kind === 'note');
   return {
-    corrections: steps.flatMap((s) => s.replaced.map((r) => ({ step: s.id, ...r }))),
+    // One correction per field a person changed (run 3, H4): a value pulled along with it (a corrected room's cleaning
+    // facts from the Logbook, a corrected lot's certificate values) is not counted again; the step's history keeps it.
+    corrections: steps.flatMap((s) => {
+      const fields = findBlock(doc.stages[s.key.stage]!.steps[s.key.step]!.block)?.fields ?? [];
+      const picked = (name: string) => !!LINK_OF[fields.find((f) => f.name === name)?.kind ?? 'text'];
+      return s.replaced.filter((r) => !r.pulled || picked(r.field)).map(({ pulled: _, ...r }) => ({ step: s.id, ...r }));
+    }),
     sentBack: events.filter((e) => e.kind === 'sent_back'),
     late: lateItems(doc, events, now),
     outOfLimits: steps.flatMap((s) => outOfLimits(s).map(([calc, r]) => ({ step: s.id, calc, shown: r.ok ? r.shown : '', notes: notes(s) }))),

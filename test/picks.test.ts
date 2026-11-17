@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { findBlock } from '../shared/blocks/index.js';
-import { clearedRooms, dispensingRooms, emptyNote, machineRefusal, untypedNote } from '../shared/engine/picks.js';
+import { dispensingRooms, emptyNote, machineRefusal, roomRefusal, untypedNote } from '../shared/engine/picks.js';
 import { latestBlock } from '../shared/blocks/index.js';
 import { skeletonList, skeletonStages } from '../web/src/designer/skeletons.js';
 
@@ -12,13 +12,15 @@ const TYPES = ['Balance', 'Analytical balance', 'Micro balance', 'IPC balance', 
   'Vial filling machine', 'Syringe filling machine', 'Form-fill-seal machine', 'Freeze dryer', 'Filter integrity tester', 'Leak tester (HVLD)',
   'Container closure integrity tester', 'Visual inspection machine', 'Isolator', 'RABS', 'Capping machine', 'Vial crimper',
   // Blow-fill-seal and sterile powder (17 Nov 2026): the demo's BFS machines, LVP bag filler and powder filler.
-  'Blow-fill-seal machine', 'LVP bag filling machine', 'Powder filling machine'];
+  'Blow-fill-seal machine', 'LVP bag filling machine', 'Powder filling machine',
+  // Run 3, H9: the demo's washers, and processors that are not washers (the stopper processor, a fluid bed processor).
+  'Vial washing machine', 'Ultrasonic washer', 'Stopper processor', 'Fluid bed processor'];
 const MACHINES = TYPES.map((type, i) => ({ code: `EQ-${i}`, type, room: null }));
 const BALANCES = ['Balance', 'IPC balance', 'Platform balance'];
 const VESSELS = ['Manufacturing vessel', 'Compounding vessel', 'Mixing vessel'];
 const OFFERS: Record<string, string[]> = {
-  'weigh.balance': BALANCES, 'charge.machine': ['Bin blender', ...VESSELS], 'dissolve.machine': VESSELS, 'mix.machine': ['Bin blender', ...VESSELS], 'make-up.machine': VESSELS, 'phase-prep.machine': VESSELS,
-  'homogenise.machine': ['Homogeniser'], 'component-wash.washer': ['Vial washer'], 'depyrogenate.machine': ['Depyrogenation tunnel', 'Dry heat steriliser'],
+  'weigh.balance': BALANCES, 'charge.machine': ['Bin blender', ...VESSELS, 'Fluid bed processor'], 'dissolve.machine': VESSELS, 'mix.machine': ['Bin blender', ...VESSELS], 'make-up.machine': VESSELS, 'phase-prep.machine': VESSELS,
+  'homogenise.machine': ['Homogeniser'], 'component-wash.washer': ['Vial washer', 'Vial washing machine', 'Ultrasonic washer'], 'depyrogenate.machine': ['Depyrogenation tunnel', 'Dry heat steriliser'],
   'sterilise.steriliser': ['Dry heat steriliser', 'Autoclave'], 'terminal-sterilise.steriliser': ['Dry heat steriliser', 'Autoclave'],
   'fill.machine': ['Vial filling machine', 'Syringe filling machine', 'Form-fill-seal machine', 'Blow-fill-seal machine', 'LVP bag filling machine', 'Powder filling machine'],
   'ffs-run.machine': ['Form-fill-seal machine', 'Blow-fill-seal machine', 'LVP bag filling machine'], 'powder-fill.machine': ['Powder filling machine'],
@@ -65,7 +67,7 @@ describe('machine pickers on the demo master-data types', () => {
     expect(offered('weigh', { ...stage, roomTypes: ['Compression'] })).toEqual(['IN-BAL-03', 'IN-BAL-04', 'IN-BAL-05']);
     expect(offered('weigh', stage, ['RM-301'])).toEqual(['INL-BAL-01']);
     expect(offered('weigh', { ...stage, roomTypes: [] })).toEqual(['IN-BAL-03', 'IN-BAL-04', 'IN-BAL-05', 'INL-BAL-01']);
-    expect(machineRefusal(stage, field('weigh', 'balance'), BALS[5]!, ROOMS, ['RM-101'])).toBe('INL-BAL-01 stands in RM-301, neither in a dispensing room of the master nor in a room this stage allows (Granulation, Coating)');
+    expect(machineRefusal(stage, field('weigh', 'balance'), BALS[5]!, ROOMS, ['RM-101'])).toBe('INL-BAL-01 stands in RM-301 (Liquid dispensing), neither in a dispensing room of the master nor in a room this stage allows (Granulation, Coating): the master names the rooms each stage runs in');
     expect(machineRefusal(stage, field('weigh', 'balance'), BALS[3]!, ROOMS, ['RM-101'])).toBe('IN-BAL-01 stands in RM-110 (QC), a laboratory area: weigh with a balance of a dispensing room of the master or of a room this stage allows');
     // A version made before the setting: the rooms whose area is exactly "Dispensing".
     const old = { header: { productItemId: 'p', productCode: 'P', productName: 'P', batchSize: '1', batchUnit: 'L' as const } };
@@ -78,7 +80,7 @@ describe('machine pickers on the demo master-data types', () => {
     const sifter = field('dissolve', 'machine');
     const items = [{ code: 'EQ-S-01', type: 'Compounding vessel', room: 'RM-103' }, { code: 'EQ-X', type: 'Compounding vessel', room: 'RM-107' },
       { code: 'SF-01', type: 'Compounding vessel', room: null }, { code: 'SF-02', type: null, room: 'RM-103' }];
-    expect(items.map((m) => machineRefusal(stage, sifter, m, ROOMS))).toEqual([null, 'EQ-X stands in RM-107, not in a room this stage allows (Granulation)',
+    expect(items.map((m) => machineRefusal(stage, sifter, m, ROOMS))).toEqual([null, 'EQ-X stands in RM-107 (Coating), not in a room this stage allows (Granulation): the master names the rooms each stage runs in',
       'SF-01 stands in no room in master data, so it is not in a room this stage allows (Granulation)', expect.stringContaining('SF-02 has no type in master data')]);
     expect(untypedNote(sifter, items)).toBe('1 machine has no type in master data, so it is not offered.');
   });
@@ -87,33 +89,26 @@ describe('machine pickers on the demo master-data types', () => {
     const stage = { ...stages[0]!, roomTypes: ['RM-103'] };
     const vessel = field('dissolve', 'machine');
     const all = [{ code: 'EQ-V-01', type: 'Compounding vessel', room: 'RM-107' }, { code: 'EQ-N', type: null, room: null }, { code: 'EQ-AC-01', type: 'Autoclave', room: 'RM-103' }];
-    expect(emptyNote(stage, vessel, all, ROOMS)).toBe('No vessel or mixer can be used here: EQ-V-01 stands in RM-107, not in a room this stage allows (RM-103). '
+    expect(emptyNote(stage, vessel, all, ROOMS)).toBe('No vessel or mixer can be used here: EQ-V-01 stands in RM-107 (Coating), not in a room this stage allows (RM-103): the master names the rooms each stage runs in. '
       + '1 machine has no type in master data, so it is not offered. Engineering moves one into a room this stage allows, or adds one, in master data (the Logbook shows where each stands).');
     expect(emptyNote(stage, vessel, all.slice(1), ROOMS)).toBe('Master data has no active vessel or mixer. 1 machine has no type in master data, so it is not offered. Engineering adds it in master data.');
   });
 
-  it('TI-11 run 2 G6: once the stage\'s line clearance names its room, a machine of that room\'s area stands in it (not the other line\'s room); other areas as before', () => {
+  it('TI-11 run 3 H2, H10: a stage names its line\'s room; one rule for every machine: it stands in a room the stage names, and the refusal says why', () => {
     // The demo: RM-207 (vials) and RM-208 (prefilled syringes) are both "Aseptic filling"; RM-210 is "Capping".
     const rooms = [{ code: 'RM-207', area: 'Aseptic filling' }, { code: 'RM-208', area: 'Aseptic filling' }, { code: 'RM-210', area: 'Capping' }];
-    const stage = { ...stages[0]!, roomTypes: ['Aseptic filling', 'Lyophilisation', 'Capping'], machineTypes: [] };
+    const stage = { ...stages[0]!, roomTypes: ['RM-207', 'Capping'], machineTypes: [] };
     const iso = { code: 'EQS-ISO-01', type: 'Isolator', room: 'RM-207' }, rabs = { code: 'EQS-RAB-01', type: 'RABS', room: 'RM-208' };
     const vfm = { code: 'EQS-VFM-01', type: 'Vial filling machine', room: 'RM-207' }, sfm = { code: 'EQS-SFM-01', type: 'Syringe filling machine', room: 'RM-208' };
     const cap = { code: 'EQS-CAP-01', type: 'Capping machine', room: 'RM-210' };
     const isolator = latestBlock('aseptic-ready')!.fields.find((f) => f.name === 'isolator')!;
     const filler = field('fill', 'machine'), capper = latestBlock('seal-check')!.fields.find((f) => f.name === 'capper')!;
-    // Before the line clearance: by the stage's areas only (both rooms of the area).
-    expect([iso, rabs].filter((m) => !machineRefusal(stage, isolator, m, rooms)).map((m) => m.code)).toEqual(['EQS-ISO-01', 'EQS-RAB-01']);
-    // The batch's line clearance of this stage recorded RM-207 (a room value is its own room); another stage's room counts not.
-    const room = { itemId: 'rm-207', code: 'RM-207', name: 'Aseptic filling room (vials)', version: 1, type: 'Aseptic filling', room: 'RM-207', area: 'Aseptic filling' };
-    const steps = [{ key: { stage: 2 }, values: { room, clean: 'yes' } }, { key: { stage: 2 }, values: { isolator: { itemId: 'x', code: 'EQS-ISO-01', type: 'Isolator', room: 'RM-207', area: 'Aseptic filling' } } },
-      { key: { stage: 1 }, values: { room: { ...room, itemId: 'rm-208', code: 'RM-208', room: 'RM-208' } } }];
-    const cleared = clearedRooms(steps, 2);
-    expect(cleared).toEqual([{ code: 'RM-207', area: 'Aseptic filling' }]);
-    expect([iso, rabs].filter((m) => !machineRefusal(stage, isolator, m, rooms, [], cleared)).map((m) => m.code)).toEqual(['EQS-ISO-01']);
-    expect(machineRefusal(stage, isolator, rabs, rooms, [], cleared)).toBe('EQS-RAB-01 stands in RM-208, not in RM-207, where this stage\'s line clearance was done');
-    // The same for every machine field: the syringe filler is not offered on the vial line; the capper in the Capping area still is.
-    expect([vfm, sfm].filter((m) => !machineRefusal(stage, filler, m, rooms, [], cleared)).map((m) => m.code)).toEqual(['EQS-VFM-01']);
-    expect(machineRefusal(stage, capper, cap, rooms, [], cleared)).toBeNull();
-    expect(emptyNote(stage, isolator, [rabs], rooms, [], cleared)).toMatch(/^No isolator, rabs or blow-fill-seal machine can be used here: EQS-RAB-01 stands in RM-208, not in RM-207/);
+    // The line clearance offers only the line's own room (and the rooms of an area the stage names).
+    expect(rooms.filter((r) => !roomRefusal(stage, r)).map((r) => r.code)).toEqual(['RM-207', 'RM-210']);
+    expect([iso, rabs].filter((m) => !machineRefusal(stage, isolator, m, rooms)).map((m) => m.code)).toEqual(['EQS-ISO-01']);
+    expect(machineRefusal(stage, isolator, rabs, rooms)).toBe('EQS-RAB-01 stands in RM-208 (Aseptic filling), not in a room this stage allows (RM-207, Capping): the master names the rooms each stage runs in');
+    expect([vfm, sfm].filter((m) => !machineRefusal(stage, filler, m, rooms)).map((m) => m.code)).toEqual(['EQS-VFM-01']);
+    expect(machineRefusal(stage, capper, cap, rooms)).toBeNull();
+    expect(emptyNote(stage, isolator, [rabs], rooms)).toMatch(/^No isolator, rabs or blow-fill-seal machine can be used here: EQS-RAB-01 stands in RM-208 \(Aseptic filling\), not in a room this stage allows/);
   });
 });

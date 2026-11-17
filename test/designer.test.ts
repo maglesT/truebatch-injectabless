@@ -7,7 +7,8 @@ import { dispensing, workedExample } from '../web/src/designer/example.js';
 import { answerDoc, earlierRefs, fieldChanges, neededKind, qtyText, scaleDoc, stepFrom, toVersion, unitsOf } from '../web/src/designer/model.js';
 import { sentence, sentenceText } from '../web/src/designer/sentences.js';
 import { stepTitle } from '../shared/engine/batch.js';
-import { defaultDispensingRooms, skeletonList, skeletonStages } from '../web/src/designer/skeletons.js';
+import { defaultDispensingRooms, skeletonList, skeletonStages, withWeighSteps } from '../web/src/designer/skeletons.js';
+import { placeChecks } from '../shared/master/places.js';
 import { tablet, unplaced } from './engine-fixture.js';
 
 // The shared test master is built from test-only blocks (test/test-blocks.ts).
@@ -128,6 +129,45 @@ describe('master designer', () => {
     expect(defaultDispensingRooms([{ code: 'RM-101', area: 'Dispensing', active: true }, { code: 'RM-102', area: 'Dispensing', active: false },
       { code: 'RM-301', area: 'Liquid dispensing', active: true }, { code: 'RM-103', area: 'Granulation', active: true },
       { code: 'RM-201', area: 'Sterile dispensing', active: true }, { code: 'RM-202', area: 'Sterile dispensing', active: false }])).toEqual(['RM-201']);
+    // Run 3, H1: with two sterile dispensing rooms (another block's), none: the author picks them, the master check asks.
+    expect(defaultDispensingRooms([{ code: 'RM-201', area: 'Sterile dispensing', active: true }, { code: 'RM-803', area: 'Sterile dispensing', active: true }])).toEqual([]);
+  });
+
+  it('run 3 H1 H2 H3: a starting master names a room where its area has one, keeps an area of several rooms (the master check asks for the line\'s room); the bag line issues its plastic by kg', () => {
+    const rooms = [['RM-205', 'Sterile compounding'], ['RM-902', 'Sterile compounding'], ['RM-206', 'Sterile filtration'], ['RM-207', 'Aseptic filling'],
+      ['RM-208', 'Aseptic filling'], ['RM-219', 'Aseptic filling'], ['RM-210', 'Capping'], ['RM-211', 'Sterilisation'], ['RM-212', 'Visual inspection'],
+      ['RM-299', 'Visual inspection', false]].map(([code, area, active]) => ({ code: code as string, area: area as string, active: active !== false }));
+    const h = { productItemId: 'p', productCode: 'P', productName: 'Examsaline', batchSize: '1000', batchUnit: 'L' as const, densityGPerMl: '1.005',
+      fillVolumeMl: '500', fillExcessMl: '15', route: 'terminal' as const, claimPer: 'mL' as const, dispensingRooms: ['RM-201'] };
+    const bag = skeletonStages('bag-terminal', h, rooms);
+    expect(bag.map((st) => [st.key, st.roomTypes])).toEqual([['compounding', ['Sterile compounding', 'RM-206']], ['filling', ['Aseptic filling']],
+      ['sterilisation', ['RM-211']], ['inspection', ['RM-212']]]);
+    expect(bag[1]!.steps.map((t) => t.key)).toEqual(['line-clearance', 'filtration-clarifying', 'issue-plastic', 'ffs-run', 'back-plastic', 'unit-reconcile']);
+    expect(bag[1]!.steps[2]).toMatchObject({ name: 'Issue the plastic film or granules', block: { id: 'container-issue', version: 3 }, settings: { unit: 'kg' } });
+    expect(bag[1]!.steps[4]).toMatchObject({ name: 'Weigh back the plastic film or granules', block: { id: 'container-return', version: 2 }, settings: { unit: 'kg' } });
+    const doc = masterSchema.parse({ header: h, formula: [], stages: bag });
+    const md = { rooms, equipment: [] };
+    expect(placeChecks(doc, md).filter((p) => p.path.endsWith('.roomTypes')).map((p) => `${p.path}: ${p.message}`)).toEqual([
+      'stages[0].roomTypes: Compounding: pick the line\'s room. The area Sterile compounding has 2 rooms (RM-205, RM-902): choose the one this stage runs in, in the stage settings, in place of the area',
+      'stages[1].roomTypes: Form-fill-seal: pick the line\'s room. The area Aseptic filling has 3 rooms (RM-207, RM-208, RM-219): choose the one this stage runs in, in the stage settings, in place of the area']);
+    // The author picks RM-219 for the bag line: no warning for it.
+    const picked = { ...doc, stages: doc.stages.map((st) => (st.key === 'filling' ? { ...st, roomTypes: ['RM-219'] } : st)) };
+    expect(placeChecks(picked, md).filter((p) => p.path === 'stages[1].roomTypes')).toEqual([]);
+  });
+
+  it('run 3 H6: the formula adds a weighing for each excipient no step weighs yet, after the drug substance\'s, as a copy of it', () => {
+    const h = { productItemId: 'p', productCode: 'P', productName: 'Examsalbin', batchSize: '25', batchUnit: 'L' as const, densityGPerMl: '1.004',
+      fillVolumeMl: '2.5', fillExcessMl: '0.1', route: 'aseptic' as const, claimPer: 'container (filled content)' as const, dispensingRooms: ['RM-201'] };
+    const line = (key: string, role: 'api' | 'excipient' | 'solvent') => ({ key, materialItemId: key, code: key.toUpperCase(), name: key, role, ...(role === 'solvent' ? {} : { mg: '1.0' }) });
+    const doc = masterSchema.parse({ header: h, formula: [line('api', 'api'), line('nacl', 'excipient'), line('cita', 'excipient'), line('wfi', 'solvent')], stages: skeletonStages('bfs-aseptic', h) });
+    doc.stages[0]!.steps[1]!.settings = { ...doc.stages[0]!.steps[1]!.settings, target: { formula: 'api', adjusted: true } };
+    const added = withWeighSteps(doc);
+    expect(added.stages[0]!.steps.slice(0, 5).map((t) => [t.key, t.block.id, (t.settings.target as { formula?: string } | undefined)?.formula ?? ''])).toEqual([
+      ['line-clearance', 'line-clearance', ''], ['weigh-api', 'weigh', 'api'], ['weigh-nacl', 'weigh', 'nacl'], ['weigh-cita', 'weigh', 'cita'], ['vehicle', 'vehicle', '']]);
+    expect(added.stages[0]!.steps[2]!.settings.tolerance).toBe(doc.stages[0]!.steps[1]!.settings.tolerance);
+    // Every excipient weighed: nothing to add (the button is not shown).
+    expect(withWeighSteps(added)).toBe(added);
+    expect(masterSchema.safeParse(added).success).toBe(true);
   });
 
   it('the plain view titles each step as the floor does and never shows a step\'s internal key', () => {
