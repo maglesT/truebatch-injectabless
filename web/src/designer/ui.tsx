@@ -42,8 +42,9 @@ export function Order({ index, count, onMove, onRemove, what }: { index: number;
   );
 }
 
-/** A set of values picked from a list (machine types, room areas): chips with a remove button, and "Add…". */
-export function ChipSet({ label, values, options, onChange, empty }: { label: string; values: string[]; options: string[]; onChange: (v: string[]) => void; empty: string }) {
+/** A set of values picked from a list (machine types, room areas): chips with a remove button, and "Add…".
+ *  `text` gives an option's shown text (e.g. a room's name and area); the value stays the option itself. */
+export function ChipSet({ label, values, options, onChange, empty, text }: { label: string; values: string[]; options: string[]; onChange: (v: string[]) => void; empty: string; text?: (o: string) => string }) {
   const left = options.filter((o) => !values.includes(o));
   return (
     <div className="chipset">
@@ -56,7 +57,7 @@ export function ChipSet({ label, values, options, onChange, empty }: { label: st
         {left.length > 0 && (
           <select aria-label={`Add to ${label.toLowerCase()}`} value="" onChange={(e) => e.target.value && onChange([...values, e.target.value])}>
             <option value="">Add…</option>
-            {left.map((o) => <option key={o}>{o}</option>)}
+            {left.map((o) => <option key={o} value={o}>{text ? text(o) : o}</option>)}
           </select>
         )}
       </div>
