@@ -1,10 +1,10 @@
 // The sterile blocks of the injectables library (v1, sections 4.2-4.8) run on the engine like any block: each is a
 // valid description, and the main ones work out their results from realistic values.
 import { describe, expect, it } from 'vitest';
-import { BLOCKS, findBlock } from '../shared/blocks/index.js';
+import { BLOCKS, findBlock, latestBlock } from '../shared/blocks/index.js';
 import { LIBRARY } from '../web/src/designer/model.js';
 import { blockProblems } from '../shared/blocks/format.js';
-import { doneProblems, evaluate, openSteps, parseKey, type StepEvent } from '../shared/engine/index.js';
+import { doneProblems, evaluate, openSteps, parseKey, usedQuantity, type StepEvent } from '../shared/engine/index.js';
 import { masterSchema, type MasterDoc } from '../shared/master/schema.js';
 import { masterChecks } from '../shared/master/checks.js';
 import { stepFrom } from '../web/src/designer/model.js';
@@ -78,6 +78,29 @@ describe('the sterile blocks of the injectables library', () => {
     const r = run(doc, { good: u('9214'), fillRejects: u('120'), inspectionRejects: u('88'), samples: u('60'), removed: u('40'), other: u('1') });
     expect(r.yield).toMatchObject({ ok: true, check: { pass: true } });
     expect(r.accountability).toMatchObject({ ok: true, check: { pass: true } });
+  });
+
+  it('F20 containers or closures issued by count: against the units expected from the header; MMS gets issued less returned', () => {
+    // 100 L ÷ (10.0 + 0.5) mL = 9523 units expected; the starting masters ask for at least 102 % (9714).
+    const doc = one('container-issue', { what: 'stoppers', enoughLimit: { low: '102.0', unit: '%' } });
+    const st = doc.stages[0]!.steps[0]!;
+    expect(st).toMatchObject({ checker: true, settings: { expected: { header: 'units' } } });
+    const u = (value: string) => ({ value, unit: 'units' });
+    expect(run(doc, { lot: 'P26-0013', issued: u('9800') }).enough).toMatchObject({ ok: true, check: { pass: true } });
+    expect(run(doc, { lot: 'P26-0013', issued: u('9600') }).enough).toMatchObject({ ok: true, check: { pass: false } });
+    expect(usedQuantity(doc, st, { lot: 'P26-0013', issued: u('9800') }, {}, [])).toEqual(u('9800'));
+    expect(usedQuantity(doc, st, { lot: 'P26-0013', issued: u('9800'), returned: u('150') }, {}, [])).toEqual(u('9650'));
+    expect(usedQuantity(doc, st, { lot: 'P26-0013', issued: u('100'), returned: u('150') }, {}, [])).toEqual(u('0'));
+  });
+
+  it('F19 the set-up and the seal check record their machine from the Logbook in a new version; the library offers only the latest', () => {
+    expect(latestBlock('aseptic-ready')!.fields[0]).toEqual({ name: 'isolator', label: 'Isolator or RABS', kind: 'machine', types: ['isolator', 'rabs'] });
+    expect(latestBlock('seal-check')!.fields[0]).toEqual({ name: 'capper', label: 'Capping machine', kind: 'machine', types: ['capping', 'crimper'] });
+    // Version 1 stays as it was, for the batches recorded with it.
+    expect(findBlock({ id: 'aseptic-ready', version: 1 })!.fields.some((f) => f.kind === 'machine')).toBe(false);
+    expect(findBlock({ id: 'seal-check', version: 1 })!.fields.some((f) => f.kind === 'machine')).toBe(false);
+    expect(LIBRARY.filter((b) => ['aseptic-ready', 'seal-check', 'container-issue'].includes(b.id)).map((b) => `${b.id} ${b.version}`))
+      .toEqual(['seal-check 2', 'aseptic-ready 2', 'container-issue 1']);
   });
 
   it('TI-08 a sterilised load past its use-by date during the step needs a deviation note (engine change 6)', () => {

@@ -78,6 +78,7 @@ const DEFAULT_SETTINGS: Record<string, Step['settings']> = { weigh: { tolerance:
   fill: { fillTarget: { header: 'fillTarget' }, density: { header: 'density' } },
   'make-up': { volume: { header: 'batchVolume' }, density: { header: 'density' }, tolerance: '0.5' },
   'unit-reconcile': { theoretical: { header: 'units' } },
+  'container-issue': { expected: { header: 'units' } },
 };
 /** A new step from a block, with its default instruction, signatures and settings. */
 export function stepFrom(block: Block, taken: string[]): Step {

@@ -348,6 +348,13 @@ export const sealCheck: Block = {
   ],
 };
 
+// 15, version 2 (owner, 17 Nov 2026, demo finding F19): the capping machine, pulled from the Logbook. Version 1 stays
+// for the recorded batches.
+export const sealCheck2: Block = {
+  ...sealCheck, version: 2,
+  fields: [{ name: 'capper', label: 'Capping machine', kind: 'machine', types: ['capping', 'crimper'] }, ...sealCheck.fields],
+};
+
 // 16. Terminal sterilisation (TI-24): one round per load; the lowest probe reaches the validated minimum F0 (or FH).
 export const terminalSterilise: Block = {
   id: 'terminal-sterilise', version: 1, name: 'Terminal sterilisation (each load)', checker: true,

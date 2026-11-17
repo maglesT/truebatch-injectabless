@@ -123,6 +123,17 @@ adding anything, look how TrueBatch Tablets does it and copy that.
   records the EM review of the batch (report numbers, the deviation number of each action-limit excursion).
 - A field may be an item's use-by date (engine change 6): refused when past, a deviation note when it passes during
   the step.
+- **Isolator, capping machine, containers and closures** (owner, 17 November 2026, demo findings F19 and F20; no new
+  mechanism): the aseptic set-up (`aseptic-ready` version 2) records the isolator or RABS first and the seal check
+  (`seal-check` version 2) its capping machine, both machine fields pulled from master data and refused while the
+  Logbook says they are not fit (its glove test and decontamination checks decide). Version 1 of each stays for the
+  recorded batches; the library and the starting masters take the latest version (`latestBlock`). Containers and
+  closures are issued by count from an MMS lot (block `container-issue`, as Packing's material issue: lot, count
+  issued, count returned at the end, a second-person check; issued at least 102 % of the header's units in the
+  starting masters). The starting masters issue vials and stoppers in the containers stage (a syringe: syringes and
+  plungers in the aseptic stage) and seals before the seal check. `material_use_v1` (`db/migrations/0013`) lists each
+  signed issue beside the weighings: issued less returned, in units (MMS counts them as nos), material code empty, so
+  MMS matches it to its lot by lot number; the app counts the same against MMS's stock (`shared/engine/stock.ts`).
 
 ## Platform
 - Runs on the Medhanta platform. Core provides people, sign-in, permissions, e-signature re-authentication and master

@@ -3,7 +3,7 @@
 // them. A stage worked in a room starts with line clearance (TI-10); a stage starts with the rooms it
 // usually runs in, by the usual area names (TI-11). Each starting master already has the steps the sterile rules of its
 // route need (TI-23 to TI-31), so the master check shows only what is the product's own.
-import { findBlock } from '../../../shared/blocks/index.js';
+import { latestBlock } from '../../../shared/blocks/index.js';
 import type { MasterDoc, Pack, SettingValue, Stage, Step } from '../../../shared/master/schema.js';
 
 type Route = NonNullable<MasterDoc['header']['route']>;
@@ -15,6 +15,9 @@ interface StagePlan { key: string; name: string; kind?: Stage['kind']; role: str
   aseptic?: boolean; startsAfter?: string; steps: StepPlan[] }
 
 const s = (block: string, key?: string, name?: string): StepPlan => ({ block, ...(key ? { key } : {}), ...(name ? { name } : {}) });
+// Containers and closures issued by count from an MMS lot (owner, 17 Nov 2026): at least the units expected and 2 % more.
+const issue = (what: string): StepPlan => ({ block: 'container-issue', key: `issue-${what}`, name: `Issue the ${what}`,
+  settings: () => ({ what, expected: { header: 'units' }, enoughLimit: { low: '102.0', unit: '%' } }) });
 const yieldStep: StepPlan = { block: 'stage-yield', key: 'yield', settings: () => ({ theoretical: { header: 'batchMass' }, yieldLimit: { low: '97.0', high: '100.5', unit: '%' },
   accountabilityLimit: { low: '99.0', high: '100.5', unit: '%' } }) };
 
@@ -25,14 +28,14 @@ const compounding = (end: StepPlan[] = []): StagePlan => ({ key: 'compounding', 
   steps: [s('weigh', 'weigh-api'), s('vehicle'), s('charge', 'charge-api'), s('dissolve'), s('ph-adjust'), s('make-up'), s('bulk-test'), ...end, yieldStep] });
 const components: StagePlan = { key: 'components', name: 'Containers and closures', kind: 'preparation', role: 'Washing operator', rooms: ['Vial washing', 'Depyrogenation', 'Component preparation', 'Sterilisation'],
   produces: ['clean, depyrogenated containers and sterile closures', 72],
-  steps: [s('component-wash', 'wash-vials', 'Wash the vials'), s('depyrogenate'), s('sterilise', 'stoppers', 'Sterilise the stoppers')] };
+  steps: [issue('vials'), issue('stoppers'), s('component-wash', 'wash-vials', 'Wash the vials'), s('depyrogenate'), s('sterilise', 'stoppers', 'Sterilise the stoppers')] };
 const asepticFill = (between: StepPlan[], o: { fill?: StepPlan[]; close?: StepPlan[]; uses?: string[] } = {}): StagePlan => ({
   key: 'filling', name: 'Aseptic filling', role: 'Aseptic operator', rooms: ['Aseptic filling', 'Lyophilisation', 'Capping'], aseptic: true, uses: o.uses ?? ['compounding', 'components'],
   // The interventions log and the clean-air checks open with the set-up and run beside the filling (what follows a fill
   // waits for the filling to finish).
   steps: [s('aseptic-ready'), s('interventions'), s('em-filling'), s('transfer-in'), ...(o.fill ?? [s('fill')]), ...between,
     // The samples are a QA hold: taken once the units are closed, so capping never waits for QA.
-    ...(o.close ?? [s('seal-check')]), s('qa-sample', 'sterility', 'Sterility and endotoxin samples'), s('unit-reconcile')] });
+    ...(o.close ?? [issue('seals'), s('seal-check')]), s('qa-sample', 'sterility', 'Sterility and endotoxin samples'), s('unit-reconcile')] });
 const resultsLater = (after: string): StagePlan => ({ key: 'results', name: 'Results later (EM plates, bioburden)', kind: 'preparation', role: 'QC microbiologist', rooms: [],
   startsAfter: after, steps: [s('incubated-results', 'plates', 'EM plates read')] });
 const terminal = (fillName: string, fill: StepPlan[], uses: string[]): StagePlan[] => [
@@ -54,7 +57,7 @@ const SKELETONS: { id: string; route?: Route; name: string; text: string; stages
   {
     id: 'liquid-terminal', route: 'terminal', name: 'Liquid in vials or ampoules, terminally sterilised',
     text: 'Compounding, clarifying filtration, filling and closing, autoclave loads with the sterility samples, leak test and inspection.',
-    stages: [compounding(), components, ...terminal('Filling', [s('fill'), s('seal-check')], ['compounding', 'components']), inspection([s('leak-test-100')])],
+    stages: [compounding(), components, ...terminal('Filling', [s('fill'), issue('seals'), s('seal-check')], ['compounding', 'components']), inspection([s('leak-test-100')])],
   },
   {
     id: 'bag-terminal', route: 'terminal', name: 'Bags or bottles (large volume), form-fill-seal, terminally sterilised',
@@ -74,7 +77,7 @@ const SKELETONS: { id: string; route?: Route; name: string; text: string; stages
   {
     id: 'syringe-aseptic', route: 'aseptic', name: 'Prefilled syringes or cartridges, aseptic',
     text: 'Compounding and sterile filtration, ready-to-use tubs into grade A, filling and plunger placement, the plunger check, inspection.',
-    stages: [compounding(filtrationSteps), asepticFill([s('plunger-check')], { fill: [s('rtu-tubs'), s('fill')], close: [], uses: ['compounding'] }),
+    stages: [compounding(filtrationSteps), asepticFill([s('plunger-check')], { fill: [issue('syringes'), issue('plungers'), s('rtu-tubs'), s('fill')], close: [], uses: ['compounding'] }),
       resultsLater('filling/fill'), inspection([s('leak-test-100')])],
   },
   {
@@ -108,7 +111,7 @@ export function skeletonStages(id: string, h: Header): Stage[] {
     ...(p.produces ? { produces: { name: p.produces[0], holdHours: p.produces[1] } } : {}),
     ...(p.aseptic ? { aseptic: true } : {}), ...(p.startsAfter ? { startsAfter: p.startsAfter } : {}),
     steps: [...(p.rooms?.length ? [{ block: 'line-clearance' }] : []), ...p.steps].reduce<Step[]>((steps, sp) => {
-      const block = findBlock({ id: sp.block, version: 1 })!;
+      const block = latestBlock(sp.block)!;
       const base = stepFrom(block, steps.map((t) => t.key));
       const settings = Object.fromEntries(Object.entries({ ...base.settings, ...sp.settings?.(h) }).filter(([, v]) => v !== ''));
       return [...steps, { ...base, ...(sp.key ? { key: sp.key } : {}), ...(sp.name ? { name: sp.name } : {}), settings, ...(sp.checker ? { checker: true } : {}) }];
@@ -126,7 +129,7 @@ export function skeletonStages(id: string, h: Header): Stage[] {
 export const PACKING_SKELETON = { id: 'packing', name: 'Packing record',
   text: 'Issue to the line, labelling and cartoning with the leaflet and the checks alongside the line, reconciliation of units and printed materials, and line clearance after, for this pack.' };
 const packStep = (block: string, key?: string, settings: Record<string, SettingValue> = {}): Step => {
-  const b = findBlock({ id: block, version: 1 })!;
+  const b = latestBlock(block)!;
   return { ...stepFrom(b, []), ...(key ? { key } : {}), settings, ...(b.stop ? { flow: { kind: 'repeat-until' as const, maxRounds: 100 } } : {}) };
 };
 const issueStep = (m: Pack['materials'][number]) => packStep('pack-material-issue', `issue-${m.key}`, { material: { formula: m.key }, unit: m.unit });

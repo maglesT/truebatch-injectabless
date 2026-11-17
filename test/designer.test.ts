@@ -95,7 +95,17 @@ describe('master designer', () => {
     // An aseptic starting master marks its filling stage aseptic and reads the EM plates in a stage of results that come later.
     const lyo = skeletonStages('lyo-aseptic', header('aseptic'));
     expect(lyo.filter((s) => s.aseptic).map((s) => s.steps.map((t) => t.block.id).join(' '))).toEqual([
-      'line-clearance aseptic-ready interventions em-filling transfer-in fill lyo-load lyo-cycle lyo-unload seal-check qa-sample unit-reconcile']);
+      'line-clearance aseptic-ready interventions em-filling transfer-in fill lyo-load lyo-cycle lyo-unload container-issue seal-check qa-sample unit-reconcile']);
+    // F19, F20 (owner, 17 Nov 2026): the latest set-up and seal check (the isolator or RABS, the capping machine, from the
+    // Logbook); containers and closures issued by count from MMS lots: vials and stoppers with the containers, seals
+    // before the seal check; a syringe's syringes and plungers in the aseptic stage.
+    const issues = (id: string) => skeletonStages(id, header('aseptic')).map((st) => st.steps.filter((t) => t.block.id === 'container-issue').map((t) => t.settings.what).join(' '));
+    expect(issues('lyo-aseptic')).toEqual(['', 'vials stoppers', 'seals', '', '']);
+    expect(issues('liquid-terminal')).toEqual(['', 'vials stoppers', 'seals', '', '']);
+    expect(issues('syringe-aseptic')).toEqual(['', 'syringes plungers', '', '']);
+    expect(lyo.flatMap((s) => s.steps).filter((t) => ['aseptic-ready', 'seal-check'].includes(t.block.id)).map((t) => t.block.version)).toEqual([2, 2]);
+    expect(lyo[1]!.steps.find((t) => t.key === 'issue-vials')).toMatchObject({ name: 'Issue the vials', checker: true,
+      settings: { what: 'vials', expected: { header: 'units' }, enoughLimit: { low: '102.0', unit: '%' } } });
     expect(lyo.find((s) => s.startsAfter)).toMatchObject({ kind: 'preparation', startsAfter: 'filling/fill', roomTypes: [] });
     // The bulk yield on the batch mass by the density (engine change 1); the units from the header.
     expect(lyo[0]!.steps.at(-1)!.settings.theoretical).toEqual({ header: 'batchMass' });

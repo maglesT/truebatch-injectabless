@@ -1,6 +1,6 @@
 /**
- * What a step takes from a material lot, as the product publishes it to MMS in material_use_v1 (db/migrations/0011 and
- * 0012, packing/migrations/0104 and 0105: less what a terminated batch gave back), and that quantity in the lot's unit
+ * What a step takes from a material lot, as the product publishes it to MMS in material_use_v1 (db/migrations/0011 to
+ * 0013, packing/migrations/0104 and 0105: less what a terminated batch gave back), and that quantity in the lot's unit
  * as MMS counts it. MMS shows a lot's available stock as its own balance less what the TrueBatch products used (MMS
  * D-57 to D-59); a lot is not used beyond it while MMS answers.
  */
@@ -10,7 +10,7 @@ import type { Stored, Value } from './values.js';
 import type { StepView } from './batch.js';
 
 // The blocks whose material the other products read as used (material_use_v1 of both products).
-export const MATERIAL_USE = ['weigh', 'lubricate', 'pack-material-issue'];
+export const MATERIAL_USE = ['weigh', 'lubricate', 'pack-material-issue', 'container-issue'];
 
 type Q = { value: string; unit: string };
 const isQ = (v: Value | undefined): v is Q => typeof v === 'object' && !Array.isArray(v) && 'value' in v && 'unit' in v;
@@ -18,7 +18,8 @@ const material = (st: Step) => { const m = st.settings.material; return typeof m
 const done = (v: StepView) => v.events.some((e) => e.kind === 'done');
 
 /**
- * The quantity a step takes from its lot: the net weight of a weighing (when worked out), or the quantity of a packing
+ * The quantity a step takes from its lot: the net weight of a weighing (when worked out), the count of containers or
+ * closures issued less the count returned, or the quantity of a packing
  * material issued less what its reconciliation returned to stores uncoded, once that reconciliation is signed done
  * (destroyed and batch-coded material is used, not returned). `steps`: the batch's steps, for the reconciliation.
  */
@@ -26,6 +27,13 @@ export function usedQuantity(doc: MasterDoc, st: Step, values: Record<string, Va
   if (st.block.id === 'weigh' || st.block.id === 'lubricate') {
     const net = results.net;
     return net?.ok ? { value: net.value, unit: net.unit } : null;
+  }
+  if (st.block.id === 'container-issue') {
+    // Containers or closures: the count issued less the count returned unused at the end, never below 0.
+    const issued = values.issued;
+    const back = values.returned;
+    if (!isQ(issued)) return null;
+    return isQ(back) && back.unit === issued.unit ? { value: Dec.max(0, new Dec(issued.value).minus(back.value)).toString(), unit: issued.unit } : issued;
   }
   if (st.block.id !== 'pack-material-issue') return null;
   const issued = values.issued;

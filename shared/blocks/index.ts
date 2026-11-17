@@ -13,6 +13,7 @@ import { sieve } from './sieve.js';
 import { stageYield } from './stage-yield.js';
 import { subBatchCombine } from './sub-batch-combine.js';
 import { weigh } from './weigh.js';
+import { containerIssue } from './container-issue.js';
 import { bulkIssue } from './bulk-issue.js';
 import { cartonCheck } from './carton-check.js';
 import { codingCheck } from './coding-check.js';
@@ -38,6 +39,7 @@ export const BLOCKS: readonly Block[] = [
   weigh, charge, mix, check, lineClearance, subBatchCombine, qaSample, stageYield, blendUniformity, sieve, dryConstant,
   ...Object.values(common),
   ...Object.values(special),
+  containerIssue,
   // TrueBatch Injectables Packing, in the order of a packing record (forming and leak test: a blister pack only).
   bulkIssue, packMaterialIssue, packClearance, lineSetup, visionChallenge, serialReceived, codingCheck, formingCheck, leakTest, onlineInspection,
   cartonCheck, serialSample, finishedGoods, printedReconciliation, serialReconciliation, destruction, packClearanceAfter,
@@ -50,3 +52,6 @@ export const blocksFor = (packing: boolean) => BLOCKS.filter((b) => GENERAL_BLOC
 export function findBlock(ref: { id: string; version: number }): Block | undefined {
   return BLOCKS.find((b) => b.id === ref.id && b.version === ref.version);
 }
+/** The latest version of a block: what a new step uses (a recorded batch keeps the version its master named). */
+export const latestBlock = (id: string): Block | undefined =>
+  BLOCKS.filter((b) => b.id === id).reduce<Block | undefined>((a, b) => (!a || b.version > a.version ? b : a), undefined);

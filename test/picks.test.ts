@@ -9,7 +9,7 @@ import { skeletonList, skeletonStages } from '../web/src/designer/skeletons.js';
 const TYPES = ['Balance', 'Analytical balance', 'Micro balance', 'IPC balance', 'Platform balance', 'Bin blender', 'Manufacturing vessel', 'Filter press',
   'Air compressor', 'Case packer', 'Compounding vessel', 'Mixing vessel', 'Homogeniser', 'Vial washer', 'Depyrogenation tunnel', 'Dry heat steriliser', 'Autoclave',
   'Vial filling machine', 'Syringe filling machine', 'Form-fill-seal machine', 'Freeze dryer', 'Filter integrity tester', 'Leak tester (HVLD)',
-  'Container closure integrity tester', 'Visual inspection machine'];
+  'Container closure integrity tester', 'Visual inspection machine', 'Isolator', 'RABS', 'Capping machine', 'Vial crimper'];
 const MACHINES = TYPES.map((type, i) => ({ code: `EQ-${i}`, type, room: null }));
 const BALANCES = ['Balance', 'IPC balance', 'Platform balance'];
 const VESSELS = ['Manufacturing vessel', 'Compounding vessel', 'Mixing vessel'];
@@ -18,7 +18,7 @@ const OFFERS: Record<string, string[]> = {
   'homogenise.machine': ['Homogeniser'], 'component-wash.washer': ['Vial washer'], 'depyrogenate.machine': ['Depyrogenation tunnel', 'Dry heat steriliser'],
   'sterilise.steriliser': ['Dry heat steriliser', 'Autoclave'], 'terminal-sterilise.steriliser': ['Dry heat steriliser', 'Autoclave'],
   'fill.machine': ['Vial filling machine', 'Syringe filling machine', 'Form-fill-seal machine'], 'ffs-run.machine': ['Form-fill-seal machine'],
-  'lyo-load.dryer': ['Freeze dryer'], 'filter-test.tester': ['Filter integrity tester'], 'leak-test-100.machine': ['Leak tester (HVLD)', 'Container closure integrity tester'],
+  'lyo-load.dryer': ['Freeze dryer'], 'aseptic-ready.isolator': ['Isolator', 'RABS'], 'seal-check.capper': ['Capping machine', 'Vial crimper'], 'filter-test.tester': ['Filter integrity tester'], 'leak-test-100.machine': ['Leak tester (HVLD)', 'Container closure integrity tester'],
 };
 
 describe('machine pickers on the demo master-data types', () => {
