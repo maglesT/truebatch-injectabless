@@ -43,7 +43,7 @@ describe('calculation checks ⛔ from the formulation test', () => {
     ['F0122 API per mL above the label claim without a declared overage (22 mg in a 20 mg tablet)',
       (d) => { Object.assign(d.formula[0]!, { mg: '22.0', labelClaim: '20 mg' }); },
       (d) => { Object.assign(d.formula[0]!, { mg: '20.0', labelClaim: '20 mg', adjust: { overage: { percent: '10.0' } } }); },
-      'formula[0].labelClaim', /22\.000 mg of Examplol per mL does not give the label claim 20 mg \(20\.000 mg of Examplol\).*overage \(T16\)/],
+      'formula[0].labelClaim', /22\.000 mg of Examplol per mL does not give the label claim 20 mg \(20\.000 mg of Examplol\).*an excess is an overage, which the batch quantity adds \(22 mg in a 20 mg tablet\)/],
     ['F0123 a stated strength 11 times the batch (11 mg against 1 mg)',
       (d) => { Object.assign(d.formula[0]!, { mg: '1.0', labelClaim: '11 mg' }); }, (d) => { Object.assign(d.formula[0]!, { mg: '1.0', labelClaim: '1 mg' }); },
       'formula[0].labelClaim', /does not give the label claim 11 mg/],

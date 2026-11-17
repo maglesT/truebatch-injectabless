@@ -7,7 +7,7 @@ import { masterSchema, type MasterDoc } from '../../../shared/master/schema.js';
 import { dispensing, type LotValues } from './example.js';
 import { batchText, headerValue } from '../../../shared/engine/values.js';
 import { settingText } from './sentences.js';
-import { qtyText } from './model.js';
+import { grouped, qtyText } from './model.js';
 import { Decimal } from './ui.js';
 
 // A count with thousands separators, as in the batch text ("15,625 units").
@@ -39,7 +39,7 @@ export function Preview({ doc: raw }: { doc: MasterDoc }) {
       return [{ stage: s.name, text: `${headerText(h)} (${settingText(doc, v)})`, ok: typeof h === 'string' || h.ok }];
     }
     const r = v && typeof v === 'object' && !('ref' in v) ? evaluate(doc, [], { stage: si, sub: 1, step: ti, round: 1 }, {}).theoretical : undefined;
-    return [{ stage: s.name, text: r ? (r.ok ? r.shown : r.message) : v === undefined ? 'not set' : `${settingText(doc, v)}${typeof v === 'object' && 'ref' in v ? ' (known during the batch)' : ''}`, ok: !r || r.ok }];
+    return [{ stage: s.name, text: r ? (r.ok ? grouped(r.shown) : r.message) : v === undefined ? 'not set' : `${settingText(doc, v)}${typeof v === 'object' && 'ref' in v ? ' (known during the batch)' : ''}`, ok: !r || r.ok }];
   }));
   return (
     <>

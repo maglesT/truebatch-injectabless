@@ -15,6 +15,9 @@ const mid = (l: Limit): string | undefined => {
 };
 const vary = (v: string, n: number) => Array.from({ length: n }, (_, i) => new Dec(v).times(new Dec(1).plus(new Dec((i % 5) - 2).div(400))).toFixed(Math.max(v.split('.')[1]?.length ?? 0, 1)));
 
+// The chip gives the verdict: a result text that ends in its own "PASS" or "FAIL" does not say it twice.
+export const verdictless = (shown: string) => shown.replace(/:\s*(PASS|FAIL)$/, '');
+
 /** The fields a block's calculations use (only these get example values). */
 export const usedFields = (b: Block) => b.fields.filter((f) => b.calcs.some((c) => refsIn(c.args).includes(f.name)));
 

@@ -411,7 +411,7 @@ describe('production approval, QC approval and QA release', () => {
     expect(text).toMatch(/QC approved: QUINN, .* IST · QC report QC-26-0042/);
     expect(text).toMatch(/Released: MEERA, .* IST/);
     expect(text).toMatch(/DEV-26-010 \| .* \| pH meter found out of calibration \| ASHA, .* \| closed by MEERA, .*: Meter recalibrated; results confirmed by a second meter/);
-    expect(text).toContain('Stage · yield 99.0 %');
+    expect(text).toContain('Stage · Compounding operator · yield 99.0 %');
     for (const m of ['Issued | ISSUER', 'Performed | ASHA', 'Verified (second person) | RAVI', 'Production approved | SAM', 'QC approved | QUINN', 'Released | MEERA']) expect(text).toContain(m);
     expect(text).not.toContain('not a released record');
   });

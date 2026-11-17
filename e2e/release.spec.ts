@@ -113,7 +113,7 @@ test('TI-22 release journey: QC approves with its report number, QA reviews, clo
   await expect(qa.page.getByRole('dialog')).toContainText('audit trail');
   await sign(qa.page);
   await expect(qa.page.getByRole('status')).toContainText('The batch is released.');
-  await expect(qa.page.locator('.bh')).toContainText('released');
+  await expect(qa.page.locator('.bh')).toContainText('Released');
 
   // The batch record PDF.
   const [download] = await Promise.all([qa.page.waitForEvent('download'), qa.page.getByRole('link', { name: 'Batch record (PDF)' }).last().click()]);
@@ -153,7 +153,7 @@ test('TI-21 QA terminates a batch still in production from the To review list: a
   await expect(inProduction).not.toContainText(batch.batchNo);
   await qa.page.goto(`/#/batch/${batch.id}`);
   await expect(qa.page.getByRole('note')).toContainText(/^Terminated by QA1 at \d{1,2} \w{3}, \d\d:\d\d IST: The pH meter failed/);
-  await expect(qa.page.locator('.bh')).toContainText('rejected');
+  await expect(qa.page.locator('.bh')).toContainText('Rejected');
   await expect(qa.page.getByRole('button', { name: 'Terminate batch' })).toHaveCount(0);
   await expect(qa.page.getByRole('region', { name: 'Production approval' })).toHaveCount(0);
   // The batch runs no more: no stage is "now"; the stages left unclosed say Terminated.

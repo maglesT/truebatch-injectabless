@@ -5,12 +5,15 @@ import { findBlock } from '../../../shared/blocks/index.js';
 import { refsIn } from '../../../shared/blocks/format.js';
 import { materialLines, type Limit, type MasterDoc, type SettingValue } from '../../../shared/master/schema.js';
 import { stepTitle } from '../../../shared/engine/batch.js';
+import { findUnit } from '../../../shared/templates/index.js';
 import { HEADER_LABEL, unitLabel } from './model.js';
 
 export type Part = string | { setting: string } | { field: string } | { calc: string } | { prev: string };
 
 /** A label inside a sentence: each word lower-cased, except one with a capital after its first letter (pH, RSD, CFU). */
 export const lower = (label: string) => label.split(' ').map((w) => (/^.+[A-Z]/u.test(w) ? w : w.toLowerCase())).join(' ');
+/** "is" or "are" after a label: "the good packs are", "the yield is". */
+const isAre = (label: string) => (/[^su]s$/.test(label.split(' ').at(-1) ?? '') ? 'are' : 'is');
 type Calc = Block['calcs'][number];
 
 // Packing: the master's pack facts and the batch facts recorded at issue, in words.
@@ -59,20 +62,24 @@ export function sentence(block: Block, c: Calc): Part[] {
   const p = (x: unknown) => input(block, x);
   const limit = (pre = '; it must be ') => (a.limit === undefined ? [] : [pre, p(a.limit)]);
   const label = lower(c.label);
+  const is = isAre(label);
   switch (c.template) {
-    case 'T1': return [`The ${label} is `, p(a.a), ' minus ', p(a.b), '.'];
-    case 'T3': return [`The ${label} is `, p(a.actual), ' as a percentage of ', p(a.theoretical), ...limit(), '.'];
+    case 'T1': return [`The ${label} ${is} `, p(a.a), ' minus ', p(a.b), '.'];
+    case 'T3': return [`The ${label} ${is} `, p(a.actual), ' as a percentage of ', p(a.theoretical), ...limit(), '.'];
     case 'T4': {
       const parts = (a.parts as { value: unknown }[]).flatMap((x, i) => [i ? ' + ' : '', p(x.value)]);
-      return [`The ${label} is `, ...parts, ' as a percentage of ', p(a.input), ...limit('; when limits are set, it must be '), '.'];
+      return [`The ${label} ${is} `, ...parts, ' as a percentage of ', p(a.input), ...limit('; when limits are set, it must be '), '.'];
     }
-    case 'T5': return [`The ${label} is the ${a.mode === 'loss' ? 'loss' : 'gain'} from `, p(a.before), ' to ', p(a.after),
+    case 'T5': return [`The ${label} ${is} the ${a.mode === 'loss' ? 'loss' : 'gain'} from `, p(a.before), ' to ', p(a.after),
       `, as a percentage of ${a.base === 'start' ? 'the starting weight' : a.base === 'final' ? 'the final weight' : 'the named stage'}`, ...limit(), '.'];
-    case 'T7': return [`The ${label} is the mean of `, p(a.readings), ...limit(', which must be '), ...(a.rsdLimit ? ['; the RSD must be ', p(a.rsdLimit)] : []), '.'];
-    case 'T13': return [`The ${label} is the time from `, p(a.start), ' to ', p(a.end), ...limit(), '.'];
+    case 'T7': return [`The ${label} ${is} the mean of `, p(a.readings), ...limit(', which must be '), ...(a.rsdLimit ? ['; the RSD must be ', p(a.rsdLimit)] : []), '.'];
+    case 'T13': return [`The ${label} ${is} the time from `, p(a.start), ' to ', p(a.end), ...limit(), '.'];
     case 'C1': {
       const around = a.around as { centre: unknown; plusMinusPercent?: unknown; plusMinus?: unknown } | undefined;
       if (around) return [p(a.value), ' must be within ± ', p(around.plusMinusPercent ?? around.plusMinus), around.plusMinusPercent ? ' % of ' : ' of ', p(around.centre), '.'];
+      // None allowed (a count that must be 0): said as such, not "at most 0 units".
+      const l = a.limit as { low?: unknown; high?: unknown } | undefined;
+      if (l && typeof l === 'object' && l.high === '0' && l.low === undefined) return [p(a.value), ' must be 0: none allowed.'];
       return [p(a.value), ' must be ', p(a.limit), '.'];
     }
     case 'C3': {
@@ -90,7 +97,7 @@ export function sentence(block: Block, c: Calc): Part[] {
       const names = [...new Set(refsIn(a))];
       const isLimit = (n: string) => block.settings.some((x) => x.name === n && x.kind === 'limit');
       const ins = names.filter((n) => !isLimit(n));
-      return [`The ${label} is worked out from `, ...ins.flatMap((n, i) => [i === 0 ? '' : i === ins.length - 1 ? ' and ' : ', ', p(`$${n}`)]),
+      return [`The ${label} ${is} worked out from `, ...ins.flatMap((n, i) => [i === 0 ? '' : i === ins.length - 1 ? ' and ' : ', ', p(`$${n}`)]),
         ...names.filter(isLimit).flatMap((n, i) => [i ? ' and ' : '; it must be ', p(`$${n}`)]), '.'];
     }
   }
@@ -145,8 +152,15 @@ export function sentenceText(doc: MasterDoc, block: Block, settings: Record<stri
     if (typeof before === 'string' && /^ must /.test(before)) return '';
     out.splice(typeof before === 'string' ? i - 1 : i, typeof before === 'string' ? 2 : 1);
   }
+  // A plain number setting whose label names its unit ("Time limit (min)") reads with it: "15 min".
+  const value = (n: string) => {
+    const s = block.settings.find((x) => x.name === n);
+    const v = settings[n];
+    const unit = s?.kind === 'number' && typeof v === 'string' ? /\(([^()±]+)\)$/.exec(s.label)?.[1] : undefined;
+    return unit && findUnit(unit) ? `${v} ${unit}` : settingText(doc, v);
+  };
   return out.map((x) => (typeof x === 'string' ? x
-    : 'setting' in x ? settingText(doc, settings[x.setting])
+    : 'setting' in x ? value(x.setting)
     : 'field' in x ? `the ${label(x.field)}`
     : 'calc' in x ? `the ${label(x.calc)}`
     : `the previous round's ${label(x.prev)}`)).join('').replace(/^the /, 'The ');

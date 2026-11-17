@@ -218,6 +218,17 @@ answering) or **ok**.
   or in a room the stage allows, never in a QC or laboratory area (`shared/engine/picks.ts`, the same rule on the
   server and the screen). Not every area called dispensing: a liquids block's "Liquid dispensing" balance is not
   offered to a tablet weighing. A version approved before the setting reads the rooms of the Dispensing area.
+  The master check warns (⚠️, TI-11; `shared/master/places.ts`, run by the designer with master data) when no machine
+  of a step's type stands in the rooms its stage allows, naming where the machines of that type stand: the floor's
+  picker would be empty. A warning, not ⛔: master data changes without a new master version, and the floor checks it
+  again; an empty picker on the floor says why (as TrueBatch Tablets, 17 Nov 2026).
+- **What the master check reports** (as TrueBatch Tablets, 17 Nov 2026): everything the plain view would show as not
+  set (a required setting, a hold time, a stage's responsible role); an optional setting left empty is left out of
+  the plain view's sentences, as the engine leaves it out. A temperature recorded with its optional limits left empty
+  is a warning (the packing forming temperature). A stage's yield on an earlier stage's output is ⛔ when the stage
+  adds formula materials (the yield would read above 100 %). The messages carry no internal codes (rules, templates,
+  failure cases, the library's check numbers); the rule stays with the problem for the tests, and an answer given to
+  a warning as it read before still counts.
 
 ## Rules and where they are enforced
 - 22 TrueBatch GMP rules (EU GMP Part I and Annex 11, 21 CFR 211 and Part 11, Revised Schedule M), listed in

@@ -18,6 +18,8 @@ export function seedMasterData(m: FakeMaster) {
     { ...item('eq-bal', 'BAL-01', 'Balance 60 kg'), kind: 'instrument', type: 'balance', room: 'DSP-01' },
     { ...item('eq-bln', 'BLN-01', 'Bin blender 200 L'), kind: 'equipment', type: 'blender', room: 'BLN-01' },
     { ...item('eq-prs', 'PRS-01', 'Rotary tablet press'), kind: 'equipment', type: 'tablet press', room: 'CMP-01' },
+    // The starting master's compounding vessel stands in a room of its stage (the master check warns otherwise, TI-11).
+    { ...item('eq-vsl', 'VSL-01', 'Compounding vessel 500 L'), kind: 'equipment', type: 'compounding vessel', room: 'CPD-01' },
   );
   // These rooms only, not the fixtures' rooms of the server tests.
   m.rooms_.splice(0);
@@ -25,5 +27,6 @@ export function seedMasterData(m: FakeMaster) {
     { ...item('rm-dsp', 'DSP-01', 'Sterile dispensing booth 1'), area: 'Sterile dispensing', grade: 'D' },
     { ...item('rm-bln', 'BLN-01', 'Blending room 1'), area: 'Blending', grade: 'D' },
     { ...item('rm-cmp', 'CMP-01', 'Compression room 1'), area: 'Compression', grade: 'D' },
+    { ...item('rm-cpd', 'CPD-01', 'Sterile compounding room 1'), area: 'Sterile compounding', grade: 'C' },
   );
 }
