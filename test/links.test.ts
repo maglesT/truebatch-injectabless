@@ -323,6 +323,27 @@ describe('TI-12 MMS: only released, in-date lots of the material; certificate va
   });
 });
 
+describe('TI-12 a lot typed by hand after an MMS lot', () => {
+  it('MMS down: the new lot\'s use-by date is typed from its label, not refused as coming from MMS (the earlier lot\'s)', async () => {
+    const d = tablet();
+    const g = d.stages[1]!;
+    d.stages = [{ ...g, uses: [], steps: [g.steps[0]!, g.steps[2]!, g.steps[6]!] }];
+    const x = await issue(d);
+    await act('asha', x.id, '0.1.0.1', 'start');
+    expect((await record(x.id, '0.1.0.1', { lot: 'API-OK', balance: 'eq-bal', gross: '1.000', tare: '0.850' })).statusCode).toBe(200);
+    expect((await stepOf(x.id, '0.1.0.1')).source['lot.expiry']).toMatchObject({ from: 'mms' });
+    await cut(S.mms);
+    try {
+      const r = await record(x.id, '0.1.0.1', { lot: 'API-ASIS', ...handLabels('lot', 'lot') });
+      expect(r.statusCode, r.body).toBe(200);
+    } finally { await restore(S.mms); }
+    const s = await stepOf(x.id, '0.1.0.1');
+    expect(s.source.lot).toEqual({ from: 'hand', link: 'mms', state: 'down' });
+    expect(s.source['lot.expiry']).toMatchObject({ from: 'hand' });
+    expect(s.values).toMatchObject({ lot: 'API-ASIS', 'lot.expiry': '2099-12-31' });
+  });
+});
+
 describe('TI-21 Deviations: the deviation number and its status come from the Deviations system', () => {
   let b: { id: number; batchNo: string };
   const devs = async () => ((await as('meera', 'GET', `/api/batches/${b.id}`)).json() as { batch: { deviations: { reference: string; open: boolean; status?: string }[]; deviationsLink: string } }).batch;
