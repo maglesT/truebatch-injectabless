@@ -180,7 +180,7 @@ describe('TI-11 Logbook: equipment and rooms fit for use', () => {
     expect((await sign('asha', b.id, '0.1.0.1', 'done')).statusCode).toBe(200);
   });
 
-  it('TI-11 while the Logbook answers, the machine and room pickers offer only what it has and name the rest; absent or down, every one', async () => {
+  it('TI-11 while the Logbook answers, the machine and room pickers offer only what it has (an empty one names the rest); absent or down, every one', async () => {
     const read = async () => (await as('asha', 'GET', '/api/logbook/items')).json() as { link: string; items: string[] };
     const r = await read();
     expect(r.link).toBe('ok');
@@ -188,7 +188,10 @@ describe('TI-11 Logbook: equipment and rooms fit for use', () => {
     const stirrers = t.master.equipment_.filter((m) => m.type === 'stirrer');
     const picks = inLogbook(stirrers, r.items);
     expect(picks.offered.map((m) => m.code)).toEqual(['STR-01', 'STR-02', 'STR-03', 'STR-04']);
-    expect(picks.note).toBe('Not offered, because the Logbook does not have it: STR-05. Only what the Logbook has can be used while it is linked.');
+    // A picker with choices has no note; an empty one names what the Logbook does not have.
+    expect(picks.note).toBeNull();
+    expect(inLogbook(stirrers.filter((m) => m.code === 'STR-05'), r.items)).toEqual({ offered: [],
+      note: 'Not offered, because the Logbook does not have it: STR-05. Only what the Logbook has can be used while it is linked.' });
     expect(inLogbook(t.master.rooms_, r.items).offered.map((x) => x.code)).toEqual(['GRN-01']);
     await cut(S.lb);
     try {
@@ -747,6 +750,30 @@ describe('the views TrueBatch publishes', () => {
     expect(await ends('EQ-USE-1')).toEqual([['RM-104', new Date('2026-11-15T10:00:00Z')]]);
     await t.owner`insert into batch_events (batch_id, kind, payload, person_id, at) values (${b2}, 'rejected', '{}', ${u!.id}, '2026-11-15 12:00+00')`;
     expect(await ends('EQ-USE-2')).toEqual([['RM-104', new Date('2026-11-15T12:00:00Z')]]);
+  });
+
+  it('equipment_use_v1: a room or machine named only in line clearance steps was used by the stage: its step_name is the stage (17 Nov 2026 run, F3)', async () => {
+    const [u] = await t.owner<{ id: number }[]>`select id::int from users order by id limit 1`;
+    // Every stage starts with a line clearance (step 0); a later step of the stage names the stirrer again.
+    const doc = placed(tablet());
+    const [v] = await t.owner<{ id: number }[]>`insert into master_versions (version_no, doc, created_by) values (1, ${t.owner.json(doc as never)}, ${u!.id}) returning id::int`;
+    const [b] = await t.owner<{ id: number }[]>`insert into batches (batch_no, master_version_id, issued_by) values ('EQ-USE-3', ${v!.id}, ${u!.id}) returning id::int`;
+    const e = (stage: number, step: number, kind: string, payload: object, at: string) => t.owner`
+      insert into step_events (batch_id, stage, sub, step, round, kind, payload, person_id, at)
+      values (${b!.id}, ${stage}, 1, ${step}, 1, ${kind}, ${t.owner.json(payload as never)}, ${u!.id}, ${at})`;
+    const room = { itemId: 'rm-105', code: 'RM-105', name: 'Compounding room 5', version: 1, type: 'Compounding', room: 'RM-105', area: 'Compounding' };
+    const stirrer = { itemId: 'eq-str', code: 'STR-01', name: 'Stirrer', version: 1, type: 'stirrer', room: 'RM-105', area: 'Compounding' };
+    // The room in the clearance of the first stage only; the stirrer in its clearance and then in a process step.
+    await e(0, 0, 'started', {}, '2026-11-16 08:00+00');
+    await e(0, 0, 'value', { values: { room, machine: stirrer } }, '2026-11-16 08:01+00');
+    await e(0, 2, 'started', {}, '2026-11-16 08:10+00');
+    await e(0, 2, 'value', { values: { machine: stirrer } }, '2026-11-16 08:11+00');
+    const rows = await t.owner.unsafe(`select equipment_code, step, step_name from ${rep()}.equipment_use_v1 where batch_number = 'EQ-USE-3' order by equipment_code`);
+    const st = doc.stages[0]!;
+    expect(st.steps[0]!.block.id).toBe('line-clearance');
+    expect(rows).toEqual([
+      { equipment_code: 'RM-105', step: `${st.key}/${st.steps[0]!.key}`, step_name: st.name },
+      { equipment_code: 'STR-01', step: `${st.key}/${st.steps[2]!.key}`, step_name: `${st.name} › ${st.steps[2]!.key}` }]);
   });
 
   it('nobody reads the views without a link: the app login itself has no grant', async () => {

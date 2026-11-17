@@ -100,14 +100,14 @@ test('TI-P2 packing journey: packing master from the skeleton (labelling, carton
   const iss = await person(browser, 'piss');
   await masters(iss.page);
   const issue = iss.page.getByRole('dialog', { name: 'Issue a batch' });
-  // While the Logbook answers, the line picker offers only the lines it has (LL-01, not LL-02) and says why; the
-  // Logbook's reason for refusing a dirty line reads as one sentence, with one full stop.
+  // While the Logbook answers, the line picker offers only the lines it has (LL-01, not LL-02); a picker with choices
+  // has no "not offered" note. The Logbook's reason for refusing a dirty line reads as one sentence, with one full stop.
   const lb = connect(TEST_DATABASE_URL);
   await lb.unsafe(`grant select on ${E2E_PACKING_SCHEMA}_lb.equipment_status_v1 to ${PACKING_APP_ROLE}`);
   try {
     await iss.page.getByRole('row', { name: /Effective/ }).getByRole('button', { name: 'Issue a batch' }).click();
-    await expect(issue.getByText('Not offered, because the Logbook does not have it: LL-02.')).toBeVisible();
     await expect(issue.getByRole('group', { name: 'Packing line' }).getByRole('button')).toHaveText([/LL-01/]);
+    await expect(issue.getByText(/Not offered, because the Logbook does not have/)).toHaveCount(0);
     await issue.getByRole('group', { name: 'Packing line' }).getByRole('button', { name: /LL-01/ }).click();
     await issue.getByLabel('Batch no. of the filled units').fill('TI260001');
     await issue.getByLabel('Filled units issued').fill('10000');

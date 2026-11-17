@@ -250,7 +250,7 @@ describe('a packing batch from the filled units of a released batch', () => {
       and batch_number = (select batch_no from batches where id = $1)`, [id]))[0];
     expect(await t.owner`select 1 from batch_events where batch_id = ${id} and kind = 'stage_closed' and payload->>'stage' = '1'`).toHaveLength(1);
     expect(await lineUse()).toEqual({ ended: false });
-    const fg = await step('2.1.0.1', { packs: '980', cartons: '98', samples: '4', returned: '120', rejects: '40' });
+    const fg = await step('2.1.0.1', { packs: '980', cartons: '98', shippers: '2', samples: '4', returned: '120', rejects: '40' });
     expect(fg.results.accountability).toMatchObject({ check: { pass: true } });
     // Before the reconciliation MMS takes off the whole quantity issued.
     const usedOf = async (lot: string) => (await t.owner.unsafe(`select quantity::text from ${t.schema}_report.material_use_v1 where lot_number = $1
@@ -294,7 +294,7 @@ describe('a packing batch from the filled units of a released batch', () => {
     for (const text of ['Packing record TIP', 'TrueBatch Injectables Packing', 'batch TI260001', 'expiry 10/2028', 'QC report QC-26-0101', 'Packing materials', 'Lot LABEL-1: 10500 nos', '9840 nos used']) expect(pdf).toContain(text);
     expect(pdf).not.toContain('9840 units used');
     // A count in master data's name for it (cartons in nos), as on screen and in MMS: per pack, the lots issued, the values.
-    for (const text of ['"10 nos"', 'Lot CARTON-1: 1000 nos', 'Quantity issued: 1000 nos', 'Used in good packs: 984 nos']) expect(pdf).toContain(text);
+    for (const text of ['"10 nos per pack"', '"Quantity"', 'Lot CARTON-1: 1000 nos', 'Quantity issued: 1000 nos', 'Used in good packs: 984 nos']) expect(pdf).toContain(text);
     for (const text of ['"10 units"', 'Lot CARTON-1: 1000 units', 'Quantity issued: 1000 units']) expect(pdf).not.toContain(text);
     // A check's line that states its own question says it once.
     expect(pdf).toContain('Packing finished: ');
@@ -303,17 +303,18 @@ describe('a packing batch from the filled units of a released batch', () => {
     expect(res.headers['content-type']).toContain('application/pdf');
 
     // The published view, for MMS finished goods later.
-    const [row] = await t.owner.unsafe(`select batch_number, coded_batch_number, product_code, bulk_product_code, pack_type, units_per_pack, mfg_date, expiry_month, packs::text, cartons::text, status, released
+    const [row] = await t.owner.unsafe(`select batch_number, coded_batch_number, product_code, bulk_product_code, pack_type, units_per_pack, mfg_date, expiry_month, packs::text, cartons::text, status, released, shippers::text
       from ${t.schema}_report.packing_batch_v1 where coded_batch_number = 'TI260001'`);
     expect(row).toMatchObject({ coded_batch_number: 'TI260001', product_code: 'PK-001', bulk_product_code: 'PRD-001', pack_type: 'carton', units_per_pack: 10, mfg_date: '2026-11-03',
-      expiry_month: '2028-10', packs: '980', cartons: '98', status: 'RELEASED', released: true });
+      expiry_month: '2028-10', packs: '980', cartons: '98', status: 'RELEASED', released: true, shippers: '2' });
     // For the Logbook: the line used, as TrueBatch Injectables publishes its machines. For MMS: the packing materials issued,
     // per lot, in the material's unit, as TrueBatch Injectables publishes what it dispensed.
     const batchNo = (await loadBatch(t.sql, id))!.batch.batchNo;
-    // One use of the line, for its whole packing stage (not the line named at issue, nor the clearance after packing).
+    // One use of the line, for its whole packing stage (not the line named at issue, nor the clearance after packing);
+    // named only in the line clearance, it was used by the stage: the Logbook reads "(Labelling and cartoning)".
     expect(await lineUse()).toEqual({ ended: true });
     const eq = await t.owner.unsafe(`select equipment_code, equipment_type, room_code, step, step_name, ended_at is not null as ended from ${t.schema}_report.equipment_use_v1 where batch_number = $1`, [batchNo]);
-    expect(eq).toEqual([{ equipment_code: 'LL-01', equipment_type: 'labelling line', room_code: 'PK-01', step: 'packing/clearance', step_name: 'Labelling and cartoning › Line clearance before packing', ended: true }]);
+    expect(eq).toEqual([{ equipment_code: 'LL-01', equipment_type: 'labelling line', room_code: 'PK-01', step: 'packing/clearance', step_name: 'Labelling and cartoning', ended: true }]);
     const used = await t.owner.unsafe(`select lot_number, material_code, material_master_id, quantity::text, unit, step, status
       from ${t.schema}_report.material_use_v1 where batch_number = $1 order by step`, [batchNo]);
     // A count in master data's unit (nos). A printed material: issued less returned to stores uncoded (cartons 1000 − 10,
@@ -336,5 +337,8 @@ describe('a packing batch from the filled units of a released batch', () => {
 
     // TI-P7: the line takes the next order once this one is finished.
     expect((await issue({ line: 'ln-1', bulk: 'TI260004', units: '5000' })).statusCode).toBe(200);
+    // Its shippers are not counted yet: null, so MMS asks for them (the last column, for MMS finished goods).
+    expect(await t.owner.unsafe(`select distinct shippers from ${t.schema}_report.packing_batch_v1 where coded_batch_number = 'TI260004'`)).toEqual([{ shippers: null }]);
+    expect((await cols('packing_batch_v1')).split(', ').at(-1)).toBe('shippers numeric');
   });
 });

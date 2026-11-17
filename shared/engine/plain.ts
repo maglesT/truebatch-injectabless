@@ -19,12 +19,31 @@ export function headline(r: Stored): string | null {
   const rounded = (r.check as { rounded?: string } | undefined)?.rounded;
   // A check decided in words (pass, accept, match) has no figure: its chip or verdict line says it.
   const figure = rounded !== undefined && /\d/.test(rounded) ? rounded : undefined;
-  // Against a target (C1 "around"): the difference from the target, in %.
-  if (figure !== undefined && typeof r.deviation === 'string') return `${r.deviation.startsWith('-') ? '' : '+'}${figure} %`;
+  // Against a target (C1 "around"): the difference from the target as its worked line rounds it, to the decimals of
+  // the ± limit ("6.76 kg is +0.1 % from 6.7500 kg" reads "+0.1 %", not the unrounded "+0.148 %").
+  if (figure !== undefined && typeof r.deviation === 'string') {
+    const d = / is ([+-]?\d[\d.]*) (\S+) from /.exec(r.shown);
+    if (d) return `${signed(d[1]!)} ${d[2]}`;
+    return `${r.deviation.startsWith('-') ? '' : '+'}${figure} %`;
+  }
   if (figure !== undefined && r.unit !== 'units') return figure;
   if (rounded !== undefined || r.unit === 'units') return null;
-  const m = /=\s*([^=;]+)$/.exec(r.shown.split('; ')[0] ?? '');
-  return m ? m[1]!.trim() : `${r.value} ${r.unit}`;
+  // The end of the part of the worked line that comes to the result's own value: "solids = … = 0.750 kg; total liquid =
+  // … = 7.500 kg; solvent to add = … = 6.750 kg" is 6.750 kg, not the first part's 0.750 kg. Else the first part's end.
+  const ends = r.shown.split('; ').map((part) => /=\s*([^=;]+)$/.exec(part)?.[1]?.trim());
+  return ends.find((e) => e !== undefined && sameNumber(e, r.value)) ?? ends[0] ?? `${r.value} ${r.unit}`;
+}
+
+/** A difference as written, with its sign; a difference that rounds to zero has none ("0.0", not "-0.0"). */
+export const signed = (f: string): string => (Number(f) === 0 ? f.replace(/^[+-]/, '') : /^[+-]/.test(f) ? f : `+${f}`);
+
+/** Whether a figure as written ("6.750 kg", "4,920 packs") is the value, rounded to the figure's decimals. */
+function sameNumber(written: string, value: string): boolean {
+  const n = /^-?\d[\d,]*(?:\.(\d+))?/.exec(written);
+  if (!n) return false;
+  const dp = n[1]?.length ?? 0;
+  const v = Number(value);
+  return Number.isFinite(v) && Math.abs(Number(n[0].replace(/,/g, '')) - v) <= 0.5 * 10 ** -dp + 1e-12;
 }
 
 /** The limit a result was checked against, as its check states it ("97.0 to 100.5 %"); null without one. */

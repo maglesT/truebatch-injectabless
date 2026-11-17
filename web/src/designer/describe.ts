@@ -5,7 +5,7 @@ import { masterChecks } from '../../../shared/master/checks.js';
 import { batchText, HEADER_WORDS } from '../../../shared/engine/values.js';
 import { fieldChanges, grouped, placeLabel } from './model.js';
 import { materialLines, type FormulaLine, type MasterDoc, type Stage, type Step } from '../../../shared/master/schema.js';
-import { unitName } from '../../../shared/engine/stock.js';
+import { perPackText, unitName } from '../../../shared/engine/stock.js';
 import { stepTitle } from '../../../shared/engine/batch.js';
 import { sentence, sentenceText, settingText, slotsOf } from './sentences.js';
 
@@ -85,7 +85,7 @@ export function describeMaster(doc: MasterDoc, units?: Units): Section[] {
       ...(p.serialisation ? [{ key: 'serialisation', text: `Serialisation checked${p.gtin ? `; pack GTIN ${p.gtin}` : ''}.` }] : []),
     ] },
     { key: 'formula', title: 'Packing materials', lines: p.materials.map((m) => ({ key: m.key,
-      text: `${m.name} (${m.code}), ${m.kind}: ${m.perPack} ${unitName(m.unit, units?.get(m.materialItemId))} per pack${m.printed ? '; printed, issued with a second person and reconciled' : ''}${m.coded ? '; coded with the batch details' : ''}.` })) },
+      text: `${m.name} (${m.code}), ${m.kind}: ${perPackText(m, units?.get(m.materialItemId))}${m.printed ? '; printed, issued with a second person and reconciled' : ''}${m.coded ? '; coded with the batch details' : ''}.` })) },
   ] : [
     { key: 'header', title: 'Header', lines: [
       { key: 'product', text: `Product ${h.productCode}, ${h.productName}.` },

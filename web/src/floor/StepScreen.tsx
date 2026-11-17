@@ -17,7 +17,7 @@ import { plantText } from '../../../shared/plant-time.js';
 import { needsText, stepNeeds } from '../../../shared/engine/state.js';
 import { clearedRooms, dispensingRooms, emptyNote, inLogbook, machineRefusal, roomRefusal } from '../../../shared/engine/picks.js';
 import { materialLines, type FormulaLine, type PackMaterial } from '../../../shared/master/schema.js';
-import { unitName } from '../../../shared/engine/stock.js';
+import { perPackText, unitName } from '../../../shared/engine/stock.js';
 
 type Dialog = { kind: 'done' | 'repeat' | 'check' | 'release-hold' | 'na' | 'send-back' | 'note' } | { kind: 'na-sign'; reason: string } | { kind: 'correct'; field: BlockField };
 const INVOLVING = ['started', 'value', 'done', 'corrected', 'not_applicable'];
@@ -35,7 +35,7 @@ function settingsText(doc: BatchDetail['master']['doc'], block: Block, st: Step,
     const v = st.settings[s.name];
     const m = v && typeof v === 'object' && 'formula' in v ? materialLines(doc).find((l) => l.key === v.formula) : undefined;
     const pm = m && 'perPack' in m ? m as PackMaterial : undefined;
-    const what = m && `${m.code} · ${m.name}${pm ? ` (${pm.kind}, ${pm.perPack} ${unitName(pm.unit, mdUnit)} per pack)` : ''}`;
+    const what = m && `${m.code} · ${m.name}${pm ? ` (${pm.kind}, ${perPackText(pm, mdUnit)})` : ''}`;
     if (m && s.kind === 'quantity' && 'role' in m && typeof v === 'object' && 'formula' in v) {
       // Worked out by the server once a value is recorded; before that, the batch quantity (an adjusted one needs the lot).
       const r = row.results[s.name] ?? (v.adjusted ? undefined : lineQuantity(doc, [], row.key, m as FormulaLine, false, {}));
@@ -112,7 +112,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
     if (block.fields.some((f) => f.kind === 'machine')) void api<PickItem[]>('GET', '/api/master/equipment').then((machine) => setMd((p) => ({ ...p, machine })), () => {});
   }, [block]);
   // What each machine or room field offers: as the server accepts it (shared/engine/picks.ts), and while the Logbook
-  // is linked only what the Logbook has; the note says what is left out and why.
+  // is linked only what the Logbook has; an empty picker says what is left out and why.
   const logbook = useLogbookItems(block.fields.some((f) => f.kind === 'machine' || f.kind === 'room'));
   // A machine stands in the room this stage's line clearance was done in, when it stands in that room's area (run 2, G6).
   const cleared = clearedRooms(d.steps.filter((x) => x.id !== row.id), row.key.stage);
@@ -120,7 +120,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
     : f.kind === 'machine' ? md.machine.filter((m) => m.active && !machineRefusal(stage, f, m, md.room, dispensingRooms(doc, md.room), cleared)) : []);
   const pickOf = (f: BlockField) => inLogbook(fits(f), logbook);
   const picksFor = (f: BlockField) => pickOf(f).offered;
-  // An empty picker says why (once master data is read); otherwise only what the Logbook leaves out.
+  // An empty picker says why (once master data is read) and what the Logbook leaves out; one with choices says nothing.
   const mdRead = md.room.length > 0 && (md.machine.length > 0 || !block.fields.some((x) => x.kind === 'machine'));
   const noteFor = (f: BlockField) => [mdRead && !fits(f).length ? emptyNote(stage, f, md.machine, md.room, dispensingRooms(doc, md.room), cleared) : null, pickOf(f).note];
 

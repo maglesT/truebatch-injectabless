@@ -235,7 +235,9 @@ answering) or **ok**.
   dirty between weighings; the record keeps which balance was used and the Logbook checks its calibration as before. Both views add `step_name` at the end ("Granulation › Granulate to
   an end point", kept with the step's start); `step` stays the keys. `0014` (17 Nov 2026): the use's `step` and
   `step_name` are the step that names it **last** (the latest started), so the Logbook's "last used by … (stage ›
-  step)" names where it was last used. `material_use_v1` gives the quantity in the
+  step)" names where it was last used. `0016`: a machine or room named only in line clearance steps (a room, the
+  filling line) was used by the stage, so its `step_name` is the stage's name ("Compounding"); a machine operated in
+  a process step keeps that step. `material_use_v1` gives the quantity in the
   material's unit in master data, read when the step is signed done (g and mg exactly in kg for a kg material).
 - **QA terminates a batch** (owner, 16 Nov 2026): a batch still in production (before production approval) that
   cannot be finished is terminated by QA (`qa.release`) from the batch screen or the "To review" list, with a reason

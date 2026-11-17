@@ -61,6 +61,16 @@ export function unitName(unit: string, stockUnit?: string | null): string {
   const p = published({ value: '1', unit }, stockUnit ?? undefined);
   return p.value === '1' ? p.unit : unit;
 }
+/**
+ * A packing material's quantity per pack in words (owner's confirmation run, 17 Nov 2026): a count used less than once
+ * per pack reads "1 carton per 10 packs", "1 shipper per 500 packs", not "0.1 nos"; else "2 nos per pack", "0.12 m per pack".
+ */
+export function perPackText(m: { perPack: string; unit: string; kind: string }, stockUnit?: string | null): string {
+  const n = Number(m.perPack);
+  const packs = n > 0 && n < 1 ? Math.round(1 / n) : 0;
+  if (m.unit === 'units' && packs > 1 && Math.abs(packs * n - 1) < 1e-9) return `1${m.kind === 'other' ? '' : ` ${m.kind}`} per ${packs} packs`;
+  return `${m.perPack} ${unitName(m.unit, stockUnit)} per pack`;
+}
 const stockUnitOf = (v: StepView) => v.events.filter((e) => typeof e.payload.stockUnit === 'string').at(-1)?.payload.stockUnit as string | undefined;
 
 /**
