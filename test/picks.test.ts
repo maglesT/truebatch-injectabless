@@ -22,7 +22,8 @@ const OFFERS: Record<string, string[]> = {
   'weigh.balance': BALANCES, 'charge.machine': ['Bin blender', ...VESSELS, 'Fluid bed processor'], 'dissolve.machine': VESSELS, 'mix.machine': ['Bin blender', ...VESSELS], 'make-up.machine': VESSELS, 'phase-prep.machine': VESSELS,
   'homogenise.machine': ['Homogeniser'], 'component-wash.washer': ['Vial washer', 'Vial washing machine', 'Ultrasonic washer'], 'depyrogenate.machine': ['Depyrogenation tunnel', 'Dry heat steriliser'],
   'sterilise.steriliser': ['Dry heat steriliser', 'Autoclave'], 'terminal-sterilise.steriliser': ['Dry heat steriliser', 'Autoclave'],
-  'fill.machine': ['Vial filling machine', 'Syringe filling machine', 'Form-fill-seal machine', 'Blow-fill-seal machine', 'LVP bag filling machine', 'Powder filling machine'],
+  // A liquid filler, not the powder filler, a blow-fill-seal or a bag machine (whole-suite run, S18).
+  'fill.machine': ['Vial filling machine', 'Syringe filling machine', 'Form-fill-seal machine'],
   'ffs-run.machine': ['Form-fill-seal machine', 'Blow-fill-seal machine', 'LVP bag filling machine'], 'powder-fill.machine': ['Powder filling machine'],
   'lyo-load.dryer': ['Freeze dryer'], 'aseptic-ready.isolator': ['Isolator', 'RABS', 'Blow-fill-seal machine'], 'seal-check.capper': ['Capping machine', 'Vial crimper'], 'filter-test.tester': ['Filter integrity tester'], 'leak-test-100.machine': ['Leak tester (HVLD)', 'Container closure integrity tester'],
 };

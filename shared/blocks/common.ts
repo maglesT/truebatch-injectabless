@@ -311,7 +311,9 @@ export const fill: Block = {
   id: 'fill', version: 1, name: 'Fill with periodic fill-weight checks', checker: false, periodic: { maxMinutes: 1440 }, stop: 'done',
   instruction: 'At each round weigh one filled unit from every needle, check the stoppers (and the stirring of a suspension), and read the counter.',
   fields: [
-    { name: 'machine', label: 'Filling machine', kind: 'machine', types: ['fill', 'filler'] },
+    // A liquid filler only (whole-suite run, S18: the powder filler was offered): not a powder filler, a blow-fill-seal
+    // or a bag machine, which have their own blocks. The same field, so the same version, as the washer's types.
+    { name: 'machine', label: 'Filling machine', kind: 'machine', types: ['fill', 'filler'], notTypes: ['powder', 'blow', 'bag'] },
     { name: 'weights', label: 'Net fill weight per needle', kind: 'number', unit: 'g', count: '$needles' },
     yes('stoppers', 'Stoppers seated'), { name: 'stirring', label: 'Stirring on (suspension)', kind: 'yes-no', optional: true },
     num('headspace', 'Headspace oxygen', '%v/v', true), num('counter', 'Counter', 'units'),
