@@ -128,7 +128,7 @@ const stepHash = (batchId: number, v: StepView) => contentHash('batch_step', bat
  * like lots, through their link (Logbook, MMS): pulled when it answers, else typed by hand with the label questions
  * (server/pull.ts). A pulled value cannot be typed over; certificate values come with the lot.
  */
-async function readValues(app: FastifyInstance, doc: MasterDoc, key: StepKey, raw: Record<string, unknown>, now: Date, current: StepView, batchNo: string) {
+async function readValues(app: FastifyInstance, tx: Tx, doc: MasterDoc, key: StepKey, raw: Record<string, unknown>, now: Date, current: StepView, batchNo: string) {
   const stage = doc.stages[key.stage]!;
   const step = stage.steps[key.step]!;
   const block = findBlock(step.block)!;
@@ -160,7 +160,8 @@ async function readValues(app: FastifyInstance, doc: MasterDoc, key: StepKey, ra
       const v = readValue(f, x, '');
       if (typeof v !== 'string') { problems.push((v as { error: string }).error); continue; }
       out[name] = v;
-      pulled = f.kind === 'bulk' ? await pullBulk(app, doc, block, v) : await pullLot(app, doc, step, block, v, current.values, now, PLANT_TZ, name);
+      if (f.kind === 'bulk') await tx`select pg_advisory_xact_lock(hashtext(${`bulk:${v.toLowerCase()}`}))`;
+      pulled = f.kind === 'bulk' ? await pullBulk(app, doc, block, v, await bulkIssued(tx, v, batchNo), raw.units) : await pullLot(app, doc, step, block, v, current.values, now, PLANT_TZ, name);
     }
     problems.push(...pulled.problems);
     source[name] = pulled.source;
@@ -175,6 +176,8 @@ async function readValues(app: FastifyInstance, doc: MasterDoc, key: StepKey, ra
     const f = fields.find((y) => y.name === name);
     if (!f) { problems.push(`There is no field ${name}`); continue; }
     if (LINK_OF[f.kind]) continue;
+    // The units issued from a batch TrueBatch Injectables gives the good units of: read with the batch (pullBulk).
+    if (block.id === 'bulk-issue' && name === 'units' && source.units) continue;
     const was = source[name] ?? current.source[name];
     // While the step's lot is typed by hand (its link off or down), the lot's date and certificate values are typed from
     // its label, whatever an earlier lot from MMS gave (they are never signed with this lot: doneProblems).
@@ -237,6 +240,25 @@ const LAST_EVENTS = 5;
 const NAMES = Object.keys(ACTIONS) as Action[];
 const BATCH_NAMES = Object.keys(BATCH_ACTIONS) as BatchAction[];
 const flowOf = (doc: MasterDoc, k: StepKey) => doc.stages[k.stage]!.steps[k.step]!.flow.kind;
+/**
+ * Packing (suite B2): the filled units already issued from a TrueBatch Injectables batch by this product's own packing
+ * batches: the units of the first step as it stands (corrections included) of every signed issue from it; a terminated
+ * packing batch is not counted (what it had went back unpacked), nor the batch whose step is being recorded.
+ */
+async function bulkIssued(tx: Tx, bulk: string, except: string): Promise<Dec> {
+  const ids = await tx<{ id: number }[]>`select distinct e.batch_id::int as id from step_events e
+    where e.stage = 0 and e.step = 0 and e.round = 1 and e.kind in ('value', 'corrected') and lower(e.payload->'values'->>'bulk') = lower(${bulk})
+      and exists (select 1 from signatures s where s.object_type = 'batch' and s.object_id = e.batch_id and s.meaning = 'issued')`;
+  let issued = new Dec(0);
+  for (const { id } of ids) {
+    const l = (await loadBatch(tx, id))!;
+    if (l.batch.batchNo === except || l.batchEvents.some((e) => e.payload.terminated)) continue;
+    const v = openSteps(l.doc, l.events, l.now).steps[0]!.values;
+    const units = v.units as { value?: string } | undefined;
+    if (String(v.bulk ?? '').toLowerCase() === bulk.toLowerCase() && units?.value) issued = issued.plus(units.value);
+  }
+  return issued;
+}
 const FIRST: StepKey = { stage: 0, sub: 1, step: 0, round: 1 };
 /**
  * Packing (TI-P2, TI-P7): a master whose first step is recorded at issue (the line, the released batch of filled units,
@@ -247,7 +269,7 @@ const FIRST: StepKey = { stage: 0, sub: 1, step: 0, round: 1 };
 async function issueValues(app: FastifyInstance, tx: Tx, doc: MasterDoc, raw: Record<string, unknown> | undefined, now: Date) {
   const block = findBlock(doc.stages[0]!.steps[0]!.block)!;
   const current = openSteps(doc, [], now).steps[0]!;
-  const typed = await readValues(app, doc, FIRST, raw ?? {}, now, current, '');
+  const typed = await readValues(app, tx, doc, FIRST, raw ?? {}, now, current, '');
   const needed = [...block.atIssue!.map((n) => block.fields.find((f) => f.name === n)!), ...handFields(block.fields, typed.source)];
   const missing = needed.filter((f) => !f.optional && typed.values[f.name] === undefined).map((f) => `${f.label} is not recorded`);
   const results = evaluate(doc, [], FIRST, typed.values);
@@ -584,10 +606,14 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
     return { link: r.state, items: r.state === 'ok' ? r.value : [] };
   });
 
-  // Packing: the batches TrueBatch Injectables has released of a product, for the issue's pick list (pull, don't type).
+  // Packing: the batches TrueBatch Injectables has released of a product, for the issue's pick list (pull, don't type),
+  // with their good units still unpacked (bulkIssued); one with none left is not offered.
   app.get<{ Querystring: { product?: string } }>('/api/bulk-batches', { preHandler: requirePermission('truebatch_injectables.batch.issue') }, async (req) => {
     const r = await app.links.truebatch_injectables.released(String(req.query.product ?? ''));
-    return { link: r.state, batches: r.state === 'ok' ? r.value.map((b) => ({ batchNo: b.batchNo, mfgDate: b.mfgDate, goodQuantity: b.goodQuantity })) : [] };
+    if (r.state !== 'ok') return { link: r.state, batches: [] };
+    const batches = await sql.begin(async (tx) => Promise.all(r.value.map(async (b) => ({ batchNo: b.batchNo, mfgDate: b.mfgDate, goodQuantity: b.goodQuantity,
+      remaining: b.goodQuantity ? Dec.max(new Dec(b.goodQuantity).minus(await bulkIssued(tx, b.batchNo, '')), 0).toString() : null }))));
+    return { link: r.state, batches: batches.filter((b) => b.remaining !== '0') };
   });
 
   // TI-22: the batch record as a PDF: a complete copy with its values, calculations, changes, notes and signatures.
@@ -675,7 +701,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
           let payload: Record<string, unknown> = {};
           const uses: number[] = [];
           if (b.values) {
-            const typed = await readValues(app, l.doc, key, b.values, l.now, v, l.batch.batchNo);
+            const typed = await readValues(app, tx, l.doc, key, b.values, l.now, v, l.batch.batchNo);
             payload = { values: typed.values, results: evaluate(l.doc, l.events, key, { ...v.values, ...typed.values }, uses), uses,
               ...(Object.keys(typed.source).length ? { source: typed.source } : {}) };
             const no = await stockProblem(app, tx, l, v, { ...v.values, ...typed.values }, payload.results as Record<string, Stored>, { ...v.source, ...typed.source });

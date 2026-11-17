@@ -306,7 +306,7 @@ answering) or **ok**.
   for a master without a reconciliation of units. TrueBatch Injectables Packing publishes the same three at the end
   of `packing_batch_v1` (`packing/migrations/0109`): the finished goods step's good packs, `packs`, and its yield in
   packs, once it is signed. Null again while the step is sent back (`0018`, packing `0110`, as TrueBatch Tablets),
-  its current value once it is signed again. Packing's issue pulls the filled units issued from `good_quantity` with the batch (gap
+  its current value once it is signed again. Packing's issue pulls the filled units issued from `good_quantity` less what its packing batches already issued (B2) with the batch (gap
   10; read through to_jsonb, so a TrueBatch Injectables from before reads as none and the units are typed as before);
   without the link they are typed from the labels, with the batch, as before.
 - **QA terminates a batch** (owner, 16 Nov 2026): a batch still in production (before production approval) that

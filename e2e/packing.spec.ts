@@ -110,9 +110,10 @@ test('TI-P2 packing journey: packing master from the skeleton (labelling, carton
     await expect(issue.getByText(/Not offered, because the Logbook does not have/)).toHaveCount(0);
     await issue.getByRole('group', { name: 'Packing line' }).getByRole('button', { name: /LL-01/ }).click();
     await issue.getByLabel('Batch no. of the filled units').fill('TI260001');
-    // Pull, don't type: the units issued are the batch's good units, from TrueBatch Injectables.
-    await expect(issue.getByLabel('Filled units issued')).toHaveCount(0);
-    await expect(issue.getByText('Filled units issued: 10,000 units, the good units of TI260001 in TrueBatch Injectables.')).toBeVisible();
+    // Pull, don't type: the units issued are filled in with the batch's good units still unpacked, from TrueBatch
+    // Injectables; part of them may be issued (suite B2).
+    await expect(issue.getByLabel('Filled units issued')).toHaveValue('10000');
+    await expect(issue.getByText('TI260001 has 10,000 good units still unpacked (10,000 good units in TrueBatch Injectables less those already issued for packing): issue all of them, or part.')).toBeVisible();
     await issue.getByRole('button', { name: 'Next: sign' }).click();
     await iss.page.getByRole('dialog').last().getByRole('button', { name: 'Sign', exact: true }).click();
     await expect(issue.getByRole('alert')).toHaveText('LL-01 is not fit for use (Logbook): Dirty: clean and verify before the next use.');
