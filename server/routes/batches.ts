@@ -127,6 +127,11 @@ async function readValues(app: FastifyInstance, doc: MasterDoc, key: StepKey, ra
     }
     problems.push(...pulled.problems);
     source[name] = pulled.source;
+    // A lot typed by hand (its link off or down): what came with an earlier lot from MMS (its use-by date, the
+    // certificate values) is no longer MMS's; it is typed from this lot's label.
+    if (f.kind === 'lot' && isHand(pulled.source)) {
+      for (const k of Object.keys(current.source)) if ((k.startsWith(`${name}.`) || CERTIFICATE[k]) && !isHand(current.source[k])) source[k] = pulled.source;
+    }
     Object.assign(out, pulled.values);
     Object.assign(source, pulled.sources);
   }
