@@ -132,20 +132,24 @@ const issueStep = (m: Pack['materials'][number]) => packStep('pack-material-issu
 const reconcileStep = (m: Pack['materials'][number]) => packStep('printed-reconciliation', `reconcile-${m.key}`, { material: { formula: m.key }, unit: m.unit, issued: { ref: `issue/issue-${m.key}/issued` } });
 const packStage = (key: string, name: string, role: string, steps: Step[], roomTypes: string[] = []): Stage => ({ key, name, kind: 'normal', roomTypes, machineTypes: [], role, uses: [], steps });
 
+/** The area injectables are packed in (master data's area name): the sterile packing hall, never a tablet packing room. */
+const PACK_AREA = 'Sterile packing';
+
 export function packingStages(pack: Pack): Stage[] {
   const blister = pack.type === 'blister';
   const serial = pack.serialisation;
   return [
+    // The issue is a warehouse step (no room, no line clearance); a master limits the line it issues to by the stage's machine types.
     packStage('issue', 'Issue to the line', 'Warehouse officer', [packStep('bulk-issue', 'bulk'), ...pack.materials.map(issueStep)]),
     packStage('packing', 'Labelling and cartoning', 'Packing operator', [packStep('pack-clearance', 'clearance'), packStep('line-setup', 'setup'),
       ...(serial ? [packStep('vision-challenge', 'camera'), packStep('serial-received', 'serials')] : []), packStep('coding-check', 'coding'),
       ...(blister ? [packStep('forming-check', 'forming'), packStep('leak-test', 'leak', { vacuumUnit: 'mbar', level: 'S-2', aql: '0.65' })] : []),
-      packStep('online-inspection', 'inspection'), packStep('carton-check', 'cartons'), ...(serial ? [packStep('serial-sample', 'serial-sample')] : [])], ['Packing']),
+      packStep('online-inspection', 'inspection'), packStep('carton-check', 'cartons'), ...(serial ? [packStep('serial-sample', 'serial-sample')] : [])], [PACK_AREA]),
     packStage('end', 'Reconciliation and line clearance', 'Packing supervisor', [
       packStep('finished-goods', 'finished', { yieldLimit: { low: '98.0', high: '100.5', unit: '%' }, accountabilityLimit: { low: '99.5', high: '100.5', unit: '%' } }),
       ...pack.materials.filter((m) => m.printed).map(reconcileStep),
       ...(serial ? [packStep('serial-reconciliation', 'serial-reconciliation', { received: { ref: 'packing/serials/received' } })] : []),
-      packStep('destruction'), packStep('pack-clearance-after', 'clearance-after')], ['Packing']),
+      packStep('destruction'), packStep('pack-clearance-after', 'clearance-after')], [PACK_AREA]),
   ];
 }
 
