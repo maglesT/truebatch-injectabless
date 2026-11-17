@@ -110,13 +110,15 @@ test('TI-P2 packing journey: packing master from the skeleton (labelling, carton
     await expect(issue.getByText(/Not offered, because the Logbook does not have/)).toHaveCount(0);
     await issue.getByRole('group', { name: 'Packing line' }).getByRole('button', { name: /LL-01/ }).click();
     await issue.getByLabel('Batch no. of the filled units').fill('TI260001');
-    // Pull, don't type: the units issued are filled in with the batch's good units still unpacked, from TrueBatch
-    // Injectables; part of them may be issued (suite B2).
+    // Pull, don't type: the units issued are what is left of the batch's good units, from TrueBatch Injectables,
+    // offered in the field; less may be typed (a part issue), more is refused (suite B2).
     await expect(issue.getByLabel('Filled units issued')).toHaveValue('10000');
-    await expect(issue.getByText('TI260001 has 10,000 good units still unpacked (10,000 good units in TrueBatch Injectables less those already issued for packing): issue all of them, or part.')).toBeVisible();
+    await expect(issue.getByText('Left to issue of TI260001: 10,000 units (10,000 good units in TrueBatch Injectables). Issue all of it, or type less for a part issue.')).toBeVisible();
+    await issue.getByLabel('Filled units issued').fill('10001');
     await issue.getByRole('button', { name: 'Next: sign' }).click();
     await iss.page.getByRole('dialog').last().getByRole('button', { name: 'Sign', exact: true }).click();
-    await expect(issue.getByRole('alert')).toHaveText('LL-01 is not fit for use (Logbook): Dirty: clean and verify before the next use.');
+    await expect(issue.getByRole('alert')).toContainText('LL-01 is not fit for use (Logbook): Dirty: clean and verify before the next use.');
+    await expect(issue.getByRole('alert')).toContainText('Only 10000 units of batch TI260001 are left to issue (10000 good units, 0 already issued to other packing batches): issue 10000 or less.');
     await issue.getByRole('button', { name: 'Cancel' }).click();
   } finally {
     await lb.unsafe(`revoke select on ${E2E_PACKING_SCHEMA}_lb.equipment_status_v1 from ${PACKING_APP_ROLE}`);
@@ -301,7 +303,7 @@ test('TI-21 QA terminates a packing batch after materials were issued: the windo
         : qa.page.getByRole('region', { name: 'In production' }).locator('.pending-row', { hasText: batch.batchNo }).getByRole('button', { name: 'Terminate batch' });
       await button.click();
       await wholeOnScreen(qa.page, window.locator('form'));
-      for (const what of [window.getByLabel('Reason for terminating'), window.getByLabel('Lot LABEL-2 back to stores'), window.getByLabel('Lot CTN-2 back to stores'), window.getByRole('button', { name: 'Continue to sign' })]) {
+      for (const what of [window.getByLabel('Reason for terminating'), window.getByLabel('Lot TI260002 back to stores'), window.getByLabel('Lot LABEL-2 back to stores'), window.getByLabel('Lot CTN-2 back to stores'), window.getByRole('button', { name: 'Continue to sign' })]) {
         await expect(what).toBeInViewport({ ratio: 1 });
       }
       if (process.env.SHOTS) await qa.page.screenshot({ path: `${process.env.SHOTS}/packing-terminate-${where}-${height}.png` });
@@ -311,22 +313,25 @@ test('TI-21 QA terminates a packing batch after materials were issued: the windo
   }
   await qa.page.getByRole('region', { name: 'In production' }).locator('.pending-row', { hasText: batch.batchNo }).getByRole('button', { name: 'Terminate batch' }).click();
   const back = qa.page.getByRole('group', { name: 'Back to stores' });
+  // The filled units issued to it first: what went back of them can be issued to another packing batch.
+  await expect(back).toContainText(/Lot TI260002 · filled units PRD-001 · .* \(used 6000 units\)/);
   await expect(back).toContainText('Lot LABEL-2 · PM-101 · Vial label (used 6300 nos)');
   await expect(back).toContainText('Lot CTN-2 · PM-103 · Carton (used 105 nos)');
   await qa.page.getByLabel('Reason for terminating').fill('Labelling line 1 down for repair: the batch cannot be finished');
   if (process.env.SHOTS) await qa.page.screenshot({ path: `${process.env.SHOTS}/packing-terminate-window.png` });
   await qa.page.getByRole('button', { name: 'Continue to sign' }).click();
-  await expect(qa.page.getByRole('dialog').getByRole('alert')).toContainText('Say how much of lot LABEL-2, CTN-2 went back to stores unused');
+  await expect(qa.page.getByRole('dialog').getByRole('alert')).toContainText('Say how much of lot TI260002, LABEL-2, CTN-2 went back to stores unused');
+  await back.getByLabel('Lot TI260002 back to stores').fill('6000');
   await back.getByLabel('Lot LABEL-2 back to stores').fill('300');
   await back.getByLabel('Lot CTN-2 back to stores').fill('5');
   await qa.page.getByRole('button', { name: 'Continue to sign' }).click();
-  await expect(qa.page.getByRole('dialog')).toContainText('Back to stores unused: lot LABEL-2 300 nos, lot CTN-2 5 nos; the rest counts as used.');
+  await expect(qa.page.getByRole('dialog')).toContainText('Back to stores unused: lot TI260002 6000 units, lot LABEL-2 300 nos, lot CTN-2 5 nos; the rest counts as used.');
   await wholeOnScreen(qa.page, qa.page.getByRole('dialog').locator('form'));
   await sign(qa.page);
   await expect(qa.page.getByRole('region', { name: 'In production' }).locator('.pending-row', { hasText: batch.batchNo })).toHaveCount(0);
   await qa.page.setViewportSize(tablet);
   await qa.page.goto(`/#/batch/${batch.id}`);
-  await expect(qa.page.getByRole('note')).toContainText(/^Terminated by PQA at .* IST: Labelling line 1 down for repair: the batch cannot be finished · Back to stores unused: lot LABEL-2 \(PM-101 · Vial label\) 300 nos, lot CTN-2 \(PM-103 · Carton\) 5 nos; the rest counts as used$/);
+  await expect(qa.page.getByRole('note')).toContainText(/^Terminated by PQA at .* IST: Labelling line 1 down for repair: the batch cannot be finished · Back to stores unused: lot TI260002 \(filled units PRD-001 · .*\) 6000 units, lot LABEL-2 \(PM-101 · Vial label\) 300 nos, lot CTN-2 \(PM-103 · Carton\) 5 nos; the rest counts as used$/);
   // The batch screen: the filled units issued to this batch (not the master's standard batch), and no stage is "now".
   await expect(qa.page.getByRole('region', { name: 'Batch', exact: true })).toContainText('Filled units issued 6,000 units');
   await expect(qa.page.getByRole('region', { name: 'Batch', exact: true })).not.toContainText('Standard packing batch');

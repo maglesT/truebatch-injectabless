@@ -390,6 +390,10 @@ describe('production approval, QC approval and QA release', () => {
     expect((await batchAct('meera', 'close-deviation', { note, reason: 'again' })).statusCode).toBe(409);
     expect((await batchSign('meera', 'release')).statusCode).toBe(200);
     expect((await full()).batch).toMatchObject({ status: 'released', actions: [] });
+    // batch_fact_v1 says who released the batch (the name as signed) and when (the release event's time), for MMS.
+    const [ev] = await t.owner<{ at: Date }[]>`select at from batch_events where batch_id = ${id} and kind = 'released'`;
+    const [f] = await t.owner.unsafe(`select status, released, released_at, released_by from ${t.schema}_report.batch_fact_v1 where batch_number = (select batch_no from batches where id = $1)`, [id]);
+    expect(f).toEqual({ status: 'RELEASED', released: true, released_at: ev!.at, released_by: 'MEERA' });
   });
 
   it('TI-21 the review list shows the deviations with their status and every signature of the batch', async () => {
@@ -487,8 +491,8 @@ describe('QA terminates a batch that cannot be finished (owner, 16 Nov 2026)', (
     expect(await t.owner.unsafe(`select lot_number, quantity::text, unit from ${t.schema}_report.material_use_v1 where batch_number = (select batch_no from batches where id = $1)`, [id]))
       .toEqual([{ lot_number: 'PVP-2611', quantity: '0.750', unit: 'kg' }]);
     expect(await uses()).toEqual([{ equipment_code: 'STR-01', ended_at: e!.at }]);
-    const [f] = await t.owner.unsafe(`select status from ${t.schema}_report.batch_fact_v1 where batch_number = (select batch_no from batches where id = $1)`, [id]);
-    expect(f).toEqual({ status: 'REJECTED' });
+    const [f] = await t.owner.unsafe(`select status, released_at, released_by from ${t.schema}_report.batch_fact_v1 where batch_number = (select batch_no from batches where id = $1)`, [id]);
+    expect(f).toEqual({ status: 'REJECTED', released_at: null, released_by: null });
     const b = await full();
     expect(b.batch).toMatchObject({ status: 'rejected', actions: [], terminated: { personName: 'MEERA', payload: { reason: 'The stirrer broke down; the binder cannot be made' } } });
     expect(b.steps.every((s) => !s.actions.length)).toBe(true);

@@ -551,7 +551,7 @@ describe('the views TrueBatch publishes', () => {
       'record_kind text', 'status text', 'issued_at timestamp with time zone', 'completed_at timestamp with time zone', 'released boolean',
       'read_at timestamp with time zone', 'data_as_of timestamp with time zone'];
     expect(await columns('batch_fact_v1')).toEqual([...batchwright, 'manufactured_on date', 'product_name text', 'master_version integer',
-      'good_quantity numeric', 'good_unit text', 'yield_percent numeric']);
+      'good_quantity numeric', 'good_unit text', 'yield_percent numeric', 'released_at timestamp with time zone', 'released_by text']);
     expect(await columns('equipment_use_v1')).toEqual(['batch_number text', 'equipment_code text', 'equipment_type text', 'room_code text', 'step text',
       'started_at timestamp with time zone', 'ended_at timestamp with time zone', 'read_at timestamp with time zone', 'data_as_of timestamp with time zone', 'step_name text']);
     expect(await columns('deviation_note_v1')).toEqual(['note_id bigint', 'source_ref text', 'batch_number text', 'product_code text', 'step text', 'note text',

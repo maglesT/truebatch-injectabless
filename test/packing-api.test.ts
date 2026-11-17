@@ -193,12 +193,15 @@ describe('a packing batch from the filled units of a released batch', () => {
     const live = JSON.stringify(batchRecordDoc(await recordInput(t.sql, (await loadBatch(t.sql, id))!), 'QA1'));
     for (const text of ['not reconciled yet', '"not started"']) expect(live).toContain(text);
     // The window asks, per lot issued, what went back to stores unused: up to what was issued, in the published unit.
-    expect((b.batch as unknown as { issued: object[] }).issued).toEqual([{ lot: 'LABEL-9', material: 'PM-101 · Vial label', value: '5250', unit: 'nos' }, { lot: 'TRAY-9', material: expect.stringMatching(/^PM-102 · /), value: '500', unit: 'nos' }]);
+    // The filled units issued come first: what went back of them can be issued to another packing batch (bulkLeft).
+    expect((b.batch as unknown as { issued: object[] }).issued).toEqual([{ lot: 'TI260004', material: 'filled units PRD-001 · Examplocin 1 g injection (filled vials)', value: '5000', unit: 'units' }, { lot: 'LABEL-9', material: 'PM-101 · Vial label', value: '5250', unit: 'nos' }, { lot: 'TRAY-9', material: expect.stringMatching(/^PM-102 · /), value: '500', unit: 'nos' }]);
     const terminate = (returns?: object[]) => as('qa1', 'POST', `/api/batches/${id}/terminate`, { proof: proofFor('qa1'), contentHash: b.batch.contentHash, reason: 'Labelling line 2 down for repair', ...(returns ? { returns } : {}) });
-    expect((await terminate()).json()).toMatchObject({ error: 'invalid_values', problems: [expect.stringMatching(/^Say how much of lot LABEL-9 /), expect.stringMatching(/^Say how much of lot TRAY-9 /)] });
-    expect((await terminate([{ lot: 'LABEL-9', value: '5300', unit: 'nos' }, { lot: 'TRAY-9', value: '0', unit: 'nos' }])).json())
-      .toMatchObject({ problems: ['Lot LABEL-9: 5250 nos was issued to this batch; 5300 nos cannot have gone back to stores.'] });
-    const r = await terminate([{ lot: 'LABEL-9', value: '300', unit: 'nos' }, { lot: 'TRAY-9', value: '0', unit: 'nos' }]);
+    expect((await terminate()).json()).toMatchObject({ error: 'invalid_values', problems: ['Say how much of lot TI260004 (filled units PRD-001 · Examplocin 1 g injection (filled vials)) went back to stores unused: 0 if none.',
+      expect.stringMatching(/^Say how much of lot LABEL-9 /), expect.stringMatching(/^Say how much of lot TRAY-9 /)] });
+    const bulk = { lot: 'TI260004', value: '2000', unit: 'units' };
+    expect((await terminate([{ ...bulk, value: '5001' }, { lot: 'LABEL-9', value: '5300', unit: 'nos' }, { lot: 'TRAY-9', value: '0', unit: 'nos' }])).json())
+      .toMatchObject({ problems: ['Lot TI260004: 5000 units was issued to this batch; 5001 units cannot have gone back to stores.', 'Lot LABEL-9: 5250 nos was issued to this batch; 5300 nos cannot have gone back to stores.'] });
+    const r = await terminate([bulk, { lot: 'LABEL-9', value: '300', unit: 'nos' }, { lot: 'TRAY-9', value: '0', unit: 'nos' }]);
     expect(r.statusCode, r.body).toBe(200);
     expect((await get(id)).batch).toMatchObject({ status: 'rejected', actions: [] });
     const no = (await t.owner<{ no: string }[]>`select batch_no as no from batches where id = ${id}`)[0]!.no;
@@ -209,7 +212,7 @@ describe('a packing batch from the filled units of a released batch', () => {
     const l = (await loadBatch(t.sql, id))!;
     expect(['LABEL-9', 'TRAY-9'].map((lot) => usesOfLot(l.doc, openSteps(l.doc, l.events, l.now).steps, lot, returnsOf(l.batchEvents))[0]!.quantity.value)).toEqual(['4950', '500']);
     const record = JSON.stringify(batchRecordDoc(await recordInput(t.sql, l, t.app.master), 'QA1'));
-    expect(record).toMatch(/Terminated by QA1 at [^"]* IST: Labelling line 2 down for repair · Back to stores unused: lot LABEL-9 \(PM-101 · Vial label\) 300 nos, lot TRAY-9 \([^)]*\) 0 nos; the rest counts as used/);
+    expect(record).toMatch(/Terminated by QA1 at [^"]* IST: Labelling line 2 down for repair · Back to stores unused: lot TI260004 \(filled units PRD-001 · Examplocin 1 g injection \(filled vials\)\) 2000 units, lot LABEL-9 \(PM-101 · Vial label\) 300 nos, lot TRAY-9 \([^)]*\) 0 nos; the rest counts as used/);
     // The packing materials it stopped before issuing say so in plain words, not "Lot —: —".
     for (const text of ['Lot LABEL-9: 5250 nos · 1.2 Issue Vial label (PM-101)', 'not issued · 1.4 Issue Carton (PM-103)', 'not issued · 1.5 Issue Leaflet (PM-104)']) expect(record).toContain(text);
     expect(record).not.toContain('Lot —');
@@ -329,6 +332,10 @@ describe('a packing batch from the filled units of a released batch', () => {
       from ${t.schema}_report.packing_batch_v1 where coded_batch_number = 'TI260001'`);
     expect(row).toMatchObject({ coded_batch_number: 'TI260001', product_code: 'PK-001', bulk_product_code: 'PRD-001', pack_type: 'carton', units_per_pack: 10, mfg_date: '2026-11-03',
       expiry_month: '2028-10', packs: '980', cartons: '98', status: 'RELEASED', released: true, shippers: '2' });
+    // For MMS (GMP traceability of the FG lot it receives): who released the batch, as signed, and when.
+    const [relAt] = await t.owner<{ at: Date }[]>`select at from batch_events where batch_id = ${id} and kind = 'released'`;
+    expect(await t.owner.unsafe(`select released_at, released_by from ${t.schema}_report.packing_batch_v1 where coded_batch_number = 'TI260001'`))
+      .toEqual([{ released_at: relAt!.at, released_by: 'QA1' }]);
     // For the Logbook: the line used, as TrueBatch Injectables publishes its machines. For MMS: the packing materials issued,
     // per lot, in the material's unit, as TrueBatch Injectables publishes what it dispensed.
     const batchNo = (await loadBatch(t.sql, id))!.batch.batchNo;
@@ -362,7 +369,12 @@ describe('a packing batch from the filled units of a released batch', () => {
     // Its shippers are not counted yet: null, so MMS asks for them (the last column, for MMS finished goods).
     expect(await t.owner.unsafe(`select distinct shippers from ${t.schema}_report.packing_batch_v1 where coded_batch_number = 'TI260004'`)).toEqual([{ shippers: null }]);
     // The yield columns (owner, 17 Nov 2026) are appended after it, never reordered.
-    expect((await cols('packing_batch_v1')).split(', ').slice(-4)).toEqual(['shippers numeric', 'good_quantity numeric', 'good_unit text', 'yield_percent numeric']);
+    // Nor who released it: null until QA releases.
+    expect(await t.owner.unsafe(`select distinct released_at, released_by from ${t.schema}_report.packing_batch_v1 where coded_batch_number = 'TI260004'`))
+      .toEqual([{ released_at: null, released_by: null }]);
+    // The release columns (17 Nov 2026) are appended after them, never reordered.
+    expect((await cols('packing_batch_v1')).split(', ').slice(-6)).toEqual(['shippers numeric', 'good_quantity numeric', 'good_unit text', 'yield_percent numeric',
+      'released_at timestamp with time zone', 'released_by text']);
     expect(await t.owner.unsafe(`select distinct good_quantity, good_unit, yield_percent from ${t.schema}_report.packing_batch_v1 where coded_batch_number = 'TI260004'`))
       .toEqual([{ good_quantity: null, good_unit: 'packs', yield_percent: null }]);
   });
@@ -387,31 +399,32 @@ describe('a packing batch from the filled units of a released batch', () => {
     expect(await out()).toEqual({ good_quantity: '985', yield_percent: '98.5' });
   });
 
-  it('gap 10, suite B2: the filled units issued are the good units still unpacked (batch_fact_v1.good_quantity less what packing batches issued from it), all or part; more is refused; a terminated packing batch gives its units back; without the column or the link: typed, as before', async () => {
+  it('gap 10, suite B2: the filled units issued are what is left of the batch\'s good units (batch_fact_v1.good_quantity) less what other packing batches were issued, net of what a terminated one gave back (QA enters it); a part issue may be typed, more is refused; without the column or the link: typed, as before', async () => {
     for (const n of [3, 4, 5, 6, 7]) t.master.equipment_.push({ ...item(`ln-${n}`, `LL-0${n}`, `Labelling line ${n}`), kind: 'equipment', type: 'labelling line', room: 'PK-01' });
     // The stand-in view so far had no good_quantity: every batch above was issued with its units typed.
     await t.owner.unsafe(`alter table ${TB}.batch_fact_v1 add column good_quantity numeric`);
     try {
       await t.owner.unsafe(`insert into ${TB}.batch_fact_v1 (batch_number, product_code, record_kind, status, issued_at, released, manufactured_on, good_quantity)
         values ('TI260006', 'PRD-001', 'PROCESSING', 'RELEASED', '2026-11-08 06:00+00', true, '2026-11-08', 9600)`);
-      // TI260001's packing batch above issued 10000 units of it: none left, so it is not offered.
+      // TI260001's packing batch above was issued 10000 units of it: none left, so it is not offered.
       await t.owner.unsafe(`update ${TB}.batch_fact_v1 set good_quantity = 9600 where batch_number = 'TI260001'`);
-      const picks = async () => ((await as('issuer', 'GET', '/api/bulk-batches?product=PRD-001')).json() as { batches: { batchNo: string; goodQuantity: string | null; remaining: string | null }[] })
-        .batches.map((b) => [b.batchNo, b.goodQuantity, b.remaining]);
-      expect(await picks()).toEqual([['TI260006', '9600', '9600'], ['TI260005', null, null], ['TI260004', null, null]]);
+      type Offer = { batchNo: string; goodQuantity: string | null; issued?: string; left?: string };
+      const picks = async () => ((await as('issuer', 'GET', '/api/bulk-batches?product=PRD-001')).json() as { batches: Offer[] }).batches.map((b) => [b.batchNo, b.goodQuantity, b.issued, b.left]);
+      expect(await picks()).toEqual([['TI260006', '9600', '0', '9600'], ['TI260005', null, undefined, undefined], ['TI260004', null, undefined, undefined]]);
       expect((await issue({ line: 'ln-3', bulk: 'TI260001' })).json())
-        .toMatchObject({ problems: ['Batch TI260001 has no units left to pack: its 9600 good units are all issued to packing batches.'] });
+        .toMatchObject({ problems: ['All 9600 good units of batch TI260001 are already issued to other packing batches: nothing is left to issue.'] });
       // Part of it: 3000 units; the rest stays to be packed.
       const part = await issue({ line: 'ln-3', bulk: 'TI260006', units: '3000' });
       expect(part.statusCode, part.body).toBe(200);
-      const s = (await get((part.json() as { id: number }).id)).steps[0]!;
+      const a = (part.json() as { id: number }).id;
+      const s = (await get(a)).steps[0]!;
       expect(s).toMatchObject({ values: { units: { value: '3000', unit: 'units' } }, source: { units: { from: 'truebatch_injectables' } } });
       expect(s.results.packs).toMatchObject({ ok: true, shown: '3000 units ÷ 10 units = 300 packs' });
-      expect(await picks()).toContainEqual(['TI260006', '9600', '6600']);
-      // More than is left, or not a whole number of units: refused.
+      expect(await picks()).toContainEqual(['TI260006', '9600', '3000', '6600']);
+      // More than is left, or 0: refused.
       expect((await issue({ line: 'ln-4', bulk: 'TI260006', units: '7000' })).json())
-        .toMatchObject({ problems: ['Batch TI260006 has 6600 good units still unpacked (9600 less 3000 already issued for packing): issue at most 6600.'] });
-      expect((await issue({ line: 'ln-4', bulk: 'TI260006', units: '0' })).json()).toMatchObject({ problems: ['Filled units issued: give a whole number from 1 to 6600.'] });
+        .toMatchObject({ problems: ['Only 6600 units of batch TI260006 are left to issue (9600 good units, 3000 already issued to other packing batches): issue 6600 or less.'] });
+      expect((await issue({ line: 'ln-4', bulk: 'TI260006', units: '0' })).json()).toMatchObject({ problems: ['Filled units issued: give more than 0 units.'] });
       // Not typed: all that is left.
       const rest = await issue({ line: 'ln-4', bulk: 'TI260006' });
       expect(rest.statusCode, rest.body).toBe(200);
@@ -419,13 +432,23 @@ describe('a packing batch from the filled units of a released batch', () => {
       expect((await get(restId)).steps[0]!.values.units).toEqual({ value: '6600', unit: 'units' });
       expect((await picks()).map((b) => b[0])).not.toContain('TI260006');
       expect((await issue({ line: 'ln-5', bulk: 'TI260006', units: '1' })).json())
-        .toMatchObject({ problems: ['Batch TI260006 has no units left to pack: its 9600 good units are all issued to packing batches.'] });
-      // A terminated packing batch's units are not counted: they go back to be packed.
+        .toMatchObject({ problems: ['All 9600 good units of batch TI260006 are already issued to other packing batches: nothing is left to issue.'] });
+      // QA terminates it and says how many of its units went back unused: only those can be issued again.
       const b = await get(restId, 'qa1');
-      const end = await as('qa1', 'POST', `/api/batches/${restId}/terminate`, { proof: proofFor('qa1'), contentHash: b.batch.contentHash, reason: 'Issued to the wrong line' });
-      expect(end.statusCode, end.body).toBe(200);
-      expect(await picks()).toContainEqual(['TI260006', '9600', '6600']);
-      expect((await issue({ line: 'ln-5', bulk: 'TI260006', units: '6600' })).statusCode).toBe(200);
+      const end = (returns?: object[]) => as('qa1', 'POST', `/api/batches/${restId}/terminate`, { proof: proofFor('qa1'), contentHash: b.batch.contentHash, reason: 'Issued to the wrong line', ...(returns ? { returns } : {}) });
+      expect((await end()).json()).toMatchObject({ problems: [expect.stringMatching(/^Say how much of lot TI260006 \(filled units PRD-001 · /)] });
+      const ended = await end([{ lot: 'TI260006', value: '2000', unit: 'units' }]);
+      expect(ended.statusCode, ended.body).toBe(200);
+      expect(await picks()).toContainEqual(['TI260006', '9600', '7600', '2000']);
+      expect((await issue({ line: 'ln-5', bulk: 'TI260006', units: '2001' })).json()).toMatchObject({ problems: [expect.stringMatching(/^Only 2000 units of batch TI260006 are left to issue/)] });
+      expect((await issue({ line: 'ln-5', bulk: 'TI260006', units: '1500' })).statusCode).toBe(200);
+      // The first batch's units corrected on the floor: up to what is left besides its own issue (9600 less 4600 and 1500).
+      const fix = (units: string) => as('op1', 'POST', `/api/batches/${a}/steps/0.1.0.1/record`, { values: { units } });
+      expect((await fix('3501')).json()).toMatchObject({ problems: ['Only 3500 units of batch TI260006 are left to issue (9600 good units, 6100 already issued to other packing batches): issue 3500 or less.'] });
+      const fixed = await fix('2500');
+      expect(fixed.statusCode, fixed.body).toBe(200);
+      expect((await get(a)).steps[0]!.values.units).toEqual({ value: '2500', unit: 'units' });
+      expect(await picks()).toContainEqual(['TI260006', '9600', '8600', '1000']);
       // No good quantity in the view: typed, as before.
       const typed = await issue({ line: 'ln-6', bulk: 'TI260004', units: '100' });
       expect(typed.statusCode, typed.body).toBe(200);

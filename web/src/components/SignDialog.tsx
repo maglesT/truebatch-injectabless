@@ -7,6 +7,7 @@ export function SignDialog({
   what,
   children,
   blocked,
+  wide,
   onSign,
   onCancel,
 }: {
@@ -16,6 +17,8 @@ export function SignDialog({
   children?: ReactNode;
   // Something in the dialog stands in the way (a training the signer does not hold, or has not ticked): Sign is off.
   blocked?: boolean;
+  // As wide as the window it follows (QA's terminate: its reason window is wide), so a long summary stays whole on the screen.
+  wide?: boolean;
   onSign: (credentials: { proof: string }) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -48,7 +51,7 @@ export function SignDialog({
 
   return (
     <div className="overlay" role="dialog" aria-modal="true">
-      <form className="card dialog" onSubmit={submit}>
+      <form className={`card dialog${wide ? ' wide' : ''}`} onSubmit={submit}>
         <h2>Sign: {MEANING_LABEL[meaning] ?? meaning}</h2>
         <p>{what}</p>
         {children}

@@ -48,13 +48,17 @@ the leaflet, to QA release of the packed batch. Built the Logbook way, as TrueBa
   `db/migrations/0007_batch_fact_manufactured_on.sql`), not its issue date; a batch without one is refused. Without the
   link the batch and its date of manufacture are typed from the tray or case labels ("RELEASED", the product) with a
   second-person check, and QA's review lists them; a typed date in the future is refused. The filled units issued are
-  the batch's good units still unpacked (`batch_fact_v1.good_quantity`, owner 17 Nov 2026, gap 10, less the units this
-  app's own packing batches issued from it: signed issues, terminated ones not counted; suite B2), filled in with it;
-  part of them may be issued, more is refused, and a batch with none left is not offered; typed, as before, without
-  the link or from a TrueBatch Injectables that does not publish them yet.
+  what is LEFT of the batch's good units (`batch_fact_v1.good_quantity`, owner 17 Nov 2026, gap 10; suite B2): the good
+  units less the units issued to the other packing batches of the same batch, net of what went back unused when QA
+  terminated one (the terminate window asks for the filled units too, listed first; not an MMS lot, so
+  `material_use_v1` is unchanged), offered in the field; less may be typed (a part issue), more is refused, also when
+  corrected on the floor, and a batch with none left is not offered (`shared/engine/stock.ts` `bulkLeft`, as TrueBatch
+  Tablets); typed, as before, without the link or from a TrueBatch Injectables that does not publish them yet.
 - **Published for OEE**: `packing_batch_v1` ends with `good_quantity` (the good packs), `good_unit` ('packs') and
   `yield_percent` (the yield in packs), from the finished goods step once it is signed; null until then and while it is
-  sent back (`packing/migrations/0109`, `0110`).
+  sent back (`packing/migrations/0109`, `0110`). Then `released_at` and `released_by`, the time of QA's release event
+  and the name printed on its e-signature, null until released (`0111`, as TrueBatch Tablets), so MMS shows who
+  released the FG lot and when.
 - **One active packing order per line** (TI-P7): a line with a batch still being packed takes no other.
 - **Batch facts and pack facts**: block calculations read the issue values (`$batch.bulk`, `$batch.mfgDate`,
   `$batch.units`, `$batch.packs`) and the master's pack (`$pack.shelfLifeMonths`, `$pack.mrp` …), so the coding
