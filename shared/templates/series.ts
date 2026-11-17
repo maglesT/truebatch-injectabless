@@ -172,7 +172,7 @@ export function c1WithinLimits(i: C1Input): Outcome<{ readonly deviation?: Dec }
       const dp = writtenDecimals(a.plusMinusPercent);
       const r = roundHalfUp(deviation, dp);
       pass = r.abs().lte(pct);
-      line = `${p.text} is ${r.isNegative() ? '' : '+'}${r.toFixed(dp)} % from ${c.text} (${what}); limit ± ${a.plusMinusPercent} %`;
+      line = `${p.text} is ${r.isZero() ? '' : r.isNegative() ? '-' : '+'}${r.abs().toFixed(dp)} % from ${c.text} (${what}); limit ± ${a.plusMinusPercent} %`;
     } else {
       const pm = parse(a.plusMinus as Q, 'The ± amount');
       sameKind([pm, c], 'The ± amount');
@@ -181,7 +181,7 @@ export function c1WithinLimits(i: C1Input): Outcome<{ readonly deviation?: Dec }
       deviation = to({ v: dev, unit: c.unit, text: '' }, pm.unit);
       const r = roundHalfUp(deviation, dp);
       pass = r.abs().lte(pm.v);
-      line = `${p.text} is ${r.isNegative() ? '' : '+'}${r.toFixed(dp)} ${pm.unit.symbol} from ${c.text} (${what}); limit ± ${pm.text}`;
+      line = `${p.text} is ${r.isZero() ? '' : r.isNegative() ? '-' : '+'}${r.abs().toFixed(dp)} ${pm.unit.symbol} from ${c.text} (${what}); limit ± ${pm.text}`;
     }
     const shown = `${line}: ${pass ? 'within limits' : 'OUT OF LIMITS'}`;
     const check: Check = { pass, level: pass ? 'pass' : 'fail', rounded: fmt(deviation, 3), shown };
@@ -263,6 +263,10 @@ export type C3Input = (Series | Pairs | Groups) & {
   readonly allowedOutside?: number;
   /** Optional outer band that no unit may be outside (e.g. ± 10 % when ± 5 % allows 2 outside). */
   readonly outer?: Band;
+  /** What a unit is, in the worked line: "tablets", "locations" (default "units"). */
+  readonly noun?: string;
+  /** The limit of the mean, when the step has one: a ± % of the mean is shown to its decimals (else 1 decimal). */
+  readonly meanLimit?: Limit;
 };
 
 export interface UnitResult {
@@ -274,7 +278,7 @@ export interface UnitResult {
   readonly deviation?: Dec;
 }
 
-function makeTester(band: Band, s: Stats): { test: (p: Parsed) => { ok: boolean; dev?: Dec }; text: string } {
+function makeTester(band: Band, s: Stats, meanDp: number): { test: (p: Parsed) => { ok: boolean; dev?: Dec }; text: string } {
   if ('limit' in band) {
     const l = band.limit;
     return { test: (p) => ({ ok: checkLimit(p.v, p.unit, l).pass }), text: describeLimit(l) };
@@ -286,7 +290,7 @@ function makeTester(band: Band, s: Stats): { test: (p: Parsed) => { ok: boolean;
   let refText: string;
   if (band.of === 'mean') {
     ref = s.mean;
-    refText = `the mean ${show(s.mean, s.unit.symbol, 3)}`;
+    refText = `the mean ${show(s.mean, s.unit.symbol, meanDp)}`;
   } else {
     const t = parse(band.of.target, 'The target');
     ref = to(t, s.unit);
@@ -316,8 +320,12 @@ export function c3AllIndividual(i: C3Input): Outcome<{ readonly units: readonly 
     const s = stats(ps);
     const allowed = i.allowedOutside ?? 0;
     if (!Number.isInteger(allowed) || allowed < 0) refuse('The number allowed outside must be a whole number, 0 or more');
-    const inner = makeTester(i.band, s);
-    const outer = i.outer === undefined ? undefined : makeTester(i.outer, s);
+    const ml = i.meanLimit;
+    const meanDp = ml === undefined ? 1 : Math.max(...[ml.low, ml.high].filter((x): x is string => typeof x === 'string').map(writtenDecimals), 0);
+    const inner = makeTester(i.band, s, meanDp);
+    const outer = i.outer === undefined ? undefined : makeTester(i.outer, s, meanDp);
+    const noun = i.noun ?? 'units';
+    const one = noun.replace(/s$/, '');
     const units: UnitResult[] = ps.map((p, n) => {
       const a = inner.test(p);
       const b = outer === undefined ? { ok: true } : outer.test(p);
@@ -327,10 +335,10 @@ export function c3AllIndividual(i: C3Input): Outcome<{ readonly units: readonly 
     const outsideOuter = units.filter((u) => !u.inOuter).length;
     const pass = outside <= allowed && outsideOuter === 0;
     const shown =
-      `${units.length} units; ${outside} outside ${inner.text} (${allowed} allowed)` +
+      `${units.length} ${noun}; ${outside} outside ${inner.text} (${allowed} allowed)` +
       (outer === undefined ? '' : `; ${outsideOuter} outside ${outer.text} (none allowed)`) +
       `: ${pass ? 'pass' : 'FAIL'}` +
-      (outside > 0 ? ` (outside: unit ${units.filter((u) => !u.inBand).map((u) => u.index).join(', ')})` : '');
+      (outside > 0 ? ` (outside: ${one} ${units.filter((u) => !u.inBand).map((u) => u.index).join(', ')})` : '');
     const check: Check = { pass, level: pass ? 'pass' : 'fail', rounded: String(outside), shown };
     return { ok: true, value: new Dec(outside), unit: 'units', units, check, shown };
   });

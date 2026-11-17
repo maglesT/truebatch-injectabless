@@ -26,7 +26,8 @@ import { t14ContentUniformity, type Coating } from './uniformity.js';
 /** A unit's result: a plain value ("4.5", "> 15"), or a reading with its unit as a block records it. */
 type Item = string | { readonly value: string; readonly unit: string };
 type Stages<X> =
-  | { readonly test: 'disintegration'; readonly maxTime: string; readonly stages: readonly (readonly X[])[] }
+  /** `noun`: what a unit is, in the worked line ("tablets"; default "units"). */
+  | { readonly test: 'disintegration'; readonly maxTime: string; readonly noun?: string; readonly stages: readonly (readonly X[])[] }
   | { readonly test: 'content uniformity'; readonly coating: Coating; readonly target?: string; readonly stages: readonly (readonly X[])[] }
   | { readonly test: 'dissolution IR' | 'dissolution DR buffer'; readonly Q: string; readonly stages: readonly (readonly X[])[] }
   | { readonly test: 'dissolution DR acid'; readonly max?: string; readonly stages: readonly (readonly X[])[] }
@@ -112,12 +113,13 @@ export function c6StagedTest(input: C6Input): Outcome<C6Extra> {
             return roundHalfUp(parse(t, `Unit ${n + 1} time`).v, dp).gt(max);
           }).length;
         const f1 = fails(i.stages[0] ?? []);
-        if (f1 === 0) return finish('pass', 1, `All 6 units disintegrated within ${i.maxTime} min: PASS`);
-        if (f1 > 2) return finish('fail', 1, `${f1} of 6 units did not disintegrate within ${i.maxTime} min: FAIL`);
-        if (i.stages.length === 1) return finish('next stage', 1, `${f1} of 6 units failed: test 12 more units`, 12);
+        const u = i.noun ?? 'units';
+        if (f1 === 0) return finish('pass', 1, `All 6 ${u} disintegrated within ${i.maxTime} min: PASS`);
+        if (f1 > 2) return finish('fail', 1, `${f1} of 6 ${u} did not disintegrate within ${i.maxTime} min: FAIL`);
+        if (i.stages.length === 1) return finish('next stage', 1, `${f1} of 6 ${u} failed: test 12 more ${u}`, 12);
         const f2 = fails(i.stages[1] ?? []);
         const passed = 18 - f1 - f2;
-        return finish(passed >= 16 ? 'pass' : 'fail', 2, `${passed} of 18 units disintegrated within ${i.maxTime} min (at least 16 needed): ${passed >= 16 ? 'PASS' : 'FAIL'}`);
+        return finish(passed >= 16 ? 'pass' : 'fail', 2, `${passed} of 18 ${u} disintegrated within ${i.maxTime} min (at least 16 needed): ${passed >= 16 ? 'PASS' : 'FAIL'}`);
       }
       case 'content uniformity': {
         needCount(i.stages, [10, 20]);

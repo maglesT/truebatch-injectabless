@@ -3,7 +3,7 @@ import { connect, type Sql } from '../server/db.js';
 import { links } from '../server/links.js';
 import { PACKING } from '../packing/product.js';
 import { PACKING_APP_ROLE } from '../packing/migrate.js';
-import { inLotUnit, issuedLots, materialUses, returnProblems, unitName, type StepView } from '../shared/engine/index.js';
+import { inLotUnit, issuedLots, materialUses, returnProblems, unitName, perPackText, type StepView } from '../shared/engine/index.js';
 import { call, freshApp, handLabels, login, proofFor, seedUser, TEST_DATABASE_URL, type TestApp } from './helpers.js';
 import { pack, packing } from './packing-fixture.js';
 
@@ -164,6 +164,12 @@ describe('a packing material lot is not issued beyond what MMS shows available',
 
   it('a quantity field shows master data\'s name for the same unit (nos for units), never another unit', () => {
     expect(unitName('units', 'nos')).toBe('nos');
+    // A packing material's quantity per pack (17 Nov 2026 run, F6): a count used less than once per pack, by the packs.
+    expect(perPackText({ perPack: '0.1', unit: 'units', kind: 'carton' }, 'nos')).toBe('1 carton per 10 packs');
+    expect(perPackText({ perPack: '0.002', unit: 'units', kind: 'shipper' })).toBe('1 shipper per 500 packs');
+    expect(perPackText({ perPack: '10', unit: 'units', kind: 'label' }, 'nos')).toBe('10 nos per pack');
+    expect(perPackText({ perPack: '0.3', unit: 'units', kind: 'other' }, 'nos')).toBe('0.3 nos per pack');
+    expect(perPackText({ perPack: '0.120', unit: 'm', kind: 'lidding foil' })).toBe('0.120 m per pack');
     expect(unitName('kg', 'kg')).toBe('kg');
     expect(unitName('g', 'kg')).toBe('g');
     expect(unitName('m', 'nos')).toBe('m');
