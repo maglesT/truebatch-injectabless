@@ -1,7 +1,7 @@
 /** TrueBatch Injectables calculation and check templates, version 2. */
 export { Dec, type Q, type Outcome, type Done, type Refusal, type ResultValue } from './core.js';
 export { checkLimit, roundHalfUp, writtenDecimals, type Check, type Limit, type Level } from './rounding.js';
-export { convert, findUnit, type Kind, type Unit } from './units.js';
+export { convert, findUnit, UNIT_LIST, type Kind, type Unit } from './units.js';
 export { t1Difference, t2Total, t3PercentOfTarget, t4Accountability, t5PercentChange, t6Ratio, t21LesserGreater } from './basic.js';
 export { t7Statistics, c1WithinLimits, c2Count, c3AllIndividual, c4Observation, noFurtherChange } from './series.js';
 export { t26MixToTarget, ethanolWw, ethanolDensity } from './mixing.js';

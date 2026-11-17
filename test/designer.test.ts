@@ -4,7 +4,7 @@ import { blocking, masterChecks } from '../shared/master/checks.js';
 import { masterSchema } from '../shared/master/schema.js';
 import { describeMaster, diffMasters, stepText } from '../web/src/designer/describe.js';
 import { dispensing, workedExample } from '../web/src/designer/example.js';
-import { answerDoc, earlierRefs, neededKind, qtyText, scaleDoc, stepFrom } from '../web/src/designer/model.js';
+import { answerDoc, earlierRefs, neededKind, qtyText, scaleDoc, stepFrom, unitsOf } from '../web/src/designer/model.js';
 import { sentence, sentenceText } from '../web/src/designer/sentences.js';
 import { stepTitle } from '../shared/engine/batch.js';
 import { defaultDispensingRooms, skeletonList, skeletonStages } from '../web/src/designer/skeletons.js';
@@ -126,6 +126,17 @@ describe('master designer', () => {
   it('a limit on a T6 result is of its own kind: diavolumes (a ratio of two volumes) have no unit, not litres', () => {
     expect(neededKind(block('tff'), 'diavolumeLimit')).toBe('number');
     expect(neededKind(block('tff'), 'tmpLimit')).not.toBe('number');
+  });
+
+  it('the unit pick lists offer every unit of the unit table: gauge pressure, pH, particles/m³ (17 Nov 2026 run, F6)', () => {
+    const symbols = (k?: Parameters<typeof unitsOf>[0]) => unitsOf(k).map((u) => u.symbol);
+    expect(symbols('gauge pressure')).toEqual(expect.arrayContaining(['bar g', 'mbar g', 'psi g', 'kPa g']));
+    expect(symbols('pH')).toEqual(['pH']);
+    expect(symbols()).toEqual(expect.arrayContaining(['pH', 'particles/m³', 'bar g', '°C']));
+    // The filter test's maker's limit (a quantity) is of the result's kind, so its unit list offers bar g.
+    const ft = BLOCKS.find((b) => b.id === 'filter-test')!;
+    expect(symbols(neededKind(ft, 'makerLimit', { resultUnit: 'bar g' }))).toContain('bar g');
+    expect(symbols(neededKind(ft, 'temperatureRange', { resultUnit: 'bar g' }))).toContain('°C');
   });
 
   it('a batch quantity under 0.01 kg reads in g, so a small excipient is not rounded away', () => {

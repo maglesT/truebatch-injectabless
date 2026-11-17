@@ -4,17 +4,13 @@ import { BLOCKS, blocksFor, findBlock, type Block } from '../../../shared/blocks
 import { product } from '../product.js';
 import { refsIn } from '../../../shared/blocks/format.js';
 import { stepTitle as title } from '../../../shared/engine/batch.js';
-import { Dec, findUnit, type Kind } from '../../../shared/templates/index.js';
+import { Dec, UNIT_LIST, type Kind } from '../../../shared/templates/index.js';
 import type { Problem } from '../../../shared/master/checks.js';
 import type { Stored } from '../../../shared/engine/index.js';
 import type { HEADER_VALUES, MasterDoc, SettingValue, Stage, Step } from '../../../shared/master/schema.js';
 
-// The unit list as offered in pick lists (shared/templates/units.ts holds the same symbols with their kinds).
-const SYMBOLS = ['', 'units', 'tablets', 'µg', 'mg', 'g', 'kg', 'µL', 'mL', 'L', 'm³', 'µm', 'mm', 'cm', 'm', 'mm²', 'cm²', 's', 'min', 'h', 'd',
-  '°C', 'K', 'Δ°C', 'N', 'kN', 'kp', 'Pa', 'hPa', 'kPa', 'MPa', 'bar', 'mbar', 'psi', 'mmHg', '%', '%w/w', 'ppm', 'µg/mg', 'mg/g', '%w/v', 'mg/mL',
-  'g/L', 'g/mL', 'g/cm³', 'rpm', '°', 'mg/cm²', 'g/h', 'g/min', 'kg/h', 'mL/min', 'L/min', 'm³/h', 'tablets/min', 'mA', 'A', 'W', 'kW', 'kWh/kg',
-  '%RH', 'g/kg', 'IU', 'CFU', 'U', 'IU/g', 'IU/mg', 'CFU/g', 'U/mg'];
-export const UNITS = SYMBOLS.filter((s) => findUnit(s)).map((s) => ({ symbol: s, kind: findUnit(s)!.kind }));
+// The unit list as offered in pick lists: every unit of the templates' unit table (shared/templates/units.ts).
+export const UNITS = UNIT_LIST;
 export const unitsOf = (kind?: Kind) => UNITS.filter((u) => !kind || u.kind === kind);
 export { kindOfUnit } from '../../../shared/master/kinds.js';
 export const unitLabel = (s: string) => (s === '' ? 'no unit' : s);
