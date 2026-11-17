@@ -37,6 +37,14 @@ async function withMasterData(master: Master, doc: MasterDoc): Promise<MasterDoc
       const m = usableItem(materials, l.materialItemId, 'material');
       return { ...l, code: m.code, name: m.name };
     }),
+    // Packing: the product packed and every packing material too.
+    ...(doc.pack ? { pack: (() => {
+      const bulk = usableItem(products, doc.pack.bulkItemId, 'product packed');
+      return { ...doc.pack, bulkCode: bulk.code, bulkName: bulk.name, materials: doc.pack.materials.map((l) => {
+        const m = usableItem(materials, l.materialItemId, 'packing material');
+        return { ...l, code: m.code, name: m.name };
+      }) };
+    })() } : {}),
   };
 }
 

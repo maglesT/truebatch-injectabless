@@ -15,6 +15,9 @@ const schema = z.object({
   QMS_DATABASE_URL: optionalUrl,
   LOGBOOK_DATABASE_URL: optionalUrl,
   MMS_DATABASE_URL: optionalUrl,
+  // Packing only: TrueBatch Injectables' published views (its released batches), TRUEBATCH_INJECTABLES_DATABASE_URL on
+  // the platform (the packing product's own database is TRUEBATCH_INJECTABLES_PACKING_DATABASE_URL).
+  INJECTABLES_LINK_URL: optionalUrl,
   // Sign-on through Medhanta core, written by the platform's apply.
   OIDC_ISSUER: z.string().url(),
   OIDC_CLIENT_ID: z.string().default('truebatch_injectables'),
@@ -34,7 +37,9 @@ export type Config = z.infer<typeof schema>;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env, product: Product = INJECTABLES): Config {
   // On the Medhanta platform apply names the product's own database <PRODUCT>_DATABASE_URL
-  // (TRUEBATCH_INJECTABLES_DATABASE_URL), its sign-on client after the product, and each link after its provider.
+  // (TRUEBATCH_INJECTABLES_DATABASE_URL, TRUEBATCH_INJECTABLES_PACKING_DATABASE_URL), its sign-on client after the
+  // product, and each link after its provider.
   const own = env[`${product.id.toUpperCase()}_DATABASE_URL`];
-  return schema.parse({ ...env, DATABASE_URL: env.DATABASE_URL ?? own, OIDC_CLIENT_ID: env.OIDC_CLIENT_ID ?? product.id, BATCH_PREFIX: env.BATCH_PREFIX ?? product.batchPrefix });
+  return schema.parse({ ...env, DATABASE_URL: env.DATABASE_URL ?? own, OIDC_CLIENT_ID: env.OIDC_CLIENT_ID ?? product.id, BATCH_PREFIX: env.BATCH_PREFIX ?? product.batchPrefix,
+    INJECTABLES_LINK_URL: product.id === INJECTABLES.id ? undefined : env.TRUEBATCH_INJECTABLES_DATABASE_URL });
 }

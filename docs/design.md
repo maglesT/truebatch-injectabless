@@ -7,8 +7,9 @@ adding anything, look how TrueBatch Tablets does it and copy that.
 ## Product
 - **One product per dosage form.** TrueBatch Injectables covers sterile drug product manufacture, from dispensing to
   QA release of filled, closed and inspected units: all injectable types and both routes (terminal sterilisation;
-  sterile filtration and aseptic filling; or both). Labelling and packing of the units is a later product of its own,
-  as TrueBatch Tablets Packing is for tablets.
+  sterile filtration and aseptic filling; or both). Labelling and packing of the units is a product of its own
+  (owner, 17 November 2026), TrueBatch Injectables Packing, in this repository on the same engine, as TrueBatch Tablets
+  Packing is for tablets (`docs/packing-design.md`).
 - **Its own engine**: a copy of the TrueBatch Tablets engine (TrueBatch Tablets a0ec59c), changed only where injections
   need it. TrueBatch Tablets and Tablets Packing keep their shared engine; a fix in one engine is checked in the other.
 - **Six engine changes, approved by the owner, each reusing a Tablets mechanism**, and nothing else without asking

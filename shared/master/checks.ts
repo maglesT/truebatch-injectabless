@@ -11,6 +11,7 @@ import { kindOf, kindOfUnit } from './kinds.js';
 import { materialLines, type Answer, type FormulaLine, type Limit, type MasterDoc, type SettingValue } from './schema.js';
 import { isBalance } from '../engine/picks.js';
 import { sterileChecks } from './sterile-checks.js';
+import { packingChecks } from './packing.js';
 
 /** A warning the author answers: one of the options, with a reason when `needsReason`. */
 export interface Question { key: string; options: string[]; needsReason: boolean; answer?: Answer }
@@ -31,7 +32,9 @@ export function masterChecks(doc: MasterDoc): Problem[] {
   const warn = (path: string, message: string) => out.push({ level: 'warning', path, message });
   const twice = (keys: string[], path: string) => keys.forEach((k, i) => keys.indexOf(k) !== i && error(`${path}[${i}]`, `The key ${k} is used twice`));
 
-  formulaChecks(doc, out, error);
+  // A packing master (it has a pack) has its own checks instead of the formula, calculation and sterile checks.
+  if (doc.pack) out.push(...packingChecks(doc));
+  else formulaChecks(doc, out, error);
 
   twice(doc.stages.map((s) => s.key), 'stages');
   // Engine change 5: each time limit names steps of this master (TI-17).
@@ -53,7 +56,7 @@ export function masterChecks(doc: MasterDoc): Problem[] {
     twice(s.steps.map((t) => t.key), `${path}.steps`);
     if (s.kind === 'sub-batch' && !s.count) error(path, 'A sub-batch stage needs the number of sub-batches');
     if (s.produces && !s.produces.holdHours) error(`${path}.produces`, `The intermediate ${s.produces.name} has no hold time`, 'TI-01');
-    if (s.kind !== 'preparation' && !s.steps.some((t) => findBlock(t.block)?.gmp === 'yield')) error(path, `Stage ${s.name} has no yield step`);
+    if (!doc.pack && s.kind !== 'preparation' && !s.steps.some((t) => findBlock(t.block)?.gmp === 'yield')) error(path, `Stage ${s.name} has no yield step`);
     if (s.kind === 'preparation' && !s.startsAfter && !doc.stages.some((x) => x.uses.includes(s.key))) warn(path, `No stage uses the preparation ${s.name}`);
     // Engine change 3: results that come later start after an earlier step, in a preparation stage nothing uses.
     if (s.startsAfter) {
@@ -66,10 +69,10 @@ export function masterChecks(doc: MasterDoc): Problem[] {
     // TI-10: a stage worked in a room starts with line clearance.
     const clearance = s.steps.findIndex((t) => findBlock(t.block)?.gmp === 'line-clearance');
     if (s.roomTypes.length && clearance < 0) error(path, `Stage ${s.name} is worked in a room but has no line clearance step`, 'TI-10');
-    if (clearance > 0) warn(`${path}.steps[${clearance}]`, `Line clearance is not the first step of ${s.name}`);
-    // TI-11: a stage that works machines (not balances) or names a room
+    if (clearance > 0 && !doc.pack) warn(`${path}.steps[${clearance}]`, `Line clearance is not the first step of ${s.name}`);
+    // TI-11: a stage that works machines (not balances, nor the line a packing batch is issued to) or names a room
     // runs only in the rooms it allows (shared/engine/picks.ts).
-    const placed = s.steps.some((t) => { const b = findBlock(t.block); return b?.fields.some((f) => f.kind === 'room' || (f.kind === 'machine' && !isBalance(f))); });
+    const placed = s.steps.some((t) => { const b = findBlock(t.block); return !b?.atIssue && b?.fields.some((f) => f.kind === 'room' || (f.kind === 'machine' && !isBalance(f))); });
     if (placed && !s.roomTypes.length) error(`${path}.roomTypes`, `Stage ${s.name}: choose the rooms this stage may run in (an area or a room of master data, in the stage settings)`, 'TI-11');
     for (const u of s.uses) {
       const pi = doc.stages.findIndex((x) => x.key === u);
@@ -80,6 +83,7 @@ export function masterChecks(doc: MasterDoc): Problem[] {
       const p = `${path}.steps[${ti}]`;
       const block = findBlock(st.block);
       if (!block) return void error(`${p}.block`, `No block ${st.block.id} version ${st.block.version}`);
+      if (block.packing && !doc.pack) error(p, `${block.name} is a packing step: an injectables master cannot use it`);
       if (!st.checker && (block.gmp || st.critical)) error(p, `${block.gmp ? `A ${block.gmp.replace('line-clearance', 'line clearance')} step` : 'A critical step'} needs a second-person check`, 'TI-08');
       if (st.critical && st.flow.kind === 'optional-with-reason') error(`${p}.flow`, 'A critical step cannot be optional');
       if (st.waitForCheck && !st.checker) warn(p, 'The next step waits for a check this step does not have');

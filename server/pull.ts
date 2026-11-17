@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { MasterEquipment, MasterRoom } from './master.js';
 import type { Block, BlockField } from '../shared/blocks/index.js';
-import { materialLines, type FormulaLine, type MasterDoc, type Step } from '../shared/master/schema.js';
+import { materialLines, type FormulaLine, type MasterDoc, type PackMaterial, type Step } from '../shared/master/schema.js';
 import { CERTIFICATE, PROVIDER_NAME, clauses, type Provider, type Source, type Value } from '../shared/engine/index.js';
 import { LOT_USABLE } from './links.js';
 import { plantDate } from '../shared/plant-time.js';
@@ -16,7 +16,7 @@ const hand = (link: Provider, state: 'absent' | 'down'): Pulled => ({ source: { 
 const refused = (...problems: string[]): Pulled => ({ source: { from: 'hand', link: 'mms', state: 'absent' }, values: {}, sources: {}, problems });
 
 /** The formula line (or packing material) a step works on (its setting that names one). */
-export function lineOf(doc: MasterDoc, st: Step): FormulaLine | undefined {
+export function lineOf(doc: MasterDoc, st: Step): FormulaLine | PackMaterial | undefined {
   const s = Object.values(st.settings).find((v): v is { formula: string } => typeof v === 'object' && 'formula' in v);
   return s && materialLines(doc).find((l) => l.key === s.formula);
 }
@@ -83,6 +83,33 @@ export async function pullLot(app: FastifyInstance, doc: MasterDoc, st: Step, bl
     out.sources[name] = { from: 'mms', asOf: l.dataAsOf, shown: `${test} ${t.value} %${t.basis ? ` (${t.basis})` : ''}, report ${t.reportRef ?? l.qcReportRef ?? '—'}` };
   }
   return out;
+}
+
+/**
+ * Packing: a batch TrueBatch Injectables has RELEASED, of this pack's product (its filled, inspected units); its date of
+ * manufacture (the date its first processing step started, batch_fact_v1.manufactured_on) comes with it.
+ */
+export async function pullBulk(app: FastifyInstance, doc: MasterDoc, block: Block, batchNo: string): Promise<Pulled> {
+  const r = await app.links.truebatch_injectables.batch(batchNo);
+  if (r.state !== 'ok') return hand('truebatch_injectables', r.state);
+  const b = r.value;
+  if (!b) return refused(`Batch ${batchNo} is not in TrueBatch Injectables.`);
+  const problems: string[] = [];
+  if (doc.pack && b.productCode !== doc.pack.bulkCode) problems.push(`Batch ${batchNo} is ${b.productCode ?? 'another product'} in TrueBatch Injectables, not ${doc.pack.bulkCode} ${doc.pack.bulkName}.`);
+  if (!b.released) problems.push(`Batch ${batchNo} is ${b.status.toLowerCase().replaceAll('_', ' ')} in TrueBatch Injectables: only a released batch may be packed.`);
+  if (!b.mfgDate) problems.push(`Batch ${batchNo} has no date of manufacture in TrueBatch Injectables (no processing step started).`);
+  const source: Source = { from: 'truebatch_injectables', asOf: b.dataAsOf, shown: `TrueBatch Injectables batch ${batchNo}: ${b.status}, ${b.productCode ?? '—'}, manufactured ${b.mfgDate ?? '—'}` };
+  const out: Pulled = { source, values: {}, sources: {}, problems };
+  if (b.mfgDate && block.fields.some((x) => x.name === 'mfgDate')) { out.values.mfgDate = b.mfgDate; out.sources.mfgDate = source; }
+  return out;
+}
+
+/** Packing: a date of manufacture typed from the tray or case labels (no TrueBatch Injectables link): a real date, never in the future. */
+export function mfgDateProblem(f: BlockField, v: string, now: Date, tz: string): string | null {
+  const d = new Date(`${v}T00:00:00Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== v) return `${f.label}: give a date, e.g. 2026-11-15.`;
+  if (v > plantDay(now, tz)) return `The date of manufacture ${plantDate(v)} is in the future: give the date on the tray or case labels.`;
+  return null;
 }
 
 /** The answer to a hand question: yes to every label question, a date in date for the lot. */

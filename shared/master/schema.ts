@@ -160,12 +160,55 @@ export const timeLimitSchema = z.object({ key: keySchema, name: text(), from: po
 // as answered: when the warning reads differently (the item changed), it needs a new answer.
 export const answerSchema = z.object({ about: text(1000), choice: text().min(1), reason: text(1000) }).strict();
 
+// TrueBatch Injectables Packing (TI-P1): a packing master is per product, pack type and size, and destination. Its
+// header names the finished pack product and the standard packing batch in filled units (batchSize, batchUnit "units");
+// `pack` holds the rest. Its formula is empty: the packing materials are `pack.materials`, and a step setting
+// { formula: key } names one of them. The units packed are the filled, inspected containers (vials, ampoules, syringes,
+// bags) of a released TrueBatch Injectables batch.
+export const PACK_TYPES = ['carton', 'tray', 'blister'] as const;
+export const PACK_MATERIAL_KINDS = ['label', 'carton', 'leaflet', 'tray', 'blister film', 'lidding foil', 'shipper', 'other'] as const;
+export const DESTINATIONS = ['India domestic', 'Export'] as const;
+export const packMaterialSchema = z.object({
+  key: keySchema,
+  materialItemId: z.string().min(1).max(100),
+  code: text(),
+  name: text(),
+  kind: z.enum(PACK_MATERIAL_KINDS),
+  // Printed (artwork): issued only by its step with a second person, reconciled to zero (TI-P4, TI-P6).
+  printed: z.boolean(),
+  // Coded on the line with the batch number, dates and MRP (TI-P5, TI-P9); leftovers are destroyed.
+  coded: z.boolean(),
+  perPack: decimal,
+  unit: z.enum(['units', 'm', 'g']),
+}).strict();
+export const packSchema = z.object({
+  bulkItemId: z.string().min(1).max(100),
+  bulkCode: text(),
+  bulkName: text(),
+  type: z.enum(PACK_TYPES),
+  // Filled units (vials, ampoules, syringes, bags) in one pack, and packs in one outer carton.
+  unitsPerPack: z.number().int().min(1).max(10_000),
+  packsPerCarton: z.number().int().min(1).max(1000),
+  // The approved shelf life (TI-P8): the expiry is worked out from it, never typed.
+  shelfLifeMonths: z.number().int().min(1).max(120),
+  // "month before": expiry = month of manufacture + shelf life − 1 (use before the end of that month).
+  expiryRule: z.enum(['month before', 'same month']).default('month before'),
+  destination: z.enum(DESTINATIONS),
+  // Maximum retail price per pack in rupees (India domestic, TI-P9).
+  mrp: decimal.optional(),
+  // The pack's GTIN, for checking the codes of the customer's serialisation system.
+  gtin: z.string().regex(/^\d{14}$/, '14 digits').optional(),
+  serialisation: z.boolean().default(false),
+  materials: z.array(packMaterialSchema).max(50),
+}).strict();
+
 export const masterSchema = z.object({
   header: headerSchema,
   formula: z.array(lineSchema).max(100),
   stages: z.array(stageSchema).max(50),
   answers: z.record(z.string().max(120), answerSchema).optional(),
   timeLimits: z.array(timeLimitSchema).max(50).optional(),
+  pack: packSchema.optional(),
 }).strict();
 
 export type MasterDoc = z.infer<typeof masterSchema>;
@@ -176,9 +219,11 @@ export type SettingValue = z.infer<typeof settingValueSchema>;
 export type Limit = z.infer<typeof limitSchema>;
 export type Answer = z.infer<typeof answerSchema>;
 export type TimeLimit = z.infer<typeof timeLimitSchema>;
+export type Pack = z.infer<typeof packSchema>;
+export type PackMaterial = z.infer<typeof packMaterialSchema>;
 
-/** Every material a step may name: the formula lines. */
-export const materialLines = (doc: MasterDoc): FormulaLine[] => doc.formula;
+/** Every material a step may name: the formula lines, or a packing master's packing materials. */
+export const materialLines = (doc: MasterDoc): (FormulaLine | PackMaterial)[] => [...doc.formula, ...(doc.pack?.materials ?? [])];
 
 export const MASTER_STATES = ['draft', 'in_review', 'approved', 'effective', 'retired'] as const;
 export type MasterState = (typeof MASTER_STATES)[number];

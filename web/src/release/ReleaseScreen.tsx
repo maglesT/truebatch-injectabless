@@ -81,7 +81,7 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
 
   const sign = async ({ proof }: { proof: string }) => {
     if (!signing) return;
-    const extra = signing.action === 'qc-approve' ? { reportNo: reportNo.trim(), emReview: emReview.trim() } : signing.action === 'reject' ? { reason: rejectWhy.trim() } : {};
+    const extra = signing.action === 'qc-approve' ? { reportNo: reportNo.trim(), ...(product.packing ? {} : { emReview: emReview.trim() }) } : signing.action === 'reject' ? { reason: rejectWhy.trim() } : {};
     try {
       await api('POST', `/api/batches/${id}/${signing.action}`, { proof, contentHash: d.batch.contentHash, ...extra });
       setSigning(null);
@@ -110,7 +110,7 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
       </div>
       {r.deviationsLink === 'down' && <p className="notice warn">The Deviations link is down: the deviation statuses shown are TrueBatch's own (closed by hand).</p>}
 
-      <SterileSummary d={d} blocks={blocks} />
+      {!product.packing && <SterileSummary d={d} blocks={blocks} />}
       <section className="dash-panel" aria-label="Review of the record and its audit trail">
         <div className="panel-head"><h2>Review of the record and its audit trail</h2>
           <span className="muted">every change, departure and finding of the batch; QA's release signature covers this review</span></div>
@@ -145,12 +145,12 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
           <li key={e.id} className="bad"><b>{name(idOf(e))}</b><span>DEMO: wait skipped by {e.personName} at {plainClock(e.at)}</span><small>{String(e.payload.label ?? '')}</small></li>))}</Group>}
         <Group title={`Signatures (${r.signatures.length})`} empty="No signatures.">{r.signatures.map((s, i) => (
           <li key={i} className="sig"><b>{MEANING_LABEL[s.meaning] ?? s.meaning}</b><span>{s.printedName}</span>
-            <small>{plainClock(s.signedAt)} · {s.step ? name(s.step) : s.objectType === 'batch' ? `Batch ${d.batch.batchNo} issued` : 'The batch record'}</small></li>))}</Group>
+            <small>{plainClock(s.signedAt)} · {s.step ? name(s.step) : s.objectType === 'batch' ? `Batch ${d.batch.batchNo} issued` : product.packing ? 'The packing record' : 'The batch record'}</small></li>))}</Group>
       </section>
 
       <section className="dash-panel" aria-label="Decision">
         <div className="panel-head"><h2>{qcTurn ? 'QC approval' : 'QA release'}</h2>
-          <a className="button" href={pdfLink(id)} download>Batch record (PDF)</a></div>
+          <a className="button" href={pdfLink(id)} download>{product.packing ? 'Packing record' : 'Batch record'} (PDF)</a></div>
         {notice && <p className="notice info" role="status">{notice}</p>}
         {r.batchEvents.filter((b) => b.kind !== 'deviation_closed').map((b) => (
           <p key={b.id} className={b.kind === 'rejected' ? 'notice bad' : 'all-good'}><span aria-hidden="true">{b.kind === 'rejected' ? '✕' : '✓'}</span>
@@ -158,9 +158,10 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
         {qcTurn && (can(me, 'qc.approve') ? (
           <div className="decide">
             <label>QC report number<input value={reportNo} onChange={(e) => setReportNo(e.target.value)} maxLength={60} placeholder="e.g. QC-26-0042" /></label>
-            <label>EM review of the batch (report numbers; the Deviations number of each action-limit excursion, or "no excursion")<input value={emReview} onChange={(e) => setEmReview(e.target.value)} maxLength={500} placeholder="e.g. EM-26-118, EM-26-119: no excursion" /></label>
-            <p className="why">Your signature means: the release tests meet the specification as in the QC report, including sterility (each sub-batch or load), bacterial endotoxins and the bioburden results; and the environmental monitoring of the batch was reviewed, every action-limit excursion with its deviation.</p>
-            <button className="big primary" disabled={!reportNo.trim() || !emReview.trim()} onClick={() => setSigning({ meaning: 'qc_approved', action: 'qc-approve' })}>Sign: QC approved</button>
+            {product.packing ? <p className="why">Your signature means: the finished packed product was tested and complies with its specification, as in the QC report.</p> : <>
+              <label>EM review of the batch (report numbers; the Deviations number of each action-limit excursion, or "no excursion")<input value={emReview} onChange={(e) => setEmReview(e.target.value)} maxLength={500} placeholder="e.g. EM-26-118, EM-26-119: no excursion" /></label>
+              <p className="why">Your signature means: the release tests meet the specification as in the QC report, including sterility (each sub-batch or load), bacterial endotoxins and the bioburden results; and the environmental monitoring of the batch was reviewed, every action-limit excursion with its deviation.</p></>}
+            <button className="big primary" disabled={!reportNo.trim() || (!product.packing && !emReview.trim())} onClick={() => setSigning({ meaning: 'qc_approved', action: 'qc-approve' })}>Sign: QC approved</button>
           </div>
         ) : <p className="notice">QC approval comes first: it needs the QC approval permission.</p>)}
         {qaTurn && (can(me, 'qa.release') ? (<>
@@ -181,7 +182,7 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
       {signing && (
         <SignDialog meaning={signing.meaning} what={`Batch ${d.batch.batchNo} · ${doc.header.productName}`} onCancel={() => setSigning(null)} onSign={sign}>
           <div className="summary-box">
-            {signing.action === 'qc-approve' && <p>QC report <b>{reportNo.trim()}</b> · EM review <b>{emReview.trim()}</b></p>}
+            {signing.action === 'qc-approve' && <p>QC report <b>{reportNo.trim()}</b>{product.packing ? '' : <> · EM review <b>{emReview.trim()}</b></>}</p>}
             {signing.action === 'reject' && <p>Reason: <b>{rejectWhy.trim()}</b></p>}
             {signing.action !== 'qc-approve' && <p>This signature also records your review of the batch's audit trail: {count(r.corrections.length, 'correction')}, {count(r.sentBack.length, 'step')} sent back,
               {' '}{count(r.late.length, 'late timer')}, {count(r.outOfLimits.length, 'value')} out of limits, {count(r.deviations.length, 'deviation')}, {count(r.notApplicable.length, 'step')} not applicable.</p>}

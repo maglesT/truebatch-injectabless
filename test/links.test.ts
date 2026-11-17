@@ -475,7 +475,7 @@ describe('the views TrueBatch publishes', () => {
     expect(notes[0]!.step).toBe('Stage 0 › Check a value against limits: pH');
   });
 
-  it('TB-P8 batch_fact_v1.manufactured_on, the date of manufacture, is the plant-time date the first processing step started, not the issue date; null before any step started', async () => {
+  it('TI-P8 batch_fact_v1.manufactured_on, the date of manufacture, is the plant-time date the first processing step started, not the issue date; null before any step started', async () => {
     const [b] = await t.owner<{ mv: number; by: number }[]>`select master_version_id::int as mv, issued_by::int as by from batches order by id limit 1`;
     const made = async (batchNo: string) => (await t.owner<{ id: number }[]>`
       insert into batches (batch_no, master_version_id, issued_by, issued_at) values (${batchNo}, ${b!.mv}, ${b!.by}, '2026-10-30 10:00+00') returning id::int`)[0]!.id;

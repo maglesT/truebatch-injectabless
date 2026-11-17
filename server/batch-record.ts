@@ -70,26 +70,38 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
   const byId = new Map(steps.map((v) => [v.id, v]));
   const stepLabel = (id: string) => { const v = byId.get(id); return v ? `${doc.stages[v.key.stage]!.name} · ${stepName(v)}` : id; };
 
-  const record = 'Batch record';
+  const record = doc.pack ? 'Packing record' : 'Batch record';
   // A batch QA terminated: said at the top and in the decisions.
   const ended = batchEvents.find((b) => b.payload.terminated);
   const endedText = ended && terminatedText(ended, plant);
   // What a terminated batch never did is not "yet" to come (owner 16 Nov 2026).
   const notYet = (what: string) => (ended ? `not ${what} (terminated)` : `not ${what} yet`);
+  const facts = doc.pack ? steps.find((v) => v.id === '0.1.0.1') : undefined;
   const content: Content[] = [
     { text: runs(`${record} ${r.batch.batchNo}`), fontSize: 16, bold: true },
     { text: runs(`${h.productCode} · ${h.productName}`), fontSize: 11, margin: [0, 2, 0, 8] },
     { table: { widths: [90, '*', 90, '*', 90, '*'], body: [
       [th('Product'), small(`${h.productCode} · ${h.productName}`), th('Batch no.'), small(r.batch.batchNo, { bold: true }), th('Status'), small(view.status, { bold: true })],
-      [th('Batch'), small(batchText(doc)), th('Formula'), small(`mg per ${h.batchUnit === 'units' ? 'unit' : 'mL'}`), th('Master version'), small(`version ${r.versionNo}`)],
+      doc.pack ? [th('Pack'), small(`${doc.pack.type}, ${doc.pack.unitsPerPack} units per pack, ${doc.pack.packsPerCarton} packs per carton; ${doc.pack.destination}${doc.pack.mrp ? `, MRP Rs. ${doc.pack.mrp}` : ''}`),
+        th('Filled units'), small(`${doc.pack.bulkCode} · batch ${valueText(facts?.values.bulk)} · ${valueText(facts?.values.units)} issued · line ${valueText(facts?.values.line)}${facts?.results.expiry?.ok ? ` · ${facts.results.expiry.shown}` : ''}`),
+        th('Master version'), small(`version ${r.versionNo}`)]
+        : [th('Batch'), small(batchText(doc)), th('Formula'), small(`mg per ${h.batchUnit === 'units' ? 'unit' : 'mL'}`), th('Master version'), small(`version ${r.versionNo}`)],
       [th('Issued'), small(`${r.issuedByName}, ${plant(r.batch.issuedAt)}`), th('Times'), small('plant time (IST)'), th('Changed values'), small('marked CHANGED; the original is struck through, with the reason', { color: RED })],
     ] }, layout: 'lightHorizontalLines' },
     ...(endedText ? [small(endedText, { bold: true, color: RED, margin: [0, 6, 0, 0] })] : []),
   ];
 
+  // Packing: the packing materials, with the lots and quantities issued and their reconciliation.
+  const naming = (v: StepView, key: string, block: string) => stepOf(v).block.id === block && Object.values(stepOf(v).settings).some((x) => typeof x === 'object' && 'formula' in x && x.formula === key);
+  if (doc.pack) content.push(heading('Packing materials'), table([150, 70, 60, '*', '*'], ['Material', 'Kind', 'Per pack', 'Lots and quantities issued', 'Reconciliation'], doc.pack.materials.map((m) => [
+    small(`${m.code} · ${m.name}`), small(`${m.kind}${m.printed ? ', printed' : ''}${m.coded ? ', coded' : ''}`), small(`${m.perPack} ${unitName(m.unit, r.units?.get(m.materialItemId))}`),
+    small(steps.filter((v) => naming(v, m.key, 'pack-material-issue')).map((v) => `${v.values.lot === undefined ? 'not issued' : `Lot ${valueText(v.values.lot)}: ${valueText(v.values.issued, unitOf(v))}`} · ${stepName(v)}`).join('\n') || notYet('issued')),
+    small(steps.filter((v) => naming(v, m.key, 'printed-reconciliation')).map((v) => (v.results.reconciliation?.ok ? v.results.reconciliation.shown : notYet('reconciled'))).join('\n') || (m.printed ? notYet('reconciled') : '—')),
+  ])));
+
   // The formula, with the lots and the quantities dispensed (the weighing steps that name the line).
-  content.push(heading('Formula'));
-  content.push(table([150, 90, 55, 80, '*'], ['Material', 'Role', `mg per ${h.batchUnit === 'units' ? 'unit' : 'mL'}`, 'Batch quantity', 'Lots and dispensed quantities'], doc.formula.map((l) => {
+  if (!doc.pack) content.push(heading('Formula'));
+  if (!doc.pack) content.push(table([150, 90, 55, 80, '*'], ['Material', 'Role', `mg per ${h.batchUnit === 'units' ? 'unit' : 'mL'}`, 'Batch quantity', 'Lots and dispensed quantities'], doc.formula.map((l) => {
     const q = lineQuantity(doc, [], { stage: 0, sub: 1, step: 0, round: 1 }, l, false, {});
     const weighed = steps.filter((v) => Object.values(stepOf(v).settings).some((s) => typeof s === 'object' && 'formula' in s && s.formula === l.key && findBlock(stepOf(v).block)?.gmp === 'weighing'));
     return [small(`${l.code} · ${l.name}`), small(l.role), small(l.mg ?? 'q.s.'), small(endOf(q)),
@@ -159,7 +171,7 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
     : { text: `No decision yet: the batch is ${view.status}.`, italics: true, fontSize: 9 });
   if (view.status !== 'released' && view.status !== 'rejected') content.push(small(`This copy was made while the batch is ${view.status}: it is not a released record.`, { color: RED, margin: [0, 4, 0, 0] }));
 
-  return pageFrame(`TrueBatch Injectables · ${record} ${r.batch.batchNo} · ${h.productCode} ${h.productName}`, by, content, printedAt, demo);
+  return pageFrame(`${doc.pack ? 'TrueBatch Injectables Packing' : 'TrueBatch Injectables'} · ${record} ${r.batch.batchNo} · ${h.productCode} ${h.productName}`, by, content, printedAt, demo);
 }
 
 /** The recorded values; a corrected value shows the original struck through, the reason, the person and the time. */

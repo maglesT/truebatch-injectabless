@@ -8,17 +8,23 @@ import { connect, type Sql } from '../server/db.js';
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const MIGRATIONS_DIR = path.resolve(here, here.includes(`${path.sep}dist${path.sep}`) ? '../../db/migrations' : 'migrations');
 
-export async function migrate(sql: Sql, dir = MIGRATIONS_DIR): Promise<string[]> {
+// Another product's database built from these migrations (TrueBatch Injectables Packing, packing/migrate.ts): the
+// folders in order, files to leave out, and its own app role in place of truebatch_injectables_app.
+export interface Plan { dirs: { dir: string; skip?: string[] }[]; role?: string }
+
+export async function migrate(sql: Sql, plan: string | Plan = MIGRATIONS_DIR): Promise<string[]> {
+  const p: Plan = typeof plan === 'string' ? { dirs: [{ dir: plan }] } : plan;
   await sql`create table if not exists schema_migrations (
     name text primary key,
     applied_at timestamptz not null default now()
   )`;
   const done = new Set((await sql<{ name: string }[]>`select name from schema_migrations`).map((r) => r.name));
-  const files = readdirSync(dir).filter((f) => /^\d{4}_.+\.sql$/.test(f)).sort();
+  const files = p.dirs.flatMap(({ dir, skip = [] }) => readdirSync(dir).filter((f) => /^\d{4}_.+\.sql$/.test(f) && !skip.includes(f)).sort().map((f) => ({ dir, f })));
   const applied: string[] = [];
-  for (const file of files) {
+  for (const { dir, f: file } of files) {
     if (done.has(file)) continue;
-    const text = readFileSync(path.join(dir, file), 'utf8');
+    const raw = readFileSync(path.join(dir, file), 'utf8');
+    const text = p.role ? raw.replaceAll('truebatch_injectables_app', p.role) : raw;
     await sql.begin(async (tx) => {
       await tx.unsafe(text);
       await tx`insert into schema_migrations (name) values (${file})`;

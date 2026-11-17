@@ -54,6 +54,9 @@ export function BatchScreen({ me, id, step, approve }: { me: Me; id: number; ste
 
 export function BatchHeader({ d }: { d: BatchDetail }) {
   const h = d.master.doc.header;
+  // A packing batch: the filled units issued to it (recorded at issue), not the master's standard packing batch.
+  const issued = d.master.doc.pack ? d.steps.find((s) => s.id === '0.1.0.1')?.values.units : undefined;
+  const units = issued && typeof issued === 'object' && 'value' in issued ? issued.value : undefined;
   return (
     <section className="dash-panel bh" aria-label="Batch">
       <div>
@@ -61,14 +64,16 @@ export function BatchHeader({ d }: { d: BatchDetail }) {
         <h1>{h.productName}</h1>
         <div className="meta">
           <span>Product <b>{h.productCode}</b></span>
-          <span>Batch <b>{batchText(d.master.doc)}</b></span>
+          {d.master.doc.pack ? (units ? <span>Filled units issued <b>{Number(units).toLocaleString('en-IN')} units</b></span>
+            : <span>Standard packing batch <b>{Number(h.batchSize).toLocaleString('en-IN')} units</b></span>)
+            : <span>Batch <b>{batchText(d.master.doc)}</b></span>}
           <span>Master version <b>{d.master.versionNo}</b></span>
           <span>Issued <b>{plainClock(d.batch.issuedAt)}</b></span>
         </div>
       </div>
       <span className="bh-side">
         <span className={`chip ${STATUS_CHIP[d.batch.status] ?? ''}`}>{d.batch.status}</span>
-        <a className="button" href={pdfLink(d.batch.id)} download>Batch record (PDF)</a>
+        <a className="button" href={pdfLink(d.batch.id)} download>{product.packing ? 'Packing record' : 'Batch record'} (PDF)</a>
       </span>
     </section>
   );
@@ -220,7 +225,7 @@ function Approval({ d, blocks, reload }: { d: BatchDetail; blocks: Block[]; relo
           <button className="big primary" onClick={() => setSigning(true)}>Sign: production approved</button></div>}
       </section>
       {signing && (
-        <SignDialog meaning="production_approved" what={`Batch ${d.batch.batchNo} · ${doc.header.productName}: the batch record is complete.`} onCancel={() => setSigning(false)} onSign={sign}>
+        <SignDialog meaning="production_approved" what={`Batch ${d.batch.batchNo} · ${doc.header.productName}: the ${product.packing ? 'packing' : 'batch'} record is complete.`} onCancel={() => setSigning(false)} onSign={sign}>
           <div className="summary-box"><p>{d.stages.length} stages closed · {d.steps.length} steps · {d.batch.deviations.length} deviation notes ({d.batch.deviations.filter((x) => x.open).length} open)</p></div>
         </SignDialog>
       )}

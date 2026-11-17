@@ -14,7 +14,9 @@ import { TEMPLATES } from '../engine/templates.js';
 
 const name = z.string().regex(/^[a-z][a-zA-Z0-9]{0,39}$/);
 
-export const FIELD_KINDS = ['number', 'text', 'yes-no', 'choice', 'timer', 'lot', 'machine', 'room'] as const;
+// bulk: a released batch of TrueBatch Injectables, its filled and inspected units (packing; pulled from its
+// batch_fact_v1, server/pull.ts).
+export const FIELD_KINDS = ['number', 'text', 'yes-no', 'choice', 'timer', 'lot', 'machine', 'room', 'bulk'] as const;
 export const fieldSchema = z.object({
   name,
   label: z.string().min(1),
@@ -37,6 +39,8 @@ export const fieldSchema = z.object({
   types: z.array(z.string().regex(/^[a-z][a-z ]*$/)).optional(),
   notTypes: z.array(z.string().regex(/^[a-z][a-z ]*$/)).optional(),
 }).strict();
+// A packing line: master data's labelling machines, cartoners, tray and blister packers, and packing lines.
+export const PACKING_LINE = ['label', 'carton', 'tray', 'blister', 'packing line'];
 
 export const SETTING_KINDS = ['quantity', 'limit', 'number', 'text', 'material'] as const;
 export const settingSchema = z.object({
@@ -71,7 +75,7 @@ export const blockSchema = z.object({
   stop: name.optional(),
   // Rounds every N minutes (periodic in-process checks); the master may not set more than maxMinutes (TI-15).
   // alongside: the steps after it open once its first round is done, and its rounds go on beside them; the stage
-  // closes only when its stop check passes.
+  // closes only when its stop check passes (packing: the periodic checks of a running line).
   periodic: z.object({ maxMinutes: z.number().int().positive(), alongside: z.boolean().optional() }).strict().optional(),
   // Engine change 2: an event log beside the stage (interventions, stoppages, time out of the fridge). Its entries are
   // rounds of the step that the operator adds at any time while the stage runs, each recorded and signed like a step:
@@ -80,6 +84,11 @@ export const blockSchema = z.object({
   log: z.boolean().optional(),
   // TI-30: a step only people with this QA-given permission may record and sign (visual inspection).
   needs: z.enum(['inspect']).optional(),
+  // Packing: the fields recorded when the batch is issued, as the first step of the record (TI-P2, TI-P7).
+  atIssue: z.array(name).min(1).optional(),
+  // A block of TrueBatch Injectables Packing (a packing master uses these and the general ones; an injectables master
+  // never).
+  packing: z.boolean().optional(),
   // A new master step from this block starts as a QA hold (the master may change it).
   qaHold: z.boolean().optional(),
   // The name of a step that names a material, "{material}" its name and code: "Issue {material}".
@@ -90,7 +99,10 @@ export type BlockField = z.infer<typeof fieldSchema>;
 export type BlockSetting = z.infer<typeof settingSchema>;
 export type Block = z.infer<typeof blockSchema>;
 
-// "$earlier.name" is this field in the earlier rounds of the step (shared/engine/values.ts).
+// Packing: "$pack.name" is the master's pack fact, "$batch.name" a batch fact recorded at issue, "$earlier.name" this
+// field in the earlier rounds of the step (shared/engine/values.ts).
+export const PACK_FACTS = ['unitsPerPack', 'packsPerCarton', 'shelfLifeMonths', 'expiryRule', 'type', 'destination', 'gtin', 'mrp'];
+export const BATCH_FACTS = ['line', 'bulk', 'mfgDate', 'units', 'packs'];
 
 /** The names inside "$name" strings of calculation arguments ("$name?" optional, "$prev.name" the previous round). */
 export function refsIn(x: unknown): string[] {
@@ -118,7 +130,8 @@ export function blockProblems(b: Block): string[] {
     if (typeof f.count === 'string' && b.settings.find((s) => s.name === String(f.count).slice(1))?.kind !== 'number') p.push(`field ${f.name}: its count ${f.count} is not a number setting`);
   }
   for (const s of b.settings) if (s.options && (s.kind !== 'text' || !s.options.length)) p.push(`setting ${s.name}: only a text setting has a list`);
-  const known = new Set([...b.fields.map((f) => f.name), ...b.settings.map((s) => s.name)]);
+  const known = new Set([...b.fields.map((f) => f.name), ...b.settings.map((s) => s.name), ...PACK_FACTS.map((x) => `pack.${x}`), ...BATCH_FACTS.map((x) => `batch.${x}`)]);
+  for (const f of b.atIssue ?? []) if (!b.fields.some((x) => x.name === f)) p.push(`atIssue: no field ${f}`);
   for (const c of b.calcs) {
     if (!(c.template in TEMPLATES)) p.push(`calculation ${c.name}: unknown template ${c.template}`);
     // "$prev.name" may also name this calculation: its result in the previous round (a running total).
