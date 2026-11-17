@@ -31,6 +31,10 @@ const ANTIOXIDANT = /\b(metabisulfite|metabisulphite|bisulfite|sulfite|ascorbic|
 const NON_AQUEOUS = /\b(oil|oleate|benzyl benzoate|polyethylene glycol|peg|propylene glycol|ethyl oleate)\b/i;
 const SUSPENSION = /\b(suspension|emulsion|depot|microspheres?|liposom\w*)\b/i;
 
+// The steps that fill product: a liquid (vials, ampoules, syringes; form-fill-seal or blow-fill-seal) or a sterile powder.
+const LIQUID_FILLS = ['fill', 'ffs-run'];
+const FILLS = [...LIQUID_FILLS, 'powder-fill'];
+
 export function sterileChecks(doc: MasterDoc, ask: Ask, refuse: Refuse): void {
   const h = doc.header;
   const steps = stepsOf(doc);
@@ -104,7 +108,7 @@ export function sterileChecks(doc: MasterDoc, ask: Ask, refuse: Refuse): void {
     refuse(steps[carbon]!.path, 'The API is charged before the carbon treatment of the same vessel: carbon adsorbs the API (library check 36)');
   }
   const filter = steps.findIndex((x) => x.id === 'filtration');
-  const filling = steps.findIndex((x, n) => n > filter && x.id === 'fill');
+  const filling = steps.findIndex((x, n) => n > filter && LIQUID_FILLS.includes(x.id));
   if (filter >= 0 && filling > filter) {
     const between = steps.slice(filter + 1, filling).filter((x) => ['charge', 'ph-adjust', 'make-up', 'bulk-adjust', 'dissolve'].includes(x.id));
     for (const x of between) {
@@ -125,7 +129,7 @@ export function sterileChecks(doc: MasterDoc, ask: Ask, refuse: Refuse): void {
   const terminal = steps.filter((x) => x.id === 'terminal-sterilise');
   const heat = steps.filter((x) => x.id === 'heat-treatment');
   // A bulk only (no fill step) is sterilised where it is filled, under that master.
-  const filled = steps.some((x) => x.id === 'fill' || x.id === 'ffs-run');
+  const filled = steps.some((x) => FILLS.includes(x.id));
   if (filled && (route === 'terminal' || route === 'both') && !terminal.length) refuse('header.route', 'The route is terminal but no terminal sterilisation step has a minimum F0: a heat treatment or pasteurisation is not sterilisation (library check 41)', 'TI-24');
   if (route === 'terminal' && heat.length) refuse(heat[0]!.path, 'A heat step below sterilising lethality in a master whose route is terminal: the route must be "both" (or aseptic), with the full aseptic record (library check 42)', 'TI-24');
   for (const x of terminal) {
@@ -147,8 +151,8 @@ export function sterileChecks(doc: MasterDoc, ask: Ask, refuse: Refuse): void {
   }
   // The sterile rules: the steps a master of this route must have (TI-01 lists them; each rule names its own).
   const ids = new Set(steps.map((x) => x.id));
-  // They apply to a master that fills product (a fill, form-fill-seal or chamber step).
-  const fills = ['fill', 'ffs-run'].some((id) => ids.has(id));
+  // They apply to a master that fills product (a fill, form-fill-seal or blow-fill-seal, or powder fill step).
+  const fills = FILLS.some((id) => ids.has(id));
   const aseptic = fills && (route === 'aseptic' || route === 'both');
   const need = (id: string, why: string, rule: string) => { if (!ids.has(id)) refuse('stages', why, rule); };
   if (aseptic) {
@@ -157,10 +161,13 @@ export function sterileChecks(doc: MasterDoc, ask: Ask, refuse: Refuse): void {
       if (!s.aseptic) continue;
       const first = s.steps.findIndex((t) => t.block.id !== 'line-clearance');
       if (s.steps[first]?.block.id !== 'aseptic-ready') refuse(`stages[${si}]`, `The aseptic stage ${s.name} starts with the aseptic set-up (people, the line's media fill, sterilised items, gloves, grade A air)`, 'TI-23');
-      if (s.steps.some((t) => t.block.id === 'fill') && !s.steps.some((t) => t.block.id === 'interventions')) refuse(`stages[${si}]`, `The aseptic filling stage ${s.name} has an interventions and stoppages log`, 'TI-28');
+      if (s.steps.some((t) => FILLS.includes(t.block.id)) && !s.steps.some((t) => t.block.id === 'interventions')) refuse(`stages[${si}]`, `The aseptic filling stage ${s.name} has an interventions and stoppages log`, 'TI-28');
     }
-    need('filtration', 'An aseptic master has its sterile filtration (with the bioburden sample just before the filter)', 'TI-25');
-    if (steps.filter((x) => x.id === 'filter-test').length < 2) {
+    // A liquid is sterile filtered; a sterile powder filled as it is has no filtration (owner, 17 Nov 2026), and its filter
+    // tests apply only when it has one.
+    const liquid = LIQUID_FILLS.some((id) => ids.has(id));
+    if (liquid) need('filtration', 'An aseptic master has its sterile filtration (with the bioburden sample just before the filter)', 'TI-25');
+    if ((liquid || ids.has('filtration')) && steps.filter((x) => x.id === 'filter-test').length < 2) {
       ask('stages', 'pupsit', 'An aseptic master tests the sterilising filter before use (after sterilisation) and after use. A pre-use test is left out only under the plant\'s risk assessment (Annex 1 8.87): confirm with its reference, or add the pre-use test.', ['pre-use test left out by the risk assessment'], true);
       need('filter-test', 'The sterilising filter is integrity tested after use', 'TI-25');
     }

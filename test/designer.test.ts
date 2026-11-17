@@ -77,9 +77,9 @@ describe('master designer', () => {
     const header = (route: 'terminal' | 'aseptic' | 'both') => ({ productItemId: 'p', productCode: 'P', productName: 'Examplol injection', batchSize: '100', batchUnit: 'L' as const,
       densityGPerMl: '1.02', fillVolumeMl: '10.0', fillExcessMl: '0.5', route, claimPer: 'mL' as const, dispensingRooms: ['RM-101'] });
     expect(skeletonList('terminal').map((s) => s.id)).toEqual(['bulk-only', 'liquid-terminal', 'bag-terminal']);
-    expect(skeletonList('aseptic').map((s) => s.id)).toEqual(['bulk-only', 'liquid-aseptic', 'lyo-aseptic', 'syringe-aseptic', 'dispersion-aseptic']);
+    expect(skeletonList('aseptic').map((s) => s.id)).toEqual(['bulk-only', 'liquid-aseptic', 'lyo-aseptic', 'syringe-aseptic', 'dispersion-aseptic', 'bfs-aseptic', 'powder-aseptic']);
     expect(skeletonList('both')).toEqual(skeletonList('aseptic'));
-    expect(skeletonList()).toHaveLength(7);
+    expect(skeletonList()).toHaveLength(9);
     expect(skeletonStages('bulk-only', header('aseptic'))[0]!.steps.map((t) => t.block.id)).toEqual(['line-clearance', 'weigh', 'charge', 'mix', 'check', 'stage-yield']);
     for (const route of ['terminal', 'aseptic'] as const) {
       for (const s of skeletonList(route)) {
@@ -109,9 +109,9 @@ describe('master designer', () => {
     expect(named('syringe-aseptic', 'container-issue')).toEqual(['', 'Issue the syringes, Issue the plungers', '', '']);
     expect(named('syringe-aseptic', 'container-return')).toEqual(['', 'Count back the syringes, Count back the plungers', '', '']);
     expect(lyo.flatMap((s) => s.steps).filter((t) => ['aseptic-ready', 'seal-check', 'container-issue'].includes(t.block.id)).map((t) => `${t.block.id} ${t.block.version}`))
-      .toEqual(['container-issue 2', 'container-issue 2', 'aseptic-ready 3', 'container-issue 2', 'seal-check 2']);
+      .toEqual(['container-issue 3', 'container-issue 3', 'aseptic-ready 4', 'container-issue 3', 'seal-check 2']);
     expect(lyo[1]!.steps.find((t) => t.key === 'issue-vials')).toMatchObject({ name: 'Issue the vials', checker: true,
-      settings: { expected: { header: 'units' }, enoughLimit: { low: '102.0', unit: '%' } } });
+      settings: { expected: { header: 'units' }, enoughLimit: { low: '102.0', unit: '%' }, unit: 'units' } });
     expect(lyo[1]!.steps.find((t) => t.key === 'issue-vials')!.settings.material).toBeUndefined();
     const doc = masterSchema.parse({ header: header('aseptic'), formula: [], stages: lyo });
     expect(masterChecks(doc).filter((p) => p.message === 'Container or closure is not set').map((p) => p.path)).toHaveLength(6);
@@ -203,6 +203,44 @@ describe('master designer', () => {
     expect(describeMaster(prev).map((s) => s.title)).toEqual(['Header', 'Formula', 'Stage 1: Binder solution', 'Stage 2: Granulation', 'Stage 3: Compression', 'Stage 4: Coating']);
   });
 
+  it('TI-23 TI-25 TI-28 the blow-fill-seal and sterile powder starting masters (17 Nov 2026) are valid drafts with their stages and steps', () => {
+    const header = (batchUnit: 'L' | 'units') => ({ productItemId: 'p', productCode: 'P', productName: 'Examplol', batchSize: batchUnit === 'L' ? '100' : '20000', batchUnit,
+      ...(batchUnit === 'L' ? { densityGPerMl: '1.0', fillVolumeMl: '2.0', fillExcessMl: '0.1' } : {}), route: 'aseptic' as const,
+      claimPer: batchUnit === 'L' ? 'mL' as const : 'container (filled content)' as const, dispensingRooms: ['RM-201'] });
+    const list = (id: string, h: ReturnType<typeof header>) => skeletonStages(id, h).map((st) => `${st.name}${st.aseptic ? ' (aseptic)' : ''}: ${st.steps.map((t) => t.key).join(' ')}`);
+    expect(list('bfs-aseptic', header('L'))).toEqual([
+      'Compounding: line-clearance weigh-api vehicle charge-api dissolve ph-adjust make-up bulk-test filter-pre filter filter-post yield',
+      'Aseptic blow-fill-seal (aseptic): line-clearance aseptic-ready interventions em-filling issue-granules ffs-run sterility back-granules unit-reconcile',
+      'Results later (EM plates, bioburden): plates',
+      'Inspection: line-clearance leak-test-100 visual-inspect aql-sample unit-reconcile']);
+    expect(list('powder-aseptic', header('units'))).toEqual([
+      'Sterile dispensing: line-clearance weigh-api',
+      'Containers and closures: line-clearance issue-vials issue-stoppers wash-vials depyrogenate stoppers',
+      'Aseptic filling (aseptic): line-clearance aseptic-ready interventions em-filling transfer-in powder-fill issue-seals seal-check sterility back-vials back-stoppers back-seals unit-reconcile',
+      'Results later (EM plates, bioburden): plates',
+      'Inspection: line-clearance visual-inspect aql-sample unit-reconcile']);
+    const bfs = skeletonStages('bfs-aseptic', header('L'));
+    const step = (key: string) => bfs[1]!.steps.find((t) => t.key === key)!;
+    // The granules are issued and weighed back in kg from an MMS lot (the container issue by weight); the newest blocks.
+    expect(step('issue-granules')).toMatchObject({ name: 'Issue the plastic granules', block: { id: 'container-issue', version: 3 }, settings: { unit: 'kg' } });
+    expect(step('issue-granules').settings.expected).toBeUndefined();
+    expect(step('back-granules')).toMatchObject({ name: 'Weigh back the plastic granules', block: { id: 'container-return', version: 2 }, settings: { unit: 'kg' } });
+    expect([step('aseptic-ready').block.version, step('ffs-run').block.version]).toEqual([4, 2]);
+    expect(bfs[1]).toMatchObject({ roomTypes: ['Aseptic filling'], uses: ['compounding'] });
+    expect(bfs[2]).toMatchObject({ startsAfter: 'filling/ffs-run' });
+    // The bag master takes ffs-run version 2 too.
+    expect(skeletonStages('bag-terminal', { ...header('L'), route: 'terminal' }).flatMap((st) => st.steps).find((t) => t.block.id === 'ffs-run')!.block.version).toBe(2);
+    const powder = skeletonStages('powder-aseptic', header('units'));
+    expect(powder[0]).toMatchObject({ kind: 'preparation', roomTypes: ['Sterile dispensing'], produces: { name: 'dispensed sterile powder' } });
+    expect(powder[2]).toMatchObject({ uses: ['dispensing', 'components'] });
+    expect(powder[3]).toMatchObject({ startsAfter: 'filling/powder-fill' });
+    // Each is a valid draft: the master check asks only for the product's own (the formula, materials and limits).
+    for (const [id, h] of [['bfs-aseptic', header('L')], ['powder-aseptic', header('units')]] as const) {
+      const doc = masterSchema.parse({ header: h, formula: [], stages: skeletonStages(id, h) });
+      expect(masterChecks(doc).filter((p) => !/not set|no drug substance/.test(p.message)), id).toEqual([]);
+    }
+  });
+
   it('run 2 G3: a step that only moved is not changed; a step moved to a newer block version says what it now records', () => {
     const h = { productItemId: 'p', productCode: 'P', productName: 'Examplol injection', batchSize: '100', batchUnit: 'L' as const, densityGPerMl: '1.0',
       fillVolumeMl: '2.0', fillExcessMl: '0.1', route: 'aseptic' as const };
@@ -211,13 +249,14 @@ describe('master designer', () => {
     const before = doc(prev.map((s) => (s.key === 'filling' ? { ...s, steps: s.steps.map((t) => (t.block.id === 'aseptic-ready' ? { ...t, block: { id: 'aseptic-ready', version: 1 } } : t)) } : s)));
     const after = doc(prev.map((s) => (s.key === 'components' ? { ...s, steps: [s.steps[0]!, s.steps[2]!, s.steps[1]!, ...s.steps.slice(3)] } : s)));
     const changed = diffMasters(before, after).flatMap((s) => s.lines.filter((l) => l.change !== 'same').map((l) => [l.key, l.text.replace(/^.*Block version/, 'Block version')]));
-    expect(changed).toEqual([['aseptic-ready', 'Block version 1 → 3: now also records Isolator or RABS; no longer records Glove integrity test passed.']]);
+    expect(changed).toEqual([['aseptic-ready', 'Block version 1 → 4: now also records Isolator, RABS or blow-fill-seal machine; no longer records Glove integrity test passed.']]);
   });
 
   it('run 2 G1: a step moved to the newer version of its block keeps the settings of the same names, its name and its flow', () => {
     const v1 = { ...stepFrom(findBlock({ id: 'container-issue', version: 1 })!, []), name: 'Issue the seals', settings: { what: 'seals', expected: { header: 'units' as const }, enoughLimit: { low: '102.0', unit: '%' } } };
     const v2 = toVersion(v1, latestBlock('container-issue')!);
-    expect(v2).toMatchObject({ name: 'Issue the seals', block: { id: 'container-issue', version: 2 }, settings: { expected: { header: 'units' }, enoughLimit: { low: '102.0', unit: '%' } } });
+    // Version 3 (17 Nov 2026) adds the unit: a count by default.
+    expect(v2).toMatchObject({ name: 'Issue the seals', block: { id: 'container-issue', version: 3 }, settings: { expected: { header: 'units' }, enoughLimit: { low: '102.0', unit: '%' }, unit: 'units' } });
     expect(v2.settings.what).toBeUndefined();
     expect(fieldChanges(findBlock({ id: 'container-issue', version: 1 })!, latestBlock('container-issue')!)).toEqual({ added: [], removed: ['Count returned to stores at the end'] });
   });

@@ -46,6 +46,15 @@ export const asepticReady3: Block = {
   calcs: [observe('ready', 'Ready for aseptic work', ['people', 'airflow', 'assembly'])],
 };
 
+// 24, version 4 (owner, 17 Nov 2026, aseptic blow-fill-seal): a blow-fill-seal machine has no isolator or RABS; its own
+// grade A air shower is its barrier, so the machine field also takes the BFS machine, whose cleaning and sterilisation
+// in place the Logbook decides. Version 3 stays for the recorded batches.
+export const asepticReady4: Block = {
+  ...asepticReady3, version: 4,
+  instruction: 'Before aseptic work: the isolator, RABS or blow-fill-seal machine fit for use in the Logbook, people in grade A/B qualified, the line\'s media fill in date, sterilised items within their use-by, grade A airflow and pressure as specified, and the aseptic assembly done.',
+  fields: asepticReady3.fields.map((f) => (f.name === 'isolator' ? { ...f, label: 'Isolator, RABS or blow-fill-seal machine', types: ['isolator', 'rabs', 'blow'] } : f)),
+};
+
 // 25. Isolator or RABS decontamination (VHP): the cycle, the H2O2 at the end of aeration, indicators; its use-by.
 export const isolatorDecon: Block = {
   id: 'isolator-decon', version: 1, name: 'Isolator or RABS decontamination', checker: true,
@@ -217,6 +226,21 @@ export const ffsRun: Block = {
   calcs: [{ name: 'mean', label: 'Mean fill weight', template: 'T7', args: { readings: '$weights', limit: '$meanLimit' } },
     { name: 'each', label: 'Each fill weight', template: 'C3', args: { readings: '$weights', band: { limit: '$eachLimit' } } },
     observe('sealCheck', 'Seals, ports and leak check', ['seals', 'leak']), finished('filling', 'Filling')],
+};
+
+// 35, version 2 (owner, 17 Nov 2026, aseptic blow-fill-seal): each round also records the parison (extrusion)
+// temperature of a BFS machine (a film form-fill-seal has none), the mould or tool in use and the check of the air
+// shower or blow air filter; the LVP bag filling machine is taken too. Version 1 stays for the recorded batches.
+export const ffsRun2: Block = {
+  ...ffsRun, version: 2,
+  instruction: 'At each round read the parison temperature (BFS) and the mould or tool in use, check the air shower or blow air filter, weigh the units shown, check seals and ports, leak check the samples and read the counter.',
+  fields: [
+    { ...ffsRun.fields[0]!, types: ['form', 'blow', 'bfs', 'ffs', 'bag fill'] },
+    num('parison', 'Parison (extrusion) temperature (BFS)', '°C', true), text('mould', 'Mould or tool ID'), yes('airFilter', 'Air shower or blow air filter checked'),
+    ...ffsRun.fields.slice(1),
+  ],
+  settings: [...ffsRun.settings, limit('parisonLimit', 'Parison temperature limits')],
+  calcs: [within('parisonCheck', 'Parison temperature', 'parison?', 'parisonLimit?'), observe('airCheck', 'Air shower or blow air filter checked', ['airFilter']), ...ffsRun.calcs],
 };
 
 // ---- 4.7 Emulsions, suspensions, depots, liposomes, lipid nanoparticles

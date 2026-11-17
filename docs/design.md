@@ -147,6 +147,36 @@ adding anything, look how TrueBatch Tablets does it and copy that.
   the same names kept), asks before removing a step, moves steps by their key, and the changes view ignores a step's
   new number and names the fields a newer block version records. The change control list offers those naming the
   product (QMS's products or the code in the title; a pack's code no longer names its bulk).
+- **Aseptic blow-fill-seal and sterile powder filling** (owner, 17 Nov 2026; no new mechanism, no new rule): two
+  starting masters, as data. "Ampoules or nebules, blow-fill-seal, aseptic": compounding with the sterile filtration
+  and filter tests, an aseptic blow-fill-seal stage in the Aseptic filling area (set-up, interventions, clean-air
+  checks, the plastic granules issued, the run, sterility samples, the granules weighed back, reconciliation), the EM
+  plates read later, and inspection with the 100 % leak test; no washing, depyrogenation, stoppers or seals. "Sterile
+  powder in vials, aseptic powder filling": the sterile powder weighed in the Sterile dispensing area (a preparation
+  stage, as the containers are: the filling stage reconciles the units), the containers stage, an aseptic filling
+  stage as the liquid's with `powder-fill` in place of `fill`, the plates read later, and inspection; no compounding or
+  filtration. The blocks, each a new version as before (the older stays for the recorded batches; new steps take the
+  latest):
+  - `ffs-run` version 2: per round the parison (extrusion) temperature with optional limits (optional: a film
+    form-fill-seal has none), the mould or tool ID and "air shower or blow air filter checked"; it also takes the LVP
+    bag filling machine. The bag master takes it too.
+  - `powder-fill` version 1, as `fill`: the powder filling machine (auger or vacuum drum), the net powder of the units
+    per round with the mean and each unit within their limits, the room's humidity against its limit, stoppers seated;
+    periodic, beside the stage's fill card on the filling screen.
+  - `aseptic-ready` version 4: the machine field also takes a blow-fill-seal machine (it has no isolator or RABS; the
+    Logbook decides its cleaning and sterilisation in place).
+  - `container-issue` version 3 and `container-return` version 2: a unit setting, units (counted) or kg (weighed), as
+    Packing's issue of a packing material. The plastic granules (LDPE or PP) are a container material of the master
+    issued by weight from an MMS lot and weighed back; `material_use_v1` and the stock check take the step's unit as
+    they are (no migration). Not a formula line: the granules are not in the product, and the formula is mg per mL.
+  The sterile structure rules (`shared/master/sterile-checks.ts`) count `powder-fill` as a fill; the sterile filtration
+  (TI-25) is needed when a liquid is filled (`fill`, `ffs-run`), and its filter tests whenever there is a filtration;
+  the interventions log (TI-28) is needed in an aseptic stage with any fill; nothing may be added between the
+  filtration and a blow-fill-seal run either (library check 37). The sterile powder's lot comes from MMS as any formula
+  material, released and in date (TI-12); the sterility of the lot is part of its QC release in MMS, not a certificate
+  value here (the certificate values are numbers in %: assay, water, LOD, content). Cleaning between products (an
+  antibiotic line) is the Logbook's: a machine or room the Logbook says is not clean is refused (TI-11) and line
+  clearance takes its cleaning from it.
 
 ## Platform
 - Runs on the Medhanta platform. Core provides people, sign-in, permissions, e-signature re-authentication and master
