@@ -10,6 +10,10 @@ import { settingText } from './sentences.js';
 import { qtyText } from './model.js';
 import { Decimal } from './ui.js';
 
+// A count with thousands separators, as in the batch text ("15,625 units").
+const counted = (t: string) => t.replace(/^\d+/, (n) => Number(n).toLocaleString('en-IN'));
+const headerText = (v: ReturnType<typeof headerValue>) => (typeof v === 'string' ? counted(v) : v.ok ? v.shown : v.message);
+
 const FIELDS: { k: keyof LotValues; label: string; when: (a: NonNullable<MasterDoc['formula'][number]['adjust']>) => boolean }[] = [
   { k: 'assay', label: 'Assay %', when: (a) => !!a.potency },
   { k: 'water', label: 'Water %', when: (a) => ['anhydrous', 'anhydrous and solvent-free'].includes(a.potency?.basis ?? '') },
@@ -29,6 +33,11 @@ export function Preview({ doc: raw }: { doc: MasterDoc }) {
   const yields = doc.stages.flatMap((s, si) => s.steps.flatMap((t, ti) => {
     if (findBlock(t.block)?.gmp !== 'yield') return [];
     const v = t.settings.theoretical;
+    // A header value (the batch mass, the expected units) shows its value with its name.
+    if (v && typeof v === 'object' && 'header' in v) {
+      const h = headerValue(doc, v.header);
+      return [{ stage: s.name, text: `${headerText(h)} (${settingText(doc, v)})`, ok: typeof h === 'string' || h.ok }];
+    }
     const r = v && typeof v === 'object' && !('ref' in v) ? evaluate(doc, [], { stage: si, sub: 1, step: ti, round: 1 }, {}).theoretical : undefined;
     return [{ stage: s.name, text: r ? (r.ok ? r.shown : r.message) : v === undefined ? 'not set' : `${settingText(doc, v)}${typeof v === 'object' && 'ref' in v ? ' (known during the batch)' : ''}`, ok: !r || r.ok }];
   }));
@@ -70,8 +79,8 @@ export function Preview({ doc: raw }: { doc: MasterDoc }) {
       <div className="card">
         <h2>Theoretical quantities and yields</h2>
         <dl className="details">
-          <dt>Batch mass</dt><dd>{typeof mass === 'string' ? mass : mass.ok ? mass.shown : mass.message}</dd>
-          <dt>Expected units</dt><dd>{(() => { const u = headerValue(doc, 'units'); return typeof u === 'string' ? u : u.ok ? u.shown : u.message; })()}</dd>
+          <dt>Batch mass</dt><dd>{headerText(mass)}</dd>
+          <dt>Expected units</dt><dd>{headerText(headerValue(doc, 'units'))}</dd>
           {yields.map((y, i) => <Fragment key={i}><dt>Yield of {y.stage}: theoretical</dt><dd className={y.ok ? '' : 'error'}>{y.text}</dd></Fragment>)}
         </dl>
       </div>
