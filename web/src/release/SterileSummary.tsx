@@ -14,12 +14,20 @@ const GROUPS: { title: string; ids: string[] }[] = [
   { title: 'Reconciliation of units', ids: ['unit-reconcile'] },
 ];
 
+/** A duration the library shows cut short ("0.0002777… h") reads in minutes or seconds under 1, at most 2 decimals. */
+export const shortTime = (t: string) => t.replace(/(\d+\.\d+)… (h|min)\b( rounded to)?/g, (_, n: string, u: string, rounded?: string) => {
+  let v = Number(n), unit = u;
+  if (unit === 'h' && v < 1) { v *= 60; unit = 'min'; }
+  if (unit === 'min' && v < 1) { v *= 60; unit = 's'; }
+  return `about ${Number(v.toFixed(2))} ${unit}${rounded ? (unit === u ? rounded : `; in ${u} rounded to`) : ''}`;
+});
+
 /** One step's line: its checks (or, for a log entry, its values) in words, and whether any is out of limits. A round
  *  followed by another has its stop check not passed yet: that is the rounds going on, not out of limits. */
 export function summaryOf(s: StepRow, block: Block | undefined): { bad: boolean; said: string[] } {
   const checks = Object.entries(s.results).filter(([, r]) => r.ok && r.check);
   const bad = checks.some(([k, r]) => tone(r) === 'bad' && k !== s.notYet);
-  const said = checks.length ? checks.map(([k, r]) => `${block?.calcs.find((c) => c.name === k)?.label ?? k}: ${words(r.ok ? (k === s.notYet ? notYetText(r.check!.shown) : r.check!.shown) : '')}`)
+  const said = checks.length ? checks.map(([k, r]) => `${block?.calcs.find((c) => c.name === k)?.label ?? k}: ${shortTime(words(r.ok ? (k === s.notYet ? notYetText(r.check!.shown) : r.check!.shown) : ''))}`)
     : (block?.fields ?? []).filter((f) => s.values[f.name] !== undefined).slice(0, 4).map((f) => `${f.label}: ${valueText(s.values[f.name])}`);
   return { bad, said };
 }
