@@ -22,7 +22,7 @@ export function lineOf(doc: MasterDoc, st: Step): FormulaLine | PackMaterial | C
 }
 
 /** TI-11: a machine or room the Logbook says is fit for use, and not in use by another batch. Line clearance: its facts. */
-export async function pullItem(app: FastifyInstance, block: Block, f: BlockField, item: MasterEquipment | MasterRoom, batchNo: string): Promise<Pulled> {
+export async function pullItem(app: FastifyInstance, block: Block, f: BlockField, item: MasterEquipment | MasterRoom, batchNo: string, productCode: string): Promise<Pulled> {
   const r = await app.links.logbook.status(item.itemId);
   if (r.state !== 'ok' || r.value === 'stale') return hand('logbook', r.state === 'absent' ? 'absent' : 'down');
   const s = r.value;
@@ -30,6 +30,10 @@ export async function pullItem(app: FastifyInstance, block: Block, f: BlockField
   // The line clearance after packing clears the line this batch has just used (it may already be dirty: a stage that
   // names no rooms does not keep the line in use, equipment_use_v1).
   if (!s.fitForUse && block.id !== 'pack-clearance-after') return refused(`${item.code} is not fit for use (Logbook): ${clauses(s.blockers) || stateWords(s.state)}.`);
+  // Owner 17 Nov 2026: after an antibiotic, only that product may follow until a product-changeover cleaning is verified in the Logbook.
+  if (s.onlyProduct && s.onlyProduct !== productCode) {
+    return refused(`${item.code} was last used for an antibiotic (${s.onlyProduct}): a product-changeover cleaning is needed in the Logbook before ${productCode}.`);
+  }
   if (s.inUseBatch && s.inUseBatch !== batchNo) return refused(`${item.code} is in use by batch ${s.inUseBatch} (Logbook).`);
   const source: Source = { from: 'logbook', asOf: s.checkedAt, shown: clauses([`${item.code}: ${stateWords(s.state)}`, ...s.warnings]) };
   const out: Pulled = { source, values: {}, sources: {}, problems: [] };

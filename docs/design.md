@@ -323,3 +323,5 @@ and QA. An unanswered warning blocks "Send for review" like a refusal. The list,
 - Tests per rule and per template, and a few browser journeys.
 - No Batchwright machinery: no control register, mutation testing, golden batches, API contract package, CLI, sandbox,
   continuity or markets.
+
+- 17 Nov 2026 (owner, H12; port of Tablets da5262f): after an antibiotic, only that product may follow on a machine or room until the Logbook verifies a product-changeover cleaning. The Logbook publishes it as equipment_status_v1.only_product (read through to_jsonb, so an older view reads as any product); pullItem refuses another product with the reason.
