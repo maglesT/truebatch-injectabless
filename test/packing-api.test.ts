@@ -250,8 +250,14 @@ describe('a packing batch from the filled units of a released batch', () => {
       and batch_number = (select batch_no from batches where id = $1)`, [id]))[0];
     expect(await t.owner`select 1 from batch_events where batch_id = ${id} and kind = 'stage_closed' and payload->>'stage' = '1'`).toHaveLength(1);
     expect(await lineUse()).toEqual({ ended: false });
+    // The good packs and the yield are published once the finished goods step is signed: null until then.
+    const yieldOf = async () => (await t.owner.unsafe(`select good_quantity::text, good_unit, yield_percent::text from ${t.schema}_report.packing_batch_v1
+      where batch_number = (select batch_no from batches where id = $1)`, [id]))[0];
+    expect(await yieldOf()).toEqual({ good_quantity: null, good_unit: 'packs', yield_percent: null });
     const fg = await step('2.1.0.1', { packs: '980', cartons: '98', shippers: '2', samples: '4', returned: '120', rejects: '40' });
     expect(fg.results.accountability).toMatchObject({ check: { pass: true } });
+    // 980 good packs of the 1000 theoretical packs (10000 units ÷ 10 per pack).
+    expect(await yieldOf()).toEqual({ good_quantity: '980', good_unit: 'packs', yield_percent: '98' });
     // Before the reconciliation MMS takes off the whole quantity issued.
     const usedOf = async (lot: string) => (await t.owner.unsafe(`select quantity::text from ${t.schema}_report.material_use_v1 where lot_number = $1
       and batch_number = (select batch_no from batches where id = $2)`, [lot, id]))[0]?.quantity as string | undefined;
@@ -339,6 +345,29 @@ describe('a packing batch from the filled units of a released batch', () => {
     expect((await issue({ line: 'ln-1', bulk: 'TI260004', units: '5000' })).statusCode).toBe(200);
     // Its shippers are not counted yet: null, so MMS asks for them (the last column, for MMS finished goods).
     expect(await t.owner.unsafe(`select distinct shippers from ${t.schema}_report.packing_batch_v1 where coded_batch_number = 'TI260004'`)).toEqual([{ shippers: null }]);
-    expect((await cols('packing_batch_v1')).split(', ').at(-1)).toBe('shippers numeric');
+    // The yield columns (owner, 17 Nov 2026) are appended after it, never reordered.
+    expect((await cols('packing_batch_v1')).split(', ').slice(-4)).toEqual(['shippers numeric', 'good_quantity numeric', 'good_unit text', 'yield_percent numeric']);
+    expect(await t.owner.unsafe(`select distinct good_quantity, good_unit, yield_percent from ${t.schema}_report.packing_batch_v1 where coded_batch_number = 'TI260004'`))
+      .toEqual([{ good_quantity: null, good_unit: 'packs', yield_percent: null }]);
+  });
+
+  it('gap 10: the filled units issued are the good units TrueBatch Injectables publishes (batch_fact_v1.good_quantity), pulled; a view without the column: typed, as before', async () => {
+    t.master.equipment_.push({ ...item('ln-3', 'LL-03', 'Labelling line 3'), kind: 'equipment', type: 'labelling line', room: 'PK-01' });
+    // The stand-in view so far had no good_quantity: every batch above was issued with its units typed.
+    await t.owner.unsafe(`alter table ${TB}.batch_fact_v1 add column good_quantity numeric`);
+    try {
+      await t.owner.unsafe(`update ${TB}.batch_fact_v1 set good_quantity = 9600 where batch_number = 'TI260001'`);
+      const picks = (await as('issuer', 'GET', '/api/bulk-batches?product=PRD-001')).json() as { batches: { batchNo: string; goodQuantity: string | null }[] };
+      expect(picks.batches.map((b) => [b.batchNo, b.goodQuantity])).toEqual([['TI260005', null], ['TI260004', null], ['TI260001', '9600']]);
+      expect((await issue({ line: 'ln-3', bulk: 'TI260001', units: '10000' })).json())
+        .toMatchObject({ problems: ['Filled units issued comes from TrueBatch Injectables and cannot be typed over'] });
+      const res = await issue({ line: 'ln-3', bulk: 'TI260001' });
+      expect(res.statusCode, res.body).toBe(200);
+      const s = (await get((res.json() as { id: number }).id)).steps[0]!;
+      expect(s).toMatchObject({ values: { units: { value: '9600', unit: 'units' } }, source: { units: { from: 'truebatch_injectables' } } });
+      expect(s.results.packs).toMatchObject({ ok: true, shown: '9600 units ÷ 10 units = 960 packs' });
+    } finally {
+      await t.owner.unsafe(`alter table ${TB}.batch_fact_v1 drop column good_quantity`);
+    }
   });
 });

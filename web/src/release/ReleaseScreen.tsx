@@ -25,7 +25,7 @@ interface Review {
   late: { timer: TimerRow; notes: FloorEvent[] }[];
   outOfLimits: { step: string; calc: string; shown: string; notes: FloorEvent[] }[];
   inputChanged: { step: string; changes: FloorEvent[] }[];
-  deviations: { note: number; step: string; reference: string; text: string; open: boolean; status?: string; closedAt?: string | null; closed?: { personName: string; at: string; payload: { reason?: string } } }[];
+  deviations: { note: number; step: string; reference: string; text: string; open: boolean; filed?: boolean; status?: string; closedAt?: string | null; closed?: { personName: string; at: string; payload: { reason?: string } } }[];
   // Owner 15 Nov 2026: every value typed by hand because a link was absent or down, and the Deviations link's state.
   hand: (Extract<Source, { from: 'hand' }> & { step: string; field: string; event: number; personName: string | null; at: string })[];
   unlinked: { number: string; status: string; title: string | null }[];
@@ -132,7 +132,7 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
           <li key={x.step}><b>{name(x.step)}</b><small>{x.changes.map((e) => `${e.personName}, ${plainClock(e.at)}`).join(' · ')}</small></li>))}</Group>}
         <Group title="Deviation notes" empty="No deviation note has a deviation number.">{r.deviations.map((x) => (
           <li key={x.note} className={x.open ? 'bad' : 'ok'}><b>{x.reference} · {name(x.step)}</b><span>{x.text}</span>
-            <small>{x.status ? `${deviationStatusWords(x.status)} in the Deviations system${x.closedAt ? `, ${plainClock(x.closedAt)}` : ''}` : x.open ? 'Open: QA closes it before release' : `Closed by ${x.closed?.personName}, ${plainClock(x.closed?.at ?? '')}: ${x.closed?.payload.reason ?? ''}`}</small>
+            <small>{x.filed ? 'Filed from this note by Deviations · ' : ''}{x.status ? `${deviationStatusWords(x.status)} in the Deviations system${x.closedAt ? `, ${plainClock(x.closedAt)}` : ''}` : x.open ? 'Open: QA closes it before release' : `Closed by ${x.closed?.personName}, ${plainClock(x.closed?.at ?? '')}: ${x.closed?.payload.reason ?? ''}`}</small>
             {x.open && !x.status && !decided && can(me, 'qa.release') && <button onClick={() => setClosing(x)}>Close the deviation…</button>}</li>))}</Group>
         {r.unlinked.length > 0 && <Group title="Deviations naming this batch that no note links" empty="">{r.unlinked.map((x) => (
           <li key={x.number} className="bad"><b>{x.number}</b><span>{x.title}</span><small>{deviationStatusWords(x.status)} in the Deviations system</small></li>))}</Group>}
