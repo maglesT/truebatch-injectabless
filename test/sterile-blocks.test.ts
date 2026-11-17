@@ -37,6 +37,68 @@ describe('the sterile blocks of the injectables library', () => {
     expect(low.each).toMatchObject({ ok: true, check: { pass: false } });
   });
 
+  // 17 Nov 2026: aseptic blow-fill-seal and sterile powder filling.
+  const latest = (id: string, settings: object): MasterDoc => {
+    const b = latestBlock(id)!;
+    return masterSchema.parse({ header, formula: [{ key: 'x', materialItemId: 'm', code: 'M', name: 'M', mg: '50.0', role: 'api' }],
+      stages: [{ key: 's', name: 'Stage', kind: 'normal', steps: [{ ...stepFrom(b, []), key: 't', settings: { ...stepFrom(b, []).settings, ...settings } }] }] });
+  };
+  const c = (value: string) => ({ value, unit: '°C' });
+
+  it('TI-14 powder-fill: the net powder of the units per round, the mean and each unit within their limits, the room humidity within its limit', () => {
+    const b = latestBlock('powder-fill')!;
+    expect([b.version, b.periodic, b.stop, b.fields.find((f) => f.name === 'machine')!.types]).toEqual([1, { maxMinutes: 1440 }, 'done', ['powder fill', 'auger']]);
+    const doc = latest('powder-fill', { units: '4', meanLimit: { low: '1.040', high: '1.080', unit: 'g' }, eachLimit: { low: '1.010', high: '1.110', unit: 'g' },
+      humidityLimit: { high: '35', unit: '%RH' } });
+    expect(doc.stages[0]!.steps[0]).toMatchObject({ everyMinutes: 30, flow: { kind: 'repeat-until' } });
+    const values = (weights: string[], rh: string) => ({ weights: weights.map(g), humidity: { value: rh, unit: '%RH' }, stoppers: 'yes', counter: { value: '1200', unit: 'units' }, filling: 'going on' });
+    const r = run(doc, values(['1.061', '1.055', '1.068', '1.050'], '28'));
+    expect(r.mean).toMatchObject({ ok: true, value: '1.0585', check: { pass: true } });
+    expect(r.each).toMatchObject({ ok: true, check: { pass: true } });
+    expect(r.humidityCheck).toMatchObject({ ok: true, check: { pass: true } });
+    expect(r.stopperCheck).toMatchObject({ ok: true, check: { pass: true } });
+    expect(r.done).toMatchObject({ ok: true, check: { pass: false } });
+    const bad = run(doc, values(['1.061', '1.055', '1.120', '1.050'], '38'));
+    expect(bad.each).toMatchObject({ ok: true, check: { pass: false } });
+    expect(bad.humidityCheck).toMatchObject({ ok: true, check: { pass: false } });
+    // The limits are the product's own: the master check asks for them.
+    expect(masterChecks(latest('powder-fill', {})).filter((p) => p.path.startsWith('stages[0].steps[0].settings')).map((p) => p.message))
+      .toEqual(expect.arrayContaining(['Mean fill weight limits is not set', 'Each fill weight limits is not set', 'Room humidity limit is not set']));
+  });
+
+  it('TI-14 ffs-run version 2: each round also records the parison temperature (BFS, against its optional limits), the mould or tool, and the air filter check', () => {
+    expect(findBlock({ id: 'ffs-run', version: 1 })!.fields.some((f) => f.name === 'parison')).toBe(false);
+    const b = latestBlock('ffs-run')!;
+    expect(b.version).toBe(2);
+    expect(b.fields.map((f) => f.name)).toEqual(['machine', 'parison', 'mould', 'airFilter', 'weights', 'seals', 'leak', 'counter', 'filling']);
+    const settings = { units: '3', meanLimit: { low: '2.00', high: '2.10', unit: 'g' }, eachLimit: { low: '1.95', high: '2.15', unit: 'g' } };
+    const values = { mould: 'MLD-5ML-08', airFilter: 'yes', weights: [g('2.05'), g('2.04'), g('2.06')], seals: 'yes', leak: 'yes', counter: { value: '6000', unit: 'units' }, filling: 'going on' };
+    const doc = latest('ffs-run', { ...settings, parisonLimit: { low: '165', high: '185', unit: '°C' } });
+    const r = run(doc, { ...values, parison: c('178') });
+    expect(r.parisonCheck).toMatchObject({ ok: true, check: { pass: true } });
+    expect(r.airCheck).toMatchObject({ ok: true, check: { pass: true } });
+    expect(r.mean).toMatchObject({ ok: true, check: { pass: true } });
+    expect(run(doc, { ...values, parison: c('190') }).parisonCheck).toMatchObject({ ok: true, check: { pass: false } });
+    expect(run(doc, { ...values, parison: c('178'), airFilter: 'no' }).airCheck).toMatchObject({ ok: true, check: { pass: false } });
+    // A film form-fill-seal has no parison: left empty, nothing is checked.
+    const film = run(latest('ffs-run', settings), values);
+    expect(film.parisonCheck).toBeUndefined();
+    expect(film.each).toMatchObject({ ok: true, check: { pass: true } });
+  });
+
+  it('F20 container-issue version 3: plastic granules issued and weighed back in kg; a count stays in units by default', () => {
+    const doc = { ...latest('container-issue', { material: { formula: 'ldpe' }, unit: 'kg', expected: '250 kg', enoughLimit: { low: '100.0', unit: '%' } }) };
+    doc.stages[0]!.steps.push({ ...stepFrom(latestBlock('container-return')!, []), key: 'back', settings: { material: { formula: 'ldpe' }, unit: 'kg' } });
+    const kg = (value: string) => ({ value, unit: 'kg' });
+    expect(run(doc, { lot: 'LDPE-26-004', issued: kg('255.0') }).enough).toMatchObject({ ok: true, check: { pass: true } });
+    expect(run(doc, { lot: 'LDPE-26-004', issued: kg('240.0') }).enough).toMatchObject({ ok: true, check: { pass: false } });
+    const st = doc.stages[0]!.steps[0]!;
+    const back = { key: parseKey('0.1.1.1')!, values: { returned: kg('12.5') }, events: [{ kind: 'done' }] } as never;
+    expect(usedQuantity(doc, st, { lot: 'LDPE-26-004', issued: kg('255.0') }, {}, [back])).toEqual(kg('242.5'));
+    expect(stepFrom(latestBlock('container-issue')!, []).settings).toEqual({ expected: { header: 'units' }, unit: 'units' });
+    expect(stepFrom(latestBlock('container-return')!, []).settings).toEqual({ unit: 'units' });
+  });
+
   it('TI-13 make-up: the batch weight to reach is the batch volume × density, the reading within ± 0.5 %', () => {
     const doc = one('make-up', {});
     const r = run(doc, { gross: { value: '1351.4', unit: 'kg' }, tare: { value: '339.2', unit: 'kg' }, temperature: { value: '22', unit: '°C' } });
@@ -94,9 +156,11 @@ describe('the sterile blocks of the injectables library', () => {
   });
 
   it('F19 the set-up and the seal check record their machine from the Logbook in a new version; the library offers only the latest', () => {
-    expect(latestBlock('aseptic-ready')!.fields[0]).toEqual({ name: 'isolator', label: 'Isolator or RABS', kind: 'machine', types: ['isolator', 'rabs'] });
+    expect(findBlock({ id: 'aseptic-ready', version: 3 })!.fields[0]).toEqual({ name: 'isolator', label: 'Isolator or RABS', kind: 'machine', types: ['isolator', 'rabs'] });
     // Run 2, G7: version 3 has no typed glove question (the Logbook decides the glove test through the isolator field).
-    expect(latestBlock('aseptic-ready')!.version).toBe(3);
+    // Version 4 (aseptic blow-fill-seal, 17 Nov 2026): the same, and a BFS machine is taken in the isolator's place.
+    expect(latestBlock('aseptic-ready')!.version).toBe(4);
+    expect(latestBlock('aseptic-ready')!.fields[0]).toEqual({ name: 'isolator', label: 'Isolator, RABS or blow-fill-seal machine', kind: 'machine', types: ['isolator', 'rabs', 'blow'] });
     expect(latestBlock('aseptic-ready')!.fields.map((f) => f.name)).toEqual(['isolator', 'people', 'apsReport', 'apsDue', 'itemsUseBy', 'airflow', 'assembly']);
     expect(findBlock({ id: 'aseptic-ready', version: 2 })!.fields.some((f) => f.name === 'gloves')).toBe(true);
     expect(latestBlock('seal-check')!.fields[0]).toEqual({ name: 'capper', label: 'Capping machine', kind: 'machine', types: ['capping', 'crimper'] });
@@ -104,8 +168,8 @@ describe('the sterile blocks of the injectables library', () => {
     expect(findBlock({ id: 'aseptic-ready', version: 1 })!.fields.some((f) => f.kind === 'machine')).toBe(false);
     expect(findBlock({ id: 'seal-check', version: 1 })!.fields.some((f) => f.kind === 'machine')).toBe(false);
     expect(LIBRARY.filter((b) => ['aseptic-ready', 'seal-check', 'container-issue'].includes(b.id)).map((b) => `${b.id} ${b.version}`))
-      .toEqual(['seal-check 2', 'aseptic-ready 3', 'container-issue 2']);
-    expect(LIBRARY.some((b) => b.id === 'container-return')).toBe(true);
+      .toEqual(['seal-check 2', 'aseptic-ready 4', 'container-issue 3']);
+    expect(LIBRARY.find((b) => b.id === 'container-return')!.version).toBe(2);
   });
 
   it('TI-08 a sterilised load past its use-by date during the step needs a deviation note (engine change 6)', () => {

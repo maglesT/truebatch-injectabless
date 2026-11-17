@@ -10,7 +10,9 @@ import { skeletonList, skeletonStages } from '../web/src/designer/skeletons.js';
 const TYPES = ['Balance', 'Analytical balance', 'Micro balance', 'IPC balance', 'Platform balance', 'Bin blender', 'Manufacturing vessel', 'Filter press',
   'Air compressor', 'Case packer', 'Compounding vessel', 'Mixing vessel', 'Homogeniser', 'Vial washer', 'Depyrogenation tunnel', 'Dry heat steriliser', 'Autoclave',
   'Vial filling machine', 'Syringe filling machine', 'Form-fill-seal machine', 'Freeze dryer', 'Filter integrity tester', 'Leak tester (HVLD)',
-  'Container closure integrity tester', 'Visual inspection machine', 'Isolator', 'RABS', 'Capping machine', 'Vial crimper'];
+  'Container closure integrity tester', 'Visual inspection machine', 'Isolator', 'RABS', 'Capping machine', 'Vial crimper',
+  // Blow-fill-seal and sterile powder (17 Nov 2026): the demo's BFS machines, LVP bag filler and powder filler.
+  'Blow-fill-seal machine', 'LVP bag filling machine', 'Powder filling machine'];
 const MACHINES = TYPES.map((type, i) => ({ code: `EQ-${i}`, type, room: null }));
 const BALANCES = ['Balance', 'IPC balance', 'Platform balance'];
 const VESSELS = ['Manufacturing vessel', 'Compounding vessel', 'Mixing vessel'];
@@ -18,8 +20,9 @@ const OFFERS: Record<string, string[]> = {
   'weigh.balance': BALANCES, 'charge.machine': ['Bin blender', ...VESSELS], 'dissolve.machine': VESSELS, 'mix.machine': ['Bin blender', ...VESSELS], 'make-up.machine': VESSELS, 'phase-prep.machine': VESSELS,
   'homogenise.machine': ['Homogeniser'], 'component-wash.washer': ['Vial washer'], 'depyrogenate.machine': ['Depyrogenation tunnel', 'Dry heat steriliser'],
   'sterilise.steriliser': ['Dry heat steriliser', 'Autoclave'], 'terminal-sterilise.steriliser': ['Dry heat steriliser', 'Autoclave'],
-  'fill.machine': ['Vial filling machine', 'Syringe filling machine', 'Form-fill-seal machine'], 'ffs-run.machine': ['Form-fill-seal machine'],
-  'lyo-load.dryer': ['Freeze dryer'], 'aseptic-ready.isolator': ['Isolator', 'RABS'], 'seal-check.capper': ['Capping machine', 'Vial crimper'], 'filter-test.tester': ['Filter integrity tester'], 'leak-test-100.machine': ['Leak tester (HVLD)', 'Container closure integrity tester'],
+  'fill.machine': ['Vial filling machine', 'Syringe filling machine', 'Form-fill-seal machine', 'Blow-fill-seal machine', 'LVP bag filling machine', 'Powder filling machine'],
+  'ffs-run.machine': ['Form-fill-seal machine', 'Blow-fill-seal machine', 'LVP bag filling machine'], 'powder-fill.machine': ['Powder filling machine'],
+  'lyo-load.dryer': ['Freeze dryer'], 'aseptic-ready.isolator': ['Isolator', 'RABS', 'Blow-fill-seal machine'], 'seal-check.capper': ['Capping machine', 'Vial crimper'], 'filter-test.tester': ['Filter integrity tester'], 'leak-test-100.machine': ['Leak tester (HVLD)', 'Container closure integrity tester'],
 };
 
 describe('machine pickers on the demo master-data types', () => {
@@ -111,6 +114,6 @@ describe('machine pickers on the demo master-data types', () => {
     // The same for every machine field: the syringe filler is not offered on the vial line; the capper in the Capping area still is.
     expect([vfm, sfm].filter((m) => !machineRefusal(stage, filler, m, rooms, [], cleared)).map((m) => m.code)).toEqual(['EQS-VFM-01']);
     expect(machineRefusal(stage, capper, cap, rooms, [], cleared)).toBeNull();
-    expect(emptyNote(stage, isolator, [rabs], rooms, [], cleared)).toMatch(/^No isolator or rabs can be used here: EQS-RAB-01 stands in RM-208, not in RM-207/);
+    expect(emptyNote(stage, isolator, [rabs], rooms, [], cleared)).toMatch(/^No isolator, rabs or blow-fill-seal machine can be used here: EQS-RAB-01 stands in RM-208, not in RM-207/);
   });
 });

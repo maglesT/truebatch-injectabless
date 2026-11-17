@@ -42,3 +42,21 @@ export const containerReturn: Block = {
   settings: [{ name: 'material', label: 'Container or closure', kind: 'material' }],
   calcs: [],
 };
+
+// Version 3 of the issue and version 2 of the count back (owner, 17 Nov 2026, aseptic blow-fill-seal): the unit is the
+// master step's, as Packing's issue of a packing material: units (counted) or kg (weighed: the plastic granules a
+// blow-fill-seal machine forms its containers from). material_use_v1 and the stock check take the step's unit as they
+// are. Version 2 and version 1 stay for the recorded batches.
+const UNIT = { name: 'unit', label: 'Unit', kind: 'text' as const, options: ['units', 'kg'] };
+export const containerIssue3: Block = {
+  ...containerIssue2, version: 3,
+  instruction: 'Issue the container, closure or granules shown from a released lot of it; count or weigh them. What is left at the end is counted or weighed back in its own step.',
+  fields: containerIssue2.fields.map((f) => (f.name === 'issued' ? { ...f, label: 'Quantity issued', unit: '$unit' } : f)),
+  settings: [...containerIssue2.settings, UNIT],
+};
+export const containerReturn2: Block = {
+  ...containerReturn, version: 2,
+  instruction: 'At the end, count or weigh what is left unused of this material and send it back to stores. Give 0 if none is left.',
+  fields: [{ name: 'returned', label: 'Quantity returned to stores', kind: 'number', unit: '$unit' }],
+  settings: [...containerReturn.settings, UNIT],
+};

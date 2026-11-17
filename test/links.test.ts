@@ -678,6 +678,25 @@ describe('the views TrueBatch publishes', () => {
     expect(materialUses(masterSchema.parse(doc), openSteps(masterSchema.parse(doc), events as never, new Date('2026-11-18T00:00:00Z')).steps).map((x) => x.quantity)).toEqual([n('15625')]);
   });
 
+  it('material_use_v1: plastic granules issued in kg by a version 3 issue and weighed back by a version 2 count back give MMS the kg used (17 Nov 2026)', async () => {
+    const [u] = await t.owner<{ id: number }[]>`select id::int from users order by id limit 1`;
+    const material = { formula: 'ldpe' };
+    const doc = { ...small([{ steps: [{ block: { id: 'container-issue', version: 3 }, checker: true, settings: { material, unit: 'kg', expected: '250 kg' } },
+      { block: { id: 'container-return', version: 2 }, checker: true, settings: { material, unit: 'kg' } }] }]),
+      containers: [{ key: 'ldpe', materialItemId: 'mat-ldpe', code: 'PM-LDPE', name: 'LDPE granules' }] };
+    const [v] = await t.owner<{ id: number }[]>`insert into master_versions (version_no, doc, created_by) values (1, ${t.owner.json(doc as never)}, ${u!.id}) returning id::int`;
+    const [b] = await t.owner<{ id: number }[]>`insert into batches (batch_no, master_version_id, issued_by) values ('MAT-USE-KG', ${v!.id}, ${u!.id}) returning id::int`;
+    const e = (step: number, kind: string, payload: object, at: string) => t.owner`insert into step_events (batch_id, stage, sub, step, round, kind, payload, person_id, at)
+      values (${b!.id}, 0, 1, ${step}, 1, ${kind}, ${t.owner.json(payload as never)}, ${u!.id}, ${at})`;
+    const kg = (value: string) => ({ value, unit: 'kg' });
+    await e(0, 'value', { values: { lot: 'LDPE-26-004', issued: kg('255.0') }, results: {} }, '2026-11-17 08:05+00');
+    await e(0, 'done', { stockUnit: 'kg' }, '2026-11-17 08:06+00');
+    await e(1, 'value', { values: { returned: kg('12.5') }, results: {} }, '2026-11-17 18:00+00');
+    await e(1, 'done', {}, '2026-11-17 18:01+00');
+    const rows = await t.owner.unsafe(`select lot_number, material_code, quantity::text, unit from ${rep()}.material_use_v1 where batch_number = 'MAT-USE-KG'`);
+    expect(rows).toEqual([{ lot_number: 'LDPE-26-004', material_code: 'PM-LDPE', quantity: '242.5', unit: 'kg' }]);
+  });
+
   it('equipment_use_v1: one use per batch and machine or room, open across the stages of the batch that name it or may run in its room; another batch, another use; a balance, none', async () => {
     const [u] = await t.owner<{ id: number }[]>`select id::int from users order by id limit 1`;
     // The binder preparation runs in RM-104; the granulation in the Granulation area, RM-104's area; the balance stands in dispensing.

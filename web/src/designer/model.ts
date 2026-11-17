@@ -82,11 +82,14 @@ const DEFAULT_SETTINGS: Record<string, Step['settings']> = { weigh: { tolerance:
   fill: { fillTarget: { header: 'fillTarget' }, density: { header: 'density' } },
   'make-up': { volume: { header: 'batchVolume' }, density: { header: 'density' }, tolerance: '0.5' },
   'unit-reconcile': { theoretical: { header: 'units' } },
-  'container-issue': { expected: { header: 'units' } },
+  'container-issue': { expected: { header: 'units' }, unit: 'units' },
+  'container-return': { unit: 'units' },
 };
+// The defaults a block of this version has a setting for (an older version may not have them all).
+const defaultsOf = (b: Block): Step['settings'] => Object.fromEntries(Object.entries(DEFAULT_SETTINGS[b.id] ?? {}).filter(([k]) => b.settings.some((x) => x.name === k)));
 /** A new step from a block, with its default instruction, signatures and settings. */
 export function stepFrom(block: Block, taken: string[]): Step {
-  return { key: newKey(block.id, taken), block: { id: block.id, version: block.version }, settings: { ...DEFAULT_SETTINGS[block.id] }, checker: block.checker,
+  return { key: newKey(block.id, taken), block: { id: block.id, version: block.version }, settings: defaultsOf(block), checker: block.checker,
     waitForCheck: false, critical: false, flow: block.stop ? { kind: 'repeat-until', maxRounds: block.periodic ? 200 : 10 } : block.qaHold ? { kind: 'qa-hold' } : { kind: 'none' },
     // A periodic check starts at its most allowed interval, at most every 30 min (the master may change it).
     ...(block.periodic ? { everyMinutes: Math.min(block.periodic.maxMinutes, 30) } : {}) };
@@ -100,7 +103,7 @@ export function fieldChanges(was: Block, now: Block): { added: string[]; removed
 /** A step moved to another version of its block (run 2, G1): the settings of the same names kept, the block's defaults for the new ones. */
 export function toVersion(t: Step, b: Block): Step {
   const kept = Object.fromEntries(Object.entries(t.settings).filter(([k]) => b.settings.some((x) => x.name === k)));
-  return { ...t, block: { id: b.id, version: b.version }, settings: { ...DEFAULT_SETTINGS[b.id], ...kept } };
+  return { ...t, block: { id: b.id, version: b.version }, settings: { ...defaultsOf(b), ...kept } };
 }
 
 export const newStage = (name: string, taken: string[]): Stage =>

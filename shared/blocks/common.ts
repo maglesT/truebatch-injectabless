@@ -355,6 +355,28 @@ export const sealCheck2: Block = {
   fields: [{ name: 'capper', label: 'Capping machine', kind: 'machine', types: ['capping', 'crimper'] }, ...sealCheck.fields],
 };
 
+// 14b. Fill a sterile powder (owner, 17 Nov 2026), as fill: the auger or vacuum-drum powder filler, the net powder of
+// the units shown per round with the mean and each unit within their limits, the room's humidity (a dry powder takes
+// up water) and the stoppers.
+export const powderFill: Block = {
+  id: 'powder-fill', version: 1, name: 'Fill a sterile powder with periodic fill-weight checks', checker: false, periodic: { maxMinutes: 1440 }, stop: 'done',
+  instruction: 'At each round weigh the net powder of the filled units shown, read the room humidity, check the stoppers and read the counter.',
+  fields: [
+    { name: 'machine', label: 'Powder filling machine', kind: 'machine', types: ['powder fill', 'auger'] },
+    { name: 'weights', label: 'Net fill weight per unit', kind: 'number', unit: 'g', count: '$units' },
+    num('humidity', 'Room relative humidity', '%RH'), yes('stoppers', 'Stoppers seated'), num('counter', 'Counter', 'units'), going('filling', 'Filling'),
+  ],
+  settings: [
+    { name: 'units', label: 'Units per round', kind: 'number' },
+    limit('meanLimit', 'Mean fill weight limits', false), limit('eachLimit', 'Each fill weight limits', false), limit('humidityLimit', 'Room humidity limit', false),
+  ],
+  calcs: [
+    { name: 'mean', label: 'Mean fill weight', template: 'T7', args: { readings: '$weights', limit: '$meanLimit' } },
+    { name: 'each', label: 'Each fill weight', template: 'C3', args: { readings: '$weights', band: { limit: '$eachLimit' } } },
+    within('humidityCheck', 'Room humidity', 'humidity', 'humidityLimit'), observe('stopperCheck', 'Stoppers seated', ['stoppers']), finished('filling', 'Filling'),
+  ],
+};
+
 // 16. Terminal sterilisation (TI-24): one round per load; the lowest probe reaches the validated minimum F0 (or FH).
 export const terminalSterilise: Block = {
   id: 'terminal-sterilise', version: 1, name: 'Terminal sterilisation (each load)', checker: true,

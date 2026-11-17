@@ -8,8 +8,8 @@ const finished = (s: StepRow) => ['done', 'checked', 'not_applicable'].includes(
 export function FillingPanel({ d, stage, now, here }: { d: BatchDetail; stage: number; now: number; here?: string }) {
   const s = d.master.doc.stages[stage];
   if (!s?.aseptic) return null;
-  const of = (blockId: string) => {
-    const ti = s.steps.findIndex((t) => t.block.id === blockId);
+  const of = (...blockIds: string[]) => {
+    const ti = s.steps.findIndex((t) => blockIds.includes(t.block.id));
     if (ti < 0) return null;
     const rows = d.steps.filter((x) => x.key.stage === stage && x.key.step === ti);
     // The round to work on now; one still waiting (an earlier step not done) is not offered.
@@ -17,8 +17,8 @@ export function FillingPanel({ d, stage, now, here }: { d: BatchDetail; stage: n
     const timer = d.timers.find((t) => t.kind === 'periodic' && t.key.stage === stage && t.key.step === ti);
     return { open, timer, done: rows.length > 0 && rows.every(finished) };
   };
-  const card = (title: string, blockId: string, button: string) => {
-    const x = of(blockId);
+  const card = (title: string, blockIds: string[], button: string) => {
+    const x = of(...blockIds);
     if (!x) return null;
     const left = x.timer ? Date.parse(x.timer.at) - now : undefined;
     const late = x.timer?.state === 'late' || (left !== undefined && left < 0);
@@ -34,8 +34,8 @@ export function FillingPanel({ d, stage, now, here }: { d: BatchDetail; stage: n
   const log = of('interventions');
   return (
     <section className="filling" aria-label="Aseptic filling">
-      {card('Fill checks', 'fill', 'Open the fill check')}
-      {card('Clean-air checks', 'em-filling', 'Open the clean-air check')}
+      {card('Fill checks', ['fill', 'ffs-run', 'powder-fill'], 'Open the fill check')}
+      {card('Clean-air checks', ['em-filling'], 'Open the clean-air check')}
       {log && (
         <div className="fill-card">
           <h3>Interventions</h3>

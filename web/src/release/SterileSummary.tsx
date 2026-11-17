@@ -7,7 +7,7 @@ import { blockOf, stepOf, tone, valueText, words, type BatchDetail, type Block, 
 const GROUPS: { title: string; ids: string[] }[] = [
   { title: 'Sterilisation and depyrogenation cycles', ids: ['terminal-sterilise', 'heat-treatment', 'irradiation', 'sterilise', 'depyrogenate', 'isolator-decon', 'lyo-cycle'] },
   { title: 'Sterile filtration and filter tests', ids: ['filter-test', 'filtration'] },
-  { title: 'Aseptic set-up (isolator or RABS)', ids: ['aseptic-ready'] },
+  { title: 'Aseptic set-up (isolator, RABS or BFS machine)', ids: ['aseptic-ready'] },
   { title: 'Clean air and microbiology', ids: ['em-filling', 'incubated-results', 'room-status'] },
   { title: 'Interventions and stoppages', ids: ['interventions'] },
   { title: 'Container closure', ids: ['seal-check', 'leak-test-100', 'headspace-gas', 'plunger-check', 'chamber-seal'] },
