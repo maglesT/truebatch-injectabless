@@ -226,7 +226,7 @@ describe('walking a stage', () => {
     expect(m('BAL-02', 'balance', null)).toBe('BAL-02 stands in no room in master data, so it is not in a room this stage allows (Granulation, DSP-01)');
     expect(m('SPV-01', 'Vessel', 'GRN-01')).toBe('SPV-01 is not a balance (master data: Vessel)');
     expect(m('BAL-06', 'Balance', 'QCL-02')).toBe('BAL-06 stands in QCL-02 (QC laboratory), a laboratory area: weigh with a balance of a dispensing room of the master or of a room this stage allows');
-    expect(m('BAL-07', 'Balance', 'BL-GRN')).toBe('BAL-07 stands in BL-GRN, neither in a dispensing room of the master nor in a room this stage allows (Granulation, DSP-01)');
+    expect(m('BAL-07', 'Balance', 'BL-GRN')).toBe('BAL-07 stands in BL-GRN (Beta-lactam), neither in a dispensing room of the master nor in a room this stage allows (Granulation, DSP-01): the master names the rooms each stage runs in');
     const press = findBlock({ id: 'compress', version: 1 })!.fields.find((f) => f.name === 'machine')!;
     expect(machineRefusal(stage, press, { code: 'PRS-01', type: 'Tablet press', room: 'GRN-01' }, rooms)).toBe('PRS-01 is not one of the machine types this stage allows (Balance, Vessel)');
     expect(rooms.map((r) => roomRefusal(stage, r))).toEqual([null, null, 'QCL-02 is not one of the rooms this stage allows (Granulation, DSP-01)', 'BL-GRN is not one of the rooms this stage allows (Granulation, DSP-01)']);

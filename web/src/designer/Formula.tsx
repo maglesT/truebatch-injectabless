@@ -9,6 +9,7 @@ import { materialLines, type Container, type FormulaLine, type MasterDoc } from 
 import { AnswerBox, type OnAnswer } from './CheckPanel.js';
 import { move, newKey, qtyText } from './model.js';
 import { Decimal, Order, Picker } from './ui.js';
+import { withWeighSteps } from './skeletons.js';
 
 type Adjust = NonNullable<FormulaLine['adjust']>;
 const HERE = { stage: 0, sub: 1, step: 0, round: 1 };
@@ -28,7 +29,9 @@ export function FormulaTable({ doc, onChange, md, masters, selected, onSelect, p
   return (
     <>
       <div className="card">
-        <div className="d-section-head"><h2>Formula</h2><span className="muted small">Quantities in mg per {per}; the batch quantity is worked out for {doc.header.batchSize} {doc.header.batchUnit}.</span></div>
+        <div className="d-section-head"><h2>Formula</h2><span className="muted small">Quantities in mg per {per}; the batch quantity is worked out for {doc.header.batchSize} {doc.header.batchUnit}.</span>
+          {/* Only while an excipient has no weighing yet (run 3, H6), as the packing materials' steps. */}
+          {withWeighSteps(doc) !== doc && <button type="button" onClick={() => onChange(withWeighSteps(doc))}>Add a weighing for each excipient</button>}</div>
         <div className="table-wrap">
           <table className="plain-table formula-table">
             <thead><tr><th>Material</th><th>mg per {per}</th><th>Role</th><th>Batch quantity</th><th>Adjustment</th><th /></tr></thead>

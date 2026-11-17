@@ -33,8 +33,9 @@ export function failed(r: Stored | undefined): boolean {
 export interface Current {
   values: Record<string, Value>;
   results: Record<string, Stored>;
-  // Corrections replace a value; the original stays in the record.
-  replaced: { field: string; was: Value; now: Value; reason: string; person: number | null; at: Date }[];
+  // Corrections replace a value; the original stays in the record. `pulled`: the new value came from a link (the
+  // Logbook's cleaning facts of a corrected room, a corrected lot's certificate values), not typed.
+  replaced: { field: string; was: Value; now: Value; reason: string; person: number | null; at: Date; pulled?: true }[];
   // The events of other steps (or rounds) the current results were worked out from.
   uses: number[];
   // Where each current value came from, when a link gives it (links.ts).
@@ -51,7 +52,8 @@ export function currentValues(events: readonly StepEvent[]): Current {
     if (e.kind !== 'value' && e.kind !== 'corrected' && !e.payload.results) continue;
     for (const [k, v] of Object.entries(e.payload.values ?? {})) {
       const was = c.values[k];
-      if (e.kind === 'corrected' && was !== undefined) c.replaced.push({ field: k, was, now: v, reason: e.payload.reason ?? '', person: e.person, at: e.at });
+      const from = e.payload.source?.[k];
+      if (e.kind === 'corrected' && was !== undefined) c.replaced.push({ field: k, was, now: v, reason: e.payload.reason ?? '', person: e.person, at: e.at, ...(from && from.from !== 'hand' ? { pulled: true as const } : {}) });
       c.values[k] = v;
       // A value typed again replaces where it came from too.
       if (e.payload.source?.[k]) c.source[k] = e.payload.source[k]; else delete c.source[k];

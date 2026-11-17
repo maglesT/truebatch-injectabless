@@ -47,7 +47,8 @@ export function HeaderFields({ header, onChange, products, rooms }: { header: He
             <option value="units">units (a dry powder filled as it is; formula per unit)</option>
           </select>
         </label>
-        <label>Density (g/mL)<Decimal label="Density" placeholder={header.batchUnit === 'kg' ? 'needed' : 'not given'} value={header.densityGPerMl} onChange={(v) => opt('densityGPerMl', v)} /></label>
+        {/* Run 3, H14: a batch made in units has no density (its formula is per unit). */}
+        {liquid && <label>Density (g/mL)<Decimal label="Density" placeholder={header.batchUnit === 'kg' ? 'needed' : 'not given'} value={header.densityGPerMl} onChange={(v) => opt('densityGPerMl', v)} /></label>}
         {liquid && <label>Nominal fill (mL per container)<Decimal label="Nominal fill" value={header.fillVolumeMl} onChange={(v) => opt('fillVolumeMl', v)} /></label>}
         {liquid && <label>Fill excess (mL per container)<Decimal label="Fill excess" placeholder="none" value={header.fillExcessMl} onChange={(v) => opt('fillExcessMl', v)} /></label>}
         <label>Route (how it is made sterile)
@@ -106,7 +107,7 @@ export function NewMaster({ md, masters, copyOf, onCreated, onCancel }: {
     setError('');
     let doc: MasterDoc = { header, formula: [], stages: [], ...(pack ? { pack } : {}) };
     if (start.kind === 'skeleton' && !skeletons.some((k) => k.id === start.id)) return setError('Choose a starting master for this route.');
-    if (start.kind === 'skeleton') doc.stages = pack ? packingStages(pack) : skeletonStages(start.id, header);
+    if (start.kind === 'skeleton') doc.stages = pack ? packingStages(pack) : skeletonStages(start.id, header, md.rooms);
     if (start.kind === 'copy' && source) doc = { ...scaleDoc(source, header.batchSize), header: { ...header, batchUnit: source.header.batchUnit }, ...(pack ? { pack } : {}) };
     const parsed = masterSchema.safeParse(doc);
     if (!header.productItemId) return setError('Pick the product.');

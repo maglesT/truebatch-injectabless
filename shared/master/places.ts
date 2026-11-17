@@ -3,7 +3,8 @@
  * only the machines of its type standing in a room its stage allows (balances also in the master's dispensing rooms),
  * shared/engine/picks.ts. When no machine of master data fits, the floor's picker would be empty: the master check
  * warns while the master is written. A warning, not an error: master data changes (a machine is moved or added) without
- * a new master version, and the floor checks it again.
+ * a new master version, and the floor checks it again. A stage that names an area of several rooms is warned too: the
+ * author picks the line's room (run 3, H2).
  */
 import { findBlock } from '../blocks/index.js';
 import { dispensingRooms, isBalance, machineRefusal, type PickMachine, type PickRoom } from '../engine/picks.js';
@@ -33,6 +34,13 @@ export function placeChecks(doc: MasterDoc, md: PlaceData): Problem[] {
           ? `No ${what} is offered on the floor: the stage allows only the machine types ${s.machineTypes.join(', ')}. Add its type to the stage's machine types (${where})`
           : `No ${what} stands in a room this stage allows (${allowed}): ${where}. Allow its room in the stage settings, or engineering moves it in master data` });
     }
+  }));
+  // Run 3, H2: the master names the line's own room. An area with several rooms (the vial, syringe and bag filling rooms
+  // are all "Aseptic filling") would let the line clearance take another line's room: the author picks the room.
+  doc.stages.forEach((s, si) => s.roomTypes.forEach((a) => {
+    const of = rooms.filter((r) => r.area === a).map((r) => r.code);
+    if (of.length > 1 && !rooms.some((r) => r.code === a)) out.push({ level: 'warning', path: `stages[${si}].roomTypes`, rule: 'TI-11',
+      message: `${s.name}: pick the line's room. The area ${a} has ${of.length} rooms (${of.join(', ')}): choose the one this stage runs in, in the stage settings, in place of the area` });
   }));
   return out;
 }

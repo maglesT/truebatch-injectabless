@@ -4,7 +4,7 @@ import type { Sql, Tx } from '../db.js';
 import { audit } from '../audit.js';
 import { parseId, requirePermission, type SessionUser } from '../auth.js';
 import { usableItem } from '../master.js';
-import { clearedRooms, dispensingRooms, machineRefusal, roomRefusal, type PickRoom } from '../../shared/engine/picks.js';
+import { dispensingRooms, machineRefusal, roomRefusal } from '../../shared/engine/picks.js';
 import { handProblem, lineOf, mfgDateProblem, pullBulk, pullItem, pullLot, pulledWords } from '../pull.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
 import { masterVersion } from './masters.js';
@@ -96,8 +96,7 @@ const stepHash = (batchId: number, v: StepView) => contentHash('batch_step', bat
  * like lots, through their link (Logbook, MMS): pulled when it answers, else typed by hand with the label questions
  * (server/pull.ts). A pulled value cannot be typed over; certificate values come with the lot.
  */
-async function readValues(app: FastifyInstance, doc: MasterDoc, key: StepKey, raw: Record<string, unknown>, now: Date, current: StepView, batchNo: string,
-  cleared: readonly PickRoom[] = []) {
+async function readValues(app: FastifyInstance, doc: MasterDoc, key: StepKey, raw: Record<string, unknown>, now: Date, current: StepView, batchNo: string) {
   const stage = doc.stages[key.stage]!;
   const step = stage.steps[key.step]!;
   const block = findBlock(step.block)!;
@@ -113,7 +112,7 @@ async function readValues(app: FastifyInstance, doc: MasterDoc, key: StepKey, ra
       const rooms = await app.master.rooms();
       const item = f.kind === 'machine' ? usableItem(await app.master.equipment(), String(x), 'machine') : usableItem(rooms, String(x), 'room');
       const type = 'type' in item ? item.type : item.area;
-      const no = 'type' in item ? machineRefusal(stage, f, item, rooms, dispensingRooms(doc, rooms), cleared) : roomRefusal(stage, item);
+      const no = 'type' in item ? machineRefusal(stage, f, item, rooms, dispensingRooms(doc, rooms)) : roomRefusal(stage, item);
       if (no) { problems.push(no); continue; }
       // The area of the room it stands in, so a later stage that runs in that area keeps it in use by the batch (equipment_use_v1).
       const room = 'room' in item ? item.room : item.code;
@@ -609,7 +608,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
           let payload: Record<string, unknown> = {};
           const uses: number[] = [];
           if (b.values) {
-            const typed = await readValues(app, l.doc, key, b.values, l.now, v, l.batch.batchNo, clearedRooms(before.steps.filter((x) => x.id !== v.id), key.stage));
+            const typed = await readValues(app, l.doc, key, b.values, l.now, v, l.batch.batchNo);
             payload = { values: typed.values, results: evaluate(l.doc, l.events, key, { ...v.values, ...typed.values }, uses), uses,
               ...(Object.keys(typed.source).length ? { source: typed.source } : {}) };
             const no = await stockProblem(app, tx, l, v, { ...v.values, ...typed.values }, payload.results as Record<string, Stored>, { ...v.source, ...typed.source });

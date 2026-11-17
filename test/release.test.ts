@@ -132,6 +132,20 @@ describe('the review list for QA', () => {
     expect(r.late).toEqual([]);
   });
 
+  it('TI-21 run 3 H4: a corrected room is one correction, not one per cleaning fact the Logbook gives with it; a typed fact still counts', () => {
+    const d = small([{ roomTypes: ['RM-219'], steps: [{ block: { id: 'line-clearance', version: 1 }, checker: true, settings: {} }] }]);
+    const lb = (room: string) => ({ from: 'logbook' as const, asOf: null, shown: `${room}: clean` });
+    const room = (code: string) => ({ itemId: code, code, name: code, version: 1, type: 'Aseptic filling', room: code, area: 'Aseptic filling' });
+    const pulled = (code: string, on: string) => ({ values: { room: room(code), clean: 'yes', cleanedOn: on, cleanedBy: 'CLEANER ONE' },
+      source: { room: lb(code), clean: lb(code), cleanedOn: lb(code), cleanedBy: lb(code) } });
+    const events = [ev('started', '0.1.0.1'), ev('value', '0.1.0.1', { payload: pulled('RM-208', '2026-11-17 09:00') }),
+      ev('corrected', '0.1.0.1', { payload: { ...pulled('RM-219', '2026-11-17 10:00'), reason: 'Wrong room tapped' } })];
+    expect(review(d, events, [], at(10)).corrections.map((c) => [c.field, c.reason])).toEqual([['room', 'Wrong room tapped']]);
+    // Typed by hand (the Logbook down): each value a person changed is a correction.
+    const typed = [...events, ev('corrected', '0.1.0.1', { payload: { values: { cleanedBy: 'CLEANER TWO' }, reason: 'Label misread' } })];
+    expect(review(d, typed, [], at(10)).corrections.map((c) => c.field)).toEqual(['room', 'cleanedBy']);
+  });
+
   it('TI-14 a repeat-until round whose stop check is "not yet" is not out of limits; the last allowed round failing is', () => {
     const d = small([{ steps: [{ flow: { kind: 'repeat-until', maxRounds: 3, stop: 'readingCheck' } }] }]);
     const round = (r: number, ok: boolean) => [ev('started', `0.1.0.${r}`), reading(`0.1.0.${r}`, { readingCheck: ok ? pass : fail }), ev('done', `0.1.0.${r}`)];

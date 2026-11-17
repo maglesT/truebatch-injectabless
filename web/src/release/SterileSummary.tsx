@@ -8,6 +8,8 @@ const GROUPS: { title: string; ids: string[] }[] = [
   { title: 'Sterilisation and depyrogenation cycles', ids: ['terminal-sterilise', 'heat-treatment', 'irradiation', 'sterilise', 'depyrogenate', 'isolator-decon', 'lyo-cycle'] },
   { title: 'Sterile filtration and filter tests', ids: ['filter-test', 'filtration'] },
   { title: 'Aseptic set-up (isolator, RABS or BFS machine)', ids: ['aseptic-ready'] },
+  // Run 3, H13: the fill itself (fill weights each round; the powder fill's humidity, the BFS parison temperature and air shower check).
+  { title: 'Filling', ids: ['fill', 'ffs-run', 'powder-fill'] },
   { title: 'Clean air and microbiology', ids: ['em-filling', 'incubated-results', 'room-status'] },
   { title: 'Interventions and stoppages', ids: ['interventions'] },
   { title: 'Container closure', ids: ['seal-check', 'leak-test-100', 'headspace-gas', 'plunger-check', 'chamber-seal'] },
@@ -49,7 +51,7 @@ export function SterileSummary({ d, blocks }: { d: BatchDetail; blocks: Block[] 
   if (!groups.length) return null;
   return (
     <section className="dash-panel" aria-label="Sterility assurance">
-      <div className="panel-head"><h2>Sterility assurance</h2><span className="muted">every cycle, the isolator or RABS, filter test, clean-air result, intervention, closure check and capping machine, inspection and reconciliation of the batch</span></div>
+      <div className="panel-head"><h2>Sterility assurance</h2><span className="muted">every cycle, the isolator or RABS, filter test, fill, clean-air result, intervention, closure check and capping machine, inspection and reconciliation of the batch</span></div>
       {groups.map((g) => {
         const rows = d.steps.filter((s) => g.ids.includes(idOf(s)) && s.events.length > 0);
         return (

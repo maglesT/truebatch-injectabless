@@ -361,7 +361,7 @@ describe('the packing line and the packing product', () => {
     const line = field('pack-clearance', 'line');
     const lines = [{ code: 'LL-01', type: 'Vial labeller', room: 'PK-01' }, { code: 'EQ-X', type: 'Vial labeller', room: 'RM-107' },
       { code: 'LL-02', type: 'Vial labeller', room: null }, { code: 'LL-03', type: null, room: 'PK-01' }];
-    expect(lines.map((m) => machineRefusal(stage, line, m, ROOMS))).toEqual([null, 'EQ-X stands in RM-107, not in a room this stage allows (Packing)',
+    expect(lines.map((m) => machineRefusal(stage, line, m, ROOMS))).toEqual([null, 'EQ-X stands in RM-107 (Visual inspection), not in a room this stage allows (Packing): the master names the rooms each stage runs in',
       'LL-02 stands in no room in master data, so it is not in a room this stage allows (Packing)', 'LL-03 has no type in master data, so it is not offered as a packing line']);
     expect(untypedNote(line, lines)).toBe('1 machine has no type in master data, so it is not offered.');
     // The issue stage names no rooms: its line (recorded at issue) is not a reason to ask for them.
