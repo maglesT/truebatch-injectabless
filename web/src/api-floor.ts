@@ -24,7 +24,7 @@ export interface StepRow {
 }
 export interface TimerRow { id: string; kind: 'hold' | 'periodic' | 'minimum' | 'duration'; key: StepKey; label: string; from: string; at: string; state: 'running' | 'due soon' | 'due' | 'late'; skipped?: { person: number | null; at: string } }
 export interface StageRow { index: number; key: string; name: string; open: boolean; blocked?: string; closed: boolean }
-export interface Deviation { note: number; step: string; reference: string; text: string; open: boolean; status?: string; closedAt?: string | null; filed?: boolean }
+export interface Deviation { note: number; step: string; reference: string; text: string; open: boolean; status?: string; closedAt?: string | null; filed?: boolean; typed?: boolean }
 export interface BatchDetail {
   now: string;
   batch: { id: number; batchNo: string; issuedAt: string; status: string; open: string[]; late: string[]; deviations: Deviation[]; yieldOut: string[]; contentHash: string; actions: string[]; deviationsLink: string;

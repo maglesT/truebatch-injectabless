@@ -308,7 +308,7 @@ describe('walking a stage', () => {
     expect(text).toContain('MAT-001 · Examplol | API | 100.0 | 10.000 kg | Lot API-2611: 10.151 kg (target');
     expect(text).toMatch(/Checked: RAVI, .* IST · signed "Verified \(second person\)"/);
     expect(text).toMatch(/Sent back: RAVI, .* · reason: Tare looks wrong/);
-    expect(text).toMatch(/DEV-26-003 \| Granulation · 2\.2 Weigh a material: Lactose monohydrate \| Lactose 0\.9 % over the corrected target \| ASHA, .* \| OPEN/);
+    expect(text).toMatch(/DEV-26-003 \(typed by hand\) \| Granulation · 2\.2 Weigh a material: Lactose monohydrate \| Lactose 0\.9 % over the corrected target \| ASHA, .* \| OPEN/);
     expect(text).toContain('This copy was made while the batch is in production: it is not a released record.');
     expect(text).toMatch(/Generated .* IST by VIEWER · true copy of the electronic record · page 1 of 3$/);
   });
@@ -410,7 +410,7 @@ describe('production approval, QC approval and QA release', () => {
     expect(text).toContain('Status | Released');
     expect(text).toMatch(/QC approved: QUINN, .* IST · QC report QC-26-0042/);
     expect(text).toMatch(/Released: MEERA, .* IST/);
-    expect(text).toMatch(/DEV-26-010 \| .* \| pH meter found out of calibration \| ASHA, .* \| closed by MEERA, .*: Meter recalibrated; results confirmed by a second meter/);
+    expect(text).toMatch(/DEV-26-010 \(typed by hand\) \| .* \| pH meter found out of calibration \| ASHA, .* \| closed by MEERA, .*: Meter recalibrated; results confirmed by a second meter/);
     expect(text).toContain('Stage · Compounding operator · yield 99.0 %');
     for (const m of ['Issued | ISSUER', 'Performed | ASHA', 'Verified (second person) | RAVI', 'Production approved | SAM', 'QC approved | QUINN', 'Released | MEERA']) expect(text).toContain(m);
     expect(text).not.toContain('not a released record');

@@ -4,7 +4,7 @@
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces.js';
 import { findBlock, type Block } from '../shared/blocks/index.js';
 import { materialLines, type Step } from '../shared/master/schema.js';
-import { batchText, batchView, deviations, fieldLabel, handFields, lateItems, lineQuantity, notYetText, cutShort, terminatedText, TERMINATED_STATE, openSteps, PROVIDER_NAME, deviationStatusWords, stepTitle, unitName, headline, limitOf, withoutVerdict, statusWords, CERTIFICATE, perPackText, type DeviationStatus, type EventKind, type Source, type Stored, type StepView, type Value } from '../shared/engine/index.js';
+import { batchText, batchView, deviations, deviationNumber, deviationText, fieldLabel, handFields, lateItems, lineQuantity, notYetText, cutShort, terminatedText, TERMINATED_STATE, openSteps, PROVIDER_NAME, deviationStatusWords, stepTitle, unitName, headline, limitOf, withoutVerdict, statusWords, CERTIFICATE, perPackText, type DeviationStatus, type EventKind, type Source, type Stored, type StepView, type Value } from '../shared/engine/index.js';
 import type { LoadedBatch } from './routes/batches.js';
 import { pageFrame, plant, runs } from './pdf.js';
 import { plantText } from '../shared/plant-time.js';
@@ -121,6 +121,10 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
       }).join('\n') || '—')];
   })));
 
+  // The deviations of the notes: the number written with the note, or the one Deviations filed from it (read live).
+  const devs = deviations(events, batchEvents, r.deviationsRead);
+  const devOf = (e: { id: number }) => devs.find((x) => x.note === e.id);
+
   // Every stage and step: values, worked calculation lines with limits and pass/fail, who did and checked what and when.
   doc.stages.forEach((s, si) => {
     const mine = steps.filter((v) => v.key.stage === si);
@@ -140,7 +144,8 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
           // Demo installations only (server/demo.ts).
           if (e.kind === 'demo_wait_skipped') return small(`DEMO: wait skipped by ${who(e.person)} at ${plant(e.at)} · ${String(e.payload.label ?? '')}`, { color: RED, bold: true });
           const sig = sigOf.get(e.id);
-          const extra = e.payload.reason ? ` · reason: ${e.payload.reason}` : e.payload.text ? ` · ${e.payload.reference ? `${e.payload.reference}: ` : ''}${e.payload.text}` : '';
+          const d = e.kind === 'note' ? devOf(e) : undefined;
+          const extra = e.payload.reason ? ` · reason: ${e.payload.reason}` : e.payload.text ? ` · ${d ? `deviation ${deviationText(d)}: ` : ''}${e.payload.text}` : '';
           // Packing: the batch facts are recorded when the batch is issued (the issuer starts the first step); the
           // operator then receives the filled units and signs it done.
           const kind = doc.pack && v.id === '0.1.0.1' && e.kind === 'started' ? 'Batch facts recorded at issue' : EVENT[e.kind];
@@ -154,16 +159,16 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
   // Timers that ran over, with the deviation notes made after them.
   content.push(heading('Timers that ran over'));
   content.push(table([250, 120, '*'], ['Timer', 'Due', 'Deviation notes'], lateItems(doc, events, now).map((l) => [
-    small(l.timer.label), small(plant(l.timer.at)), small(l.notes.map((n) => `${n.payload.reference ? `${n.payload.reference}: ` : ''}${n.payload.text ?? ''} (${who(n.person)}, ${plant(n.at)})`).join('\n') || 'NO DEVIATION NOTE', l.notes.length ? {} : { color: RED }),
+    small(l.timer.label), small(plant(l.timer.at)), small(l.notes.map((n) => `${devOf(n) ? `${devOf(n)!.reference}: ` : ''}${n.payload.text ?? ''} (${who(n.person)}, ${plant(n.at)})`).join('\n') || 'NO DEVIATION NOTE', l.notes.length ? {} : { color: RED }),
   ])));
 
-  // Deviation notes with their status (a note with a deviation number is open until QA closes it).
-  const devs = deviations(events, batchEvents, r.deviationsRead);
+  // Deviation notes with their number and status (a note with a deviation number is open until it is closed: in the
+  // Deviations system while it answers, else by QA); a number typed by hand, or filed in Deviations from the note, says so.
   content.push(heading('Deviation notes'));
   content.push(table([70, 170, '*', 110, 170], ['Deviation', 'Step', 'Note', 'Written', 'Status'], events.filter((e) => e.kind === 'note').map((e) => {
-    const d = devs.find((x) => x.note === e.id);
+    const d = devOf(e);
     const closed = d?.closed && batchEvents.find((b) => b.id === d.closed!.id);
-    return [small(d?.reference ?? e.payload.reference ?? '—'), small(stepLabel(`${e.stage}.${e.sub}.${e.step}.${e.round}`)), small(e.payload.text ?? ''), small(`${who(e.person)}, ${plant(e.at)}`),
+    return [small(d ? deviationNumber(d) : '—'), small(stepLabel(`${e.stage}.${e.sub}.${e.step}.${e.round}`)), small(e.payload.text ?? ''), small(`${who(e.person)}, ${plant(e.at)}`),
       small(!d ? 'note (no deviation number)' : d.status ? `${d.open ? 'OPEN: ' : ''}${deviationStatusWords(d.status)} in the Deviations system${d.closedAt ? `, ${plant(d.closedAt)}` : ''}` : d.open ? 'OPEN' : `closed by ${closed?.personName ?? ''}, ${plant(closed?.at)}: ${closed?.payload.reason ?? ''}`, d?.open ? { color: RED } : {})];
   })));
 

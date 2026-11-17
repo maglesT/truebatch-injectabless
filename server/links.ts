@@ -48,11 +48,12 @@ export const deviationsClient = (l: Link) => ({
   byNumbers: (numbers: string[]) => l.read(async (q, v) => new Map((await q<DevRow[]>`
     select distinct on (number) number, status, title, closed_at::text from ${v('deviation_v1')} where number = any(${numbers}) order by number`)
     .map((r) => [r.number, dev(r)]))),
-  // Gap 6 (owner, 17 Nov 2026): the deviations Deviations filed from this product's notes, by their source_ref
-  // ("<product>:note:<note id>", as Deviations' automatic filing names them), keyed by source_ref.
+  // The deviations filed from these notes (owner, 17 Nov 2026: the number flows back): deviation_v1.source_ref is the
+  // note's deviation_note_v1.source_ref. Read through to_jsonb, so a view without the column finds none.
   bySourceRefs: (refs: string[]) => l.read(async (q, v) => new Map((await q<(DevRow & { source_ref: string })[]>`
-    select distinct on (source_ref) source_ref, number, status, title, closed_at::text from ${v('deviation_v1')} where source_ref = any(${refs}) order by source_ref, number`)
-    .map((r) => [r.source_ref, dev(r)]))),
+    select distinct on (source_ref) source_ref, number, status, title, closed_at from (
+      select to_jsonb(d) ->> 'source_ref' as source_ref, number, status, title, closed_at::text from ${v('deviation_v1')} d) x
+    where source_ref = any(${refs}) order by source_ref, number`).map((r) => [r.source_ref, dev(r)]))),
   // The deviations that name the batch, matched as Deviations matches batches (its batch_norm).
   byBatch: (batchNo: string) => l.read(async (q, v) => (await q<DevRow[]>`
     select distinct on (number) number, status, title, closed_at::text from ${v('deviation_v1')}
@@ -146,13 +147,16 @@ export const mmsClient = (l: Link) => ({
 
 // ---- TrueBatch Injectables: report.batch_fact_v1 (published), read by TrueBatch Injectables Packing for the batch
 // whose filled units it packs. The date of manufacture is its manufactured_on: the plant-time date the batch's first
-// processing step started (db/migrations/0007_batch_fact_manufactured_on.sql); null until a step has started. Its good
-// units are good_quantity (0017), read through to_jsonb: a view from before the column reads as null (typed, as before).
+// processing step started (db/migrations/0007_batch_fact_manufactured_on.sql); null until a step has started.
+// goodQuantity (owner, 17 Nov 2026: pull, don't type): its good_quantity, the good units of its last reconciliation of
+// units (db/migrations/0017_batch_fact_yield.sql), what the packing batch is issued; read through to_jsonb, so a view
+// from before the column was appended reads as null (the units are then typed).
 export interface BulkRead { batchNo: string; productCode: string | null; status: string; released: boolean; mfgDate: string | null; dataAsOf: string | null; goodQuantity: string | null }
 type BulkRow = { batch_number: string; product_code: string | null; status: string; released: boolean; mfg_date: string | null; data_as_of: string | null; good_quantity: string | null };
-const bulkOf = (r: BulkRow): BulkRead => ({ batchNo: r.batch_number, productCode: r.product_code, status: r.status, released: r.released, mfgDate: r.mfg_date,
-  dataAsOf: r.data_as_of, goodQuantity: r.good_quantity });
-const BULK_COLS = `batch_number, product_code, status, released, manufactured_on::text as mfg_date, data_as_of::text, to_jsonb(f) ->> 'good_quantity' as good_quantity`;
+const bulkOf = (r: BulkRow): BulkRead => ({ batchNo: r.batch_number, productCode: r.product_code, status: r.status, released: r.released, mfgDate: r.mfg_date, dataAsOf: r.data_as_of,
+  goodQuantity: r.good_quantity });
+const BULK_COLS = `batch_number, product_code, status, released, manufactured_on::text as mfg_date, data_as_of::text,
+  nullif(to_jsonb(f) ->> 'good_quantity', '') as good_quantity`;
 export const injectablesClient = (l: Link) => ({
   batch: (batchNo: string) => l.read(async (q, v) => {
     const [r] = await q<BulkRow[]>`select ${q.unsafe(BULK_COLS)} from ${v('batch_fact_v1')} f where batch_number = ${batchNo} limit 1`;
