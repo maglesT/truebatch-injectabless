@@ -9,7 +9,7 @@ import type { Kind } from '../../../shared/templates/index.js';
 import { HEADER_VALUES, materialLines, type Limit, type MasterDoc, type SettingValue, type Step } from '../../../shared/master/schema.js';
 import { usedFields, workedExample } from './example.js';
 import { earlierRefs, HEADER_LABEL, kindOfUnit, neededKind, unitLabel, unitsOf } from './model.js';
-import { sentence, slotsOf, type Part } from './sentences.js';
+import { lower, sentence, slotsOf, type Part } from './sentences.js';
 import { Decimal } from './ui.js';
 
 type Settings = Step['settings'];
@@ -117,7 +117,7 @@ export function StepSettings({ doc, si, ti, onChange }: { doc: MasterDoc; si: nu
 
 function PartView({ block, part, slot, first }: { block: Block; part: Part; slot: (name: string) => JSX.Element; first: boolean }) {
   if (typeof part === 'string') return <>{part}</>;
-  const label = (n: string) => [...block.fields, ...block.calcs, ...block.settings].find((x) => x.name === n)?.label.toLowerCase() ?? n;
+  const label = (n: string) => lower([...block.fields, ...block.calcs, ...block.settings].find((x) => x.name === n)?.label ?? n);
   if ('setting' in part) return first ? <span className="slot">{slot(part.setting)}</span> : <span className="tok">the {label(part.setting)} (above)</span>;
   if ('field' in part) return <span className="tok field">the {label(part.field)}</span>;
   if ('calc' in part) return <span className="tok calc">the {label(part.calc)}</span>;

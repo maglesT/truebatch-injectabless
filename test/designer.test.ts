@@ -139,6 +139,19 @@ describe('master designer', () => {
     expect(symbols(neededKind(ft, 'temperatureRange', { resultUnit: 'bar g' }))).toContain('°C');
   });
 
+  it('the plain view leaves out an optional limit that is not set, and keeps pH as written (17 Nov 2026 run, F10)', () => {
+    const d = tablet();
+    const bulk = block('bulk-test');
+    const said = (settings: object) => bulk.calcs.map((c) => sentenceText(d, bulk, settings as never, sentence(bulk, c))).filter(Boolean);
+    expect(said({})).toEqual(['Appearance: the answer must be "yes".']);
+    expect(said({ phLimit: { low: '6.5', high: '7.5', unit: 'pH' } })).toEqual(['The pH must be within 6.5 to 7.5 pH.', 'Appearance: the answer must be "yes".']);
+    const ft = block('filter-test');
+    const integrity = (settings: object) => sentenceText(d, ft, settings as never, sentence(ft, ft.calcs.find((c) => c.template === 'I19')!));
+    const text = integrity({ test: 'bubble point', makerLimit: '3.2 bar g', wettedWith: 'water', temperatureRange: { low: '15', high: '25', unit: '°C' } });
+    expect(text).not.toContain('(not set)');
+    expect(text).toContain('3.2 bar g, water and the test temperature');
+  });
+
   it('a batch quantity under 0.01 kg reads in g, so a small excipient is not rounded away', () => {
     expect(qtyText({ ok: true, value: '0.0025', unit: 'kg', shown: '' })).toBe('2.500 g');
     expect(qtyText({ ok: true, value: '1.2625', unit: 'kg', shown: '' })).toBe('1.263 kg');
