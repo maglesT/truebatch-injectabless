@@ -127,11 +127,6 @@ async function readValues(app: FastifyInstance, doc: MasterDoc, key: StepKey, ra
     }
     problems.push(...pulled.problems);
     source[name] = pulled.source;
-    // A lot typed by hand (its link off or down): what came with an earlier lot from MMS (its use-by date, the
-    // certificate values) is no longer MMS's; it is typed from this lot's label.
-    if (f.kind === 'lot' && isHand(pulled.source)) {
-      for (const k of Object.keys(current.source)) if ((k.startsWith(`${name}.`) || CERTIFICATE[k]) && !isHand(current.source[k])) source[k] = pulled.source;
-    }
     Object.assign(out, pulled.values);
     Object.assign(source, pulled.sources);
   }
@@ -144,7 +139,10 @@ async function readValues(app: FastifyInstance, doc: MasterDoc, key: StepKey, ra
     if (!f) { problems.push(`There is no field ${name}`); continue; }
     if (LINK_OF[f.kind]) continue;
     const was = source[name] ?? current.source[name];
-    if (was && !isHand(was)) { problems.push(`${f.label} ${pulledWords(was)}`); continue; }
+    // While the step's lot is typed by hand (its link off or down), the lot's date and certificate values are typed from
+    // its label, whatever an earlier lot from MMS gave (they are never signed with this lot: doneProblems).
+    const lotHand = lot && (name.startsWith(`${lot.name}.`) || CERTIFICATE[name]) && isHand(sources[lot.name]);
+    if (was && !isHand(was) && !lotHand) { problems.push(`${f.label} ${pulledWords(was)}`); continue; }
     if (lot && CERTIFICATE[name]) {
       const from = sources[lot.name];
       if (!from) { problems.push(`${f.label}: record the lot first`); continue; }

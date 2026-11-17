@@ -7,7 +7,7 @@ import { materialLines, type MasterDoc, type Step } from '../master/schema.js';
 import { keyId, stepState, type EventKind, type State, type StepEvent, type StepKey } from './state.js';
 import { c1WithinLimits, convert, Dec, findUnit } from '../templates/index.js';
 import { currentValues, durationId, durations, evaluate, failed, headerValue, HEADER_WORDS, inputChanges, type Current } from './values.js';
-import { fieldLabel, handEntered, handFields } from './links.js';
+import { CERTIFICATE, fieldLabel, handEntered, handFields } from './links.js';
 import { PLANT_TZ, plantDate } from '../plant-time.js';
 
 /** The plant's calendar day of a moment (YYYY-MM-DD). */
@@ -296,6 +296,23 @@ export function doneProblems(doc: MasterDoc, v: StepView, now: Date): string[] {
   const p: string[] = [];
   for (const f of [...block.fields, ...handFields(block.fields, v.source)]) if (!f.optional && v.values[f.name] === undefined) p.push(`${f.label} is not recorded`);
   for (const r of Object.values(v.results)) if (!r.ok) p.push(r.message);
+  // A value of the lot (its use-by date, "released", a certificate value) recorded before the step's current lot is the
+  // previous lot's: recorded again for this lot before the step is signed (a lot typed by hand after an MMS lot).
+  const setAt = (k: string) => v.events.filter((e) => (e.kind === 'value' || e.kind === 'corrected') && e.payload.values && k in e.payload.values).map((e) => e.id).at(-1);
+  for (const lf of block.fields.filter((f) => f.kind === 'lot')) {
+    // The event that set the current lot (the same lot picked again is not a new lot).
+    let lotAt: number | undefined, prev: unknown;
+    for (const e of v.events) if ((e.kind === 'value' || e.kind === 'corrected') && e.payload.values && lf.name in e.payload.values) {
+      const lot = e.payload.values[lf.name];
+      if (JSON.stringify(lot) !== JSON.stringify(prev)) lotAt = e.id;
+      prev = lot;
+    }
+    if (lotAt === undefined) continue;
+    for (const k of Object.keys(v.values).filter((x) => x.startsWith(`${lf.name}.`) || CERTIFICATE[x])) {
+      const at = setAt(k);
+      if (at !== undefined && at < lotAt) p.push(`${fieldLabel([...block.fields, ...handFields(block.fields, v.source)], k)} is the previous lot's: record it for lot ${String(v.values[lf.name])}`);
+    }
+  }
   const stop = stopName(st);
   const out = block.calcs.filter((c) => c.name !== stop && failed(v.results[c.name])).map((c) => c.label);
   // The note must come after the last value, or after the last change of an input from another step.
