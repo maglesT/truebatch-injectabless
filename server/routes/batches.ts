@@ -16,6 +16,7 @@ import type { MasterDoc } from '../../shared/master/schema.js';
 import { Dec } from '../../shared/templates/index.js';
 import {
   ACTIONS, BATCH_ACTIONS, CERTIFICATE, LINK_OF, MATERIAL_USE, batchRefusal, filedKey, inLotUnit, issuedLots, returnProblems, returnsOf, usedQuantity, usesOfLot, stepLabel, stepPlace, stepTitle, handFields, isHand, batchView, doneProblems, evaluate, lateItems, openSteps, parseKey, readValue, refusal, review, stepFields, stepNeeds, timers,
+  trainingCheck, type Training,
   type Action, type BatchAction, type BatchEvent, type DeviationStatus, type LinkState, type Source, type StageView, type Stored, type StepEvent, type StepKey, type StepView, type Timer, type Value,
 } from '../../shared/engine/index.js';
 
@@ -194,8 +195,9 @@ const values = z.record(z.unknown());
 const BODIES: Record<Action, z.ZodTypeAny> = {
   start: z.object({}),
   record: z.object({ values }),
-  done: signBody,
-  check: signBody,
+  // trained: the signer ticked "I am trained in …" while Recruitment was not reachable (shared/engine/training.ts).
+  done: signBody.extend({ trained: z.boolean().optional() }),
+  check: signBody.extend({ trained: z.boolean().optional() }),
   'send-back': z.object({ reason }),
   correct: z.object({ values, reason }),
   'not-applicable': signBody.extend({ reason }),
@@ -504,7 +506,8 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
     const unlinked = named.state === 'ok' ? named.value.filter((d) => !r.deviations.some((x) => x.reference === d.number)) : [];
     return { status: view(l, dv.read).status, ...r, deviationsLink: dv.link, unlinked, signatures,
       corrections: r.corrections.map((c) => ({ ...c, personName: names.get(c.person) ?? null })),
-      hand: r.hand.map((h) => ({ ...h, personName: names.get(h.person) ?? null })) };
+      hand: r.hand.map((h) => ({ ...h, personName: names.get(h.person) ?? null })),
+      trainingTyped: r.trainingTyped.map((h) => ({ ...h, personName: names.get(h.person) ?? null })) };
   });
 
   // The deviations that name this batch in the Deviations system, for the note's pick list (pull, don't type).
@@ -529,6 +532,26 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
         and exists (select 1 from jsonb_each(e.payload->'values') f where jsonb_typeof(f.value) = 'object' and f.value->>'itemId' = ${item})
       order by e.at desc limit 1`;
     return { previous: u ? { ...u, text: `${[u.productCode, u.productName].filter(Boolean).join(' · ')}, batch ${u.batchNo}` } : null };
+  });
+
+  // Before a step that names a training is signed: the person's training in it, as Recruitment answers now (the sign
+  // dialog shows it; the signature reads it again). Link off or down: the dialog asks for the tick.
+  app.get<{ Params: { id: string; key: string } }>('/api/batches/:id/steps/:key/training', anyUser, async (req, reply) => {
+    const id = parseId(req.params.id);
+    const key = parseKey(req.params.key);
+    const l = id === null || key === null ? null : await loadBatch(sql, id);
+    const st = key && l?.doc.stages[key.stage]?.steps[key.step];
+    if (!l || !st) return reply.code(404).send({ error: 'not_found' });
+    if (!st.training) return { skill: null };
+    const read = await app.links.recruitment.training(req.user!.username, st.training.code);
+    const t = trainingCheck(st.training, req.user!.fullName, read, false);
+    return { skill: st.training, link: read.state, ok: t.ok, ...(t.ok ? { training: t.training } : { message: t.message }) };
+  });
+
+  // The skills Recruitment trains people in, for the designer's "Training needed" pick list (pull, don't type).
+  app.get('/api/recruitment/skills', anyUser, async () => {
+    const r = await app.links.recruitment.skills();
+    return { link: r.state, skills: r.state === 'ok' ? r.value : [] };
   });
 
   // The lots of a material MMS has released and in date today, for the lot's pick list.
@@ -609,7 +632,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
       const key = parseKey(req.params.key);
       const body = BODIES[action].safeParse(req.body);
       if (id === null || key === null || !body.success) return reply.code(400).send({ error: 'invalid', problems: body.error?.issues.map((i) => `${i.path.join('.')}: ${i.message}`) ?? [] });
-      const b = body.data as { proof?: string; contentHash?: string; reason?: string; text?: string; reference?: string; values?: Record<string, unknown> };
+      const b = body.data as { proof?: string; contentHash?: string; reason?: string; text?: string; reference?: string; values?: Record<string, unknown>; trained?: boolean };
       const user = req.user!;
       try {
         const signer = rule.meaning ? await authenticateSigner(sql, app.proofKey, user, { proof: b.proof! }, { objectType: 'batch', objectId: id, meaning: rule.meaning }) : null;
@@ -643,6 +666,13 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
           if (action === 'done') { const no = await stockProblem(app, tx, l, v, v.values, v.results, v.source); if (no) throw new StepError(409, 'not_in_stock', [no]); }
           // Signed again after an input changed: the results worked out again, as shown, are stored with the signature.
           if (action === 'done' && v.inputChanged.length) payload = { results: evaluate(l.doc, l.events, key, v.values, uses), uses };
+          // Only trained people sign (owner, 17 Nov 2026): the signer's training in the step's skill, read from Recruitment now.
+          const skill = l.doc.stages[key.stage]!.steps[key.step]!.training;
+          if (skill && (action === 'done' || action === 'check')) {
+            const t = trainingCheck(skill, user.fullName, await app.links.recruitment.training(user.username, skill.code), b.trained === true);
+            if (!t.ok) throw new StepError(409, t.error, [t.message]);
+            payload.training = t.training;
+          }
           if (b.reason) payload.reason = b.reason;
           if (b.text) payload.text = b.text;
           // Where the note was written, in words, for the deviation filed from it (deviation_note_v1.step).
@@ -665,7 +695,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
             values (${id}, ${key.stage}, ${key.sub}, ${key.step}, ${key.round}, ${rule.event}, ${tx.json(payload as never)}, ${user.id})
             returning id::int`;
           if (signer && rule.meaning) {
-            const content = { ...stepContent(id, v), action, ...(b.reason ? { reason: b.reason } : {}) };
+            const content = { ...stepContent(id, v), action, ...(b.reason ? { reason: b.reason } : {}), ...(payload.training ? { training: payload.training as Training } : {}) };
             await sign(tx, { signer, objectType: 'step_event', objectId: ev!.id, meaning: rule.meaning, content, shownHash: contentHash('step_event', ev!.id, content) });
           }
           // 5. audit

@@ -10,7 +10,7 @@ format, server, screens and tests), changed only where injections need it (owner
 SQL, a small set of rules checked once in the app.
 
 - Design decisions: `docs/design.md`
-- The 29 TrueBatch Injectables rules and their tests: `docs/rules.md`
+- The 30 TrueBatch Injectables rules (the 29 of the minimum register and TI-32, only trained people sign) and their tests: `docs/rules.md`
 - The calculation templates: `shared/templates/README.md`
 
 ## Status (phase E)

@@ -11,6 +11,8 @@ import { usedFields, verdictless, workedExample } from './example.js';
 import { earlierRefs, fieldChanges, HEADER_LABEL, kindOfUnit, neededKind, toVersion, unitLabel, unitsOf } from './model.js';
 import { lower, sentence, slotsOf, type Part } from './sentences.js';
 import { Decimal } from './ui.js';
+import { api } from '../api.js';
+import { skillText } from '../../../shared/engine/training.js';
 
 type Settings = Step['settings'];
 const FLOWS = [['none', 'Once'], ['repeat-until', 'Repeat until a check passes'], ['optional-with-reason', 'Optional (skipped with a reason)'], ['qa-hold', 'QA hold (QA releases before the next step)']] as const;
@@ -79,6 +81,7 @@ export function StepSettings({ doc, si, ti, onChange }: { doc: MasterDoc; si: nu
         <label className="check"><input type="checkbox" checked={step.checker} onChange={(e) => onChange({ ...step, checker: e.target.checked })} />A second person checks it (checker)</label>
         {block.gmp && <p className="muted small">A {block.gmp.replace('-', ' ')} step always needs a second-person check.</p>}
         <label className="check"><input type="checkbox" checked={step.critical} onChange={(e) => onChange({ ...step, critical: e.target.checked })} />Critical step</label>
+        <TrainingNeeded value={step.training} onChange={(training) => { const { training: _, ...rest } = step; onChange(training ? { ...rest, training } : rest as Step); }} />
       </div>
 
       <div className="d-section">
@@ -119,6 +122,39 @@ export function StepSettings({ doc, si, ti, onChange }: { doc: MasterDoc; si: nu
         </div>
       </details>
     </div>
+  );
+}
+
+type Skill = NonNullable<Step['training']>;
+/**
+ * Only trained people sign (owner, 17 Nov 2026): the skill the performer and the checker must hold, picked from the
+ * skills Recruitment publishes; typed only while the Recruitment link is off or down. None: anyone may sign.
+ */
+function TrainingNeeded({ value, onChange }: { value?: Skill; onChange: (s: Skill | undefined) => void }) {
+  const [read, setRead] = useState<{ link: string; skills: Skill[] } | null>(null);
+  useEffect(() => {
+    let live = true;
+    void api<{ link: string; skills: Skill[] }>('GET', '/api/recruitment/skills').then((r) => live && setRead(r), () => live && setRead({ link: 'down', skills: [] }));
+    return () => { live = false; };
+  }, []);
+  if (!read) return null;
+  if (read.link === 'ok') {
+    // A skill the master names that Recruitment no longer lists stays offered, marked.
+    const skills = value && !read.skills.some((x) => x.code === value.code) ? [...read.skills, value] : read.skills;
+    return (
+      <label>Training needed (from Recruitment)
+        <select aria-label="Training needed" value={value?.code ?? ''} onChange={(e) => onChange(skills.find((x) => x.code === e.target.value))}>
+          <option value="">(none: anyone with the permission signs)</option>
+          {skills.map((x) => <option key={x.code} value={x.code}>{skillText(x)}{read.skills.includes(x) ? '' : ' (not in Recruitment now)'}</option>)}
+        </select>
+      </label>
+    );
+  }
+  return (
+    <label>Training needed (Recruitment is {read.link === 'absent' ? 'not linked' : 'not reachable'}: type the skill code)
+      <input aria-label="Training needed" placeholder="none, e.g. SOP-STR-004" value={value?.code ?? ''}
+        onChange={(e) => onChange(e.target.value.trim() ? { code: e.target.value.trim() } : undefined)} />
+    </label>
   );
 }
 

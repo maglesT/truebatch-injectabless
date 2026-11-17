@@ -1,14 +1,15 @@
 # TrueBatch Injectables rules
 
-The 29 TrueBatch Injectables rules (owner's minimum register for sterile drug products, 16 November 2026:
-`injectables-minimum-register.md`): 14 carried over from TrueBatch Tablets unchanged, 6 changed, 9 new; the numbers
+The 30 TrueBatch Injectables rules: the 29 of the owner's minimum register for sterile drug products (16 November 2026:
+`injectables-minimum-register.md`; 14 carried over from TrueBatch Tablets unchanged, 6 changed, 9 new) and TI-32,
+only trained people sign (owner, 17 November 2026, as TrueBatch Tablets TB-23); the numbers
 TI-15 and TI-16 (compression; sieves, punches and dies) are not used. Each rule is checked once, in the app. Each test
 that proves a rule starts its name with the rule ID, e.g. `TI-08 the person who performed a step cannot check it`.
 `npm run traceability` prints the rule-to-test list; CI (`npm run traceability -- --check`) fails when a rule has no
 test, unless its feature comes later (marked "later" in the Tests column, with the feature it waits for).
 
-Clauses: the binding clauses each rule rests on (US: 21 CFR 211 and Part 11; EU: EudraLex Vol 4 Part I chapters C4,
-C5, Annex 1 (A1, 2022) and Annex 11 (A11); IN: Revised Schedule M Part I (SCHM) and Part II sterile products
+Clauses: the binding clauses each rule rests on (US: 21 CFR 211 and Part 11; EU: EudraLex Vol 4 Part I chapters C2,
+C4, C5, Annex 1 (A1, 2022) and Annex 11 (A11); IN: Revised Schedule M Part I (SCHM) and Part II sterile products
 (SCHM-II)), from the minimum register. QA should confirm them before validation. The sterile parts of the changed rules are tested with the sterile blocks and master checks (test/sterile-*.test.ts).
 
 | Rule | Requirement | Clauses | Tests |
@@ -42,6 +43,7 @@ C5, Annex 1 (A1, 2022) and Annex 11 (A11); IN: Revised Schedule M Part I (SCHM) 
 | TI-29 | Containers are closed and checked for integrity as the master says | US 211.94(b); 211.192; EU A1 8.22-8.24, 8.27, 8.28; IN SCHM-II 10.1, 10.2, 10.4, 10.5, 10.7 | `test/sterile-rules.test.ts`, `test/sterile-blocks.test.ts` |
 | TI-30 | Every filled unit is inspected, with rejects recorded by defect category | US 211.165(a); 211.192; EU A1 8.30, 8.32, 8.33; IN SCHM-II 10.8 | `test/sterile-rules.test.ts` (inspection required; visual inspector permission) |
 | TI-31 | Freeze-drying is recorded against the validated cycle | US 211.100(b); 211.113(b); EU A1 8.122-8.124, 8.126; IN SCHM-II 4.11.2.4 | `test/sterile-rules.test.ts`, `test/templates/cycle.test.ts` |
+| TI-32 | A step that names a training is signed (performed or checked) only by a person Recruitment shows trained in it; while Recruitment cannot be reached the signer confirms it and QA sees it | US 211.25(a); 11.10(i); EU C2 2.11 | `test/training.test.ts`, `e2e/floor.spec.ts` |
 
 ## Packing rules (TrueBatch Injectables Packing)
 
@@ -50,7 +52,7 @@ Packing", with the shared engine, as TrueBatch Tablets Packing is for tablets; t
 TB-P1 to TB-P9). They are not rules of the injectables minimum register: they are the packing product's own, for
 labelling and packing the filled, inspected units (vials, ampoules, syringes, bags) of a released TrueBatch
 Injectables batch. Each uses the mechanisms of the rules above: the master and its check (TI-01, TI-02), issue
-(TI-03), entries, signatures and second-person checks (TI-04 to TI-08), deviation notes (TI-09), in-process and
+(TI-03), entries, signatures and second-person checks (TI-04 to TI-08), the training a step names (TI-32), deviation notes (TI-09), in-process and
 periodic checks (TI-14), reconciliation that blocks release (TI-18) and QC approval and QA release (TI-21, TI-22),
 which apply to the packing record unchanged (QC approves it, then QA releases it). The sterile rules (TI-23 to TI-31)
 do not apply to packing. The tests name the packing rule; the tests of the shared rules cover the packing record

@@ -7,6 +7,7 @@ import { fieldChanges, grouped, placeLabel } from './model.js';
 import { materialLines, type FormulaLine, type MasterDoc, type Stage, type Step } from '../../../shared/master/schema.js';
 import { perPackText, unitName } from '../../../shared/engine/stock.js';
 import { stepTitle } from '../../../shared/engine/batch.js';
+import { neededText } from '../../../shared/engine/training.js';
 import { sentence, sentenceText, settingText, slotsOf } from './sentences.js';
 
 export interface Line { key: string; text: string }
@@ -64,6 +65,7 @@ export function stepText(doc: MasterDoc, t: Step, j: number, units?: Units): str
   const after = steps.findIndex((x) => x.key === t.orderAfter);
   return [`${j + 1}. ${stepTitle(doc, t)}: ${t.instruction ?? b.instruction}`, ...loose, ...calcs,
     `Signed by the operator${t.checker ? ' and checked by a second person' : ''}${t.waitForCheck ? '; the next step waits for the check' : ''}.`,
+    t.training ? neededText(t.training, t.checker) : '',
     t.critical ? 'Critical step.' : '', t.minMinutes ? `Takes at least ${t.minMinutes} minutes.` : '', flow,
     t.everyMinutesLater ? `After ${t.everyMinutesLater.afterMinutes} minutes, a round every ${t.everyMinutesLater.everyMinutes} minutes.` : '',
     t.onlyIf ? `Done only when the ${HEADER_WORDS[t.onlyIf.header]} is ${t.onlyIf.limit.low ? `at least ${t.onlyIf.limit.low}` : ''}${t.onlyIf.limit.low && t.onlyIf.limit.high ? ' and ' : ''}${t.onlyIf.limit.high ? `at most ${t.onlyIf.limit.high}` : ''} ${t.onlyIf.limit.unit}; otherwise left out.` : '',
