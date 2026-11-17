@@ -23,6 +23,23 @@ from the product (the engine tests keep five of them as test-only fixtures, `tes
 (phase F: the filling screen, the designer by type and route), links and the platform release (G), the end-to-end runs
 on the demo (H).
 
+## TrueBatch Injectables Packing
+Labelling and packing the filled, inspected units of a released TrueBatch Injectables batch is a separate product on
+the platform (owner, 17 November 2026), built from this repository on the same engine and screens, as TrueBatch Tablets
+Packing is for tablets: `docs/packing-design.md`, its rules TI-P1 to TI-P9 in `docs/rules.md`. Its own parts are in
+`packing/` (entry points, migrations, the views it publishes) and `ops/packing.*`.
+
+```sh
+export DATABASE_URL=postgres://truebatch_injectables_owner:dev@localhost:5432/truebatch_injectables_packing_dev DB_APP_ROLE=truebatch_injectables_packing_app
+export TRUEBATCH_INJECTABLES_DATABASE_URL=postgres://...   # optional: TrueBatch Injectables' published views (released batches)
+npm run migrate:packing
+npm run dev:packing        # API on :3001
+npm run dev:packing-web    # UI on :5174 (proxies /api)
+```
+
+On the platform the packing product reads its own database from `TRUEBATCH_INJECTABLES_PACKING_DATABASE_URL`, runs as
+`truebatch_injectables_packing_app`, and is declared in `ops/packing.manifest.draft.json`.
+
 ## Develop
 Needs Node 22 and PostgreSQL 17.
 
@@ -59,6 +76,7 @@ below its lower limit), which ends that wait at once. From a terminal in the pro
 
 ```sh
 node dist/server/demo-skip.js TI260004 [stage] --as <username>
+node dist/packing/server/demo-skip.js TIP260001 [stage] --as <username>   # TrueBatch Injectables Packing (truebatch_injectables_packing.demo.skip)
 ```
 
 Each skip is an insert-only step event `demo_wait_skipped` with who, when and which wait, shown in the step history,
@@ -68,8 +86,9 @@ non-zero.
 
 ## Conventions
 - One app: `server/` (Fastify), `web/` (React), `db/migrations/` (plain SQL), `shared/` (engine, templates, blocks,
-  master format), `test/`, `e2e/` (browser tests), `ops/`, `docs/`.
-- A test that proves a rule starts its name with the rule ID: `TI-xx` for TrueBatch Injectables rules, `PL-xx` for
-  platform rules.
+  master format), `test/`, `e2e/` (browser tests), `ops/`, `docs/`, and `packing/` for TrueBatch Injectables
+  Packing's own entry points and migrations.
+- A test that proves a rule starts its name with the rule ID: `TI-xx` for TrueBatch Injectables rules, `TI-Px` for
+  the packing rules, `PL-xx` for platform rules.
 - Paraphrase regulations; never paste more than a short phrase.
 - Work on a branch, CI green, one review pass, then merge.

@@ -43,6 +43,31 @@ C5, Annex 1 (A1, 2022) and Annex 11 (A11); IN: Revised Schedule M Part I (SCHM) 
 | TI-30 | Every filled unit is inspected, with rejects recorded by defect category | US 211.165(a); 211.192; EU A1 8.30, 8.32, 8.33; IN SCHM-II 10.8 | `test/sterile-rules.test.ts` (inspection required; visual inspector permission) |
 | TI-31 | Freeze-drying is recorded against the validated cycle | US 211.100(b); 211.113(b); EU A1 8.122-8.124, 8.126; IN SCHM-II 4.11.2.4 | `test/sterile-rules.test.ts`, `test/templates/cycle.test.ts` |
 
+## Packing rules (TrueBatch Injectables Packing)
+
+The 9 packing rules (owner, 17 November 2026: injectables packing is a separate product, "TrueBatch Injectables
+Packing", with the shared engine, as TrueBatch Tablets Packing is for tablets; the same rules and numbers as Tablets'
+TB-P1 to TB-P9). They are not rules of the injectables minimum register: they are the packing product's own, for
+labelling and packing the filled, inspected units (vials, ampoules, syringes, bags) of a released TrueBatch
+Injectables batch. Each uses the mechanisms of the rules above: the master and its check (TI-01, TI-02), issue
+(TI-03), entries, signatures and second-person checks (TI-04 to TI-08), deviation notes (TI-09), in-process and
+periodic checks (TI-14), reconciliation that blocks release (TI-18) and QC approval and QA release (TI-21, TI-22),
+which apply to the packing record unchanged (QC approves it, then QA releases it). The sterile rules (TI-23 to TI-31)
+do not apply to packing. The tests name the packing rule; the tests of the shared rules cover the packing record
+through the same engine and routes.
+
+| Rule | Requirement | Clauses | Tests |
+|------|-------------|---------|-------|
+| TI-P1 | A packing master per product, pack type and size (and destination): its packing materials with codes, where the batch number, dates and MRP are printed, line clearance before and after, and IPCs with limits | US 211.186(b); EU C4 4.19; IN SCHM 17.3.7 | `test/packing.test.ts`, `test/packing-api.test.ts` (its own permission codes) |
+| TI-P2 | A packing record per packing batch, linked to the RELEASED batch of filled units: quantities, responsible people, checks, specimens and problems | US 211.188(b)(6),(8),(9),(13); EU C4 4.21; IN SCHM 17.3.9 | `test/packing.test.ts`, `test/packing-api.test.ts` (batch released, read from TrueBatch Injectables; typed from its tray or case labels without the link), `e2e/packing.spec.ts` |
+| TI-P3 | Line clearance before and after packing, checked by a second person; a blister pack (prefilled syringes) formed and sealed within limits and leak tested periodically | US 211.130(e); 211.188(b)(6); EU C4 4.19(f),(g), C5 5.50; IN SCHM 17.3.9.2, 18.5.2; SCHM-VIII 7.1-7.4 | `test/packing.test.ts` |
+| TI-P4 | Printed and other packing materials (labels, cartons, leaflets, trays) issued only by their signed and checked step, from a released lot of the master's material; every component checked against the packing master at line start | US 211.125(a),(b),(f), 211.130(d); EU C5 5.52 | `test/packing.test.ts`, `test/stock.test.ts` (not beyond MMS's stock) |
+| TI-P5 | Coding (batch number, dates, MRP) on the labels and cartons checked at the start and at intervals; the camera challenged; labelled units and packs inspected on line; line samples never returned; the customer's serialisation checked (codes of this batch, no serial twice, reconciled), never generated | US 211.122(g), 211.130(c), 211.134; EU C5 5.55-5.60; IN SCHM 18.5.4-18.5.9 | `test/packing.test.ts` |
+| TI-P6 | Filled units and every printed material reconciled (issued = used + destroyed + returned); a gap needs a deviation note and blocks release until its number is linked; batch-coded leftovers destroyed and recorded | US 211.125(c)-(e), 211.192; EU C4 4.21(h), C5 5.61, 5.62; IN SCHM 18.2.3, 18.5.10, 18.5.11 | `test/packing.test.ts`, `test/packing-api.test.ts` |
+| TI-P7 | One active packing order per line; the line is named on the record, with the product and batch | US 211.130(a); EU C5 5.49, 5.51; IN SCHM 18.5.1, 18.5.3 | `test/packing-api.test.ts` |
+| TI-P8 | The expiry is worked out from the approved shelf life and the date of manufacture of the filled units, never typed | US 211.137; EU C4 4.16; IN SCHM 17.3.1.2 | `test/packing.test.ts`, `test/links.test.ts` (`batch_fact_v1.manufactured_on`: the date the first step started), `test/packing-api.test.ts` (read from it; a typed date in the future refused) |
+| TI-P9 | Label data per destination (India domestic: dates and MRP); the coding check compares the printed data with the batch record | IN SCHM 17.3.1.2; US 211.137 (expiry) | `test/packing.test.ts` |
+
 ## Notes: safety rules built into the calculation templates
 
 These notes record which TrueBatch rule each template safety rule protects. They are not rule rows, and they add no
