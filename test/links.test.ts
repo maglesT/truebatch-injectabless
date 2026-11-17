@@ -617,6 +617,11 @@ describe('the views TrueBatch publishes', () => {
     expect(await fact()).toEqual({ good_quantity: null, good_unit: 'syringes', yield_percent: null });
     await done(1, 1, 1);
     expect(await fact()).toEqual({ good_quantity: '950', good_unit: 'syringes', yield_percent: '95' });
+    // Sent back: null again until it is signed again (as TrueBatch Tablets, 0018).
+    await t.owner`insert into step_events (batch_id, stage, sub, step, round, kind, payload, person_id) values (${b!.id}, 1, 1, 1, 1, 'sent_back', '{"reason":"recount"}', ${u!.id})`;
+    expect(await fact()).toEqual({ good_quantity: null, good_unit: 'syringes', yield_percent: null });
+    await done(1, 1, 1);
+    expect(await fact()).toEqual({ good_quantity: '950', good_unit: 'syringes', yield_percent: '95' });
     // A correction counts.
     await counted(1, 1, 1, 'corrected', '948', '94.8');
     expect(await fact()).toEqual({ good_quantity: '948', good_unit: 'syringes', yield_percent: '94.8' });

@@ -351,6 +351,26 @@ describe('a packing batch from the filled units of a released batch', () => {
       .toEqual([{ good_quantity: null, good_unit: 'packs', yield_percent: null }]);
   });
 
+  it('packing_batch_v1 good_quantity and yield_percent are null again while the finished goods step is sent back (0110, as TrueBatch Tablets Packing)', async () => {
+    const [u] = await t.owner<{ id: number }[]>`select id::int from users order by id limit 1`;
+    // Only what the view reads of a packing master: a pack, then the finished goods step.
+    const doc = { header: { productCode: 'PK-SB' }, pack: { bulkCode: 'PRD-001', type: 'vial', unitsPerPack: 10 },
+      stages: [{ key: 'r', steps: [{ key: 'i', block: { id: 'bulk-issue', version: 1 } }] }, { key: 'f', steps: [{ key: 'g', block: { id: 'finished-goods', version: 1 } }] }] };
+    const [v] = await t.owner<{ id: number }[]>`insert into master_versions (version_no, doc, created_by) values (1, ${t.owner.json(doc as never)}, ${u!.id}) returning id::int`;
+    const [b] = await t.owner<{ id: number }[]>`insert into batches (batch_no, master_version_id, issued_by) values ('PK-SB-1', ${v!.id}, ${u!.id}) returning id::int`;
+    const add = (kind: string, payload: object) => t.owner`insert into step_events (batch_id, stage, sub, step, round, kind, payload, person_id)
+      values (${b!.id}, 1, 1, 0, 1, ${kind}, ${t.owner.json(payload as never)}, ${u!.id})`;
+    const out = async () => (await t.owner.unsafe(`select good_quantity::text, yield_percent::text from ${t.schema}_report.packing_batch_v1 where batch_number = 'PK-SB-1'`))[0];
+    await add('value', { values: { packs: { value: '990', unit: 'packs' } }, results: { yield: { ok: true, value: '99', unit: '%', shown: '' } } });
+    await add('done', {});
+    expect(await out()).toEqual({ good_quantity: '990', yield_percent: '99' });
+    await add('sent_back', { reason: 'recount' });
+    expect(await out()).toEqual({ good_quantity: null, yield_percent: null });
+    await add('value', { values: { packs: { value: '985', unit: 'packs' } }, results: { yield: { ok: true, value: '98.5', unit: '%', shown: '' } } });
+    await add('done', {});
+    expect(await out()).toEqual({ good_quantity: '985', yield_percent: '98.5' });
+  });
+
   it('gap 10: the filled units issued are the good units TrueBatch Injectables publishes (batch_fact_v1.good_quantity), pulled; a view without the column: typed, as before', async () => {
     t.master.equipment_.push({ ...item('ln-3', 'LL-03', 'Labelling line 3'), kind: 'equipment', type: 'labelling line', room: 'PK-01' });
     // The stand-in view so far had no good_quantity: every batch above was issued with its units typed.
