@@ -383,6 +383,23 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
     return out;
   });
 
+  // Done on the floor: the latest batches the person recorded or signed a step of whose steps are all done (waiting for
+  // production approval, or approved, released or rejected) and that are not in their work list, so the finished
+  // record stays one tap away from My work (owner, 17 Nov 2026).
+  app.get('/api/batches/finished', anyUser, async (req) => {
+    const ids = await sql<{ id: number }[]>`
+      select b.id::int from batches b
+      where exists (select 1 from step_events e where e.batch_id = b.id and e.person_id = ${req.user!.id})
+      order by b.issued_at desc limit 20`;
+    const out = [];
+    for (const { id } of ids) {
+      const l = (await loadBatch(sql, id))!;
+      if (view(l).status === 'in production' || myWork(l, req.user!)) continue;
+      if (out.length < 10) out.push({ id, batchNo: l.batch.batchNo, productCode: l.doc.header.productCode, productName: l.doc.header.productName, status: view(l).status });
+    }
+    return out;
+  });
+
   // To review: for QC the production-approved batches, for QA the QC-approved ones (TI-21), oldest decision first; for
   // QA also the batches still in production, which QA may terminate.
   app.get('/api/batches/to-review', { preHandler: requirePermission('truebatch_injectables.qc.approve', 'truebatch_injectables.qa.release') }, async (req) => {

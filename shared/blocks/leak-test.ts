@@ -8,8 +8,8 @@ export const leakTest: Block = {
   instruction: 'Put the sample in the leak tester at the set vacuum for the set time. Count the packs that leak (coloured water in a pocket).',
   fields: [
     { name: 'vacuum', label: 'Vacuum', kind: 'number', unit: '$vacuumUnit' },
-    { name: 'tested', label: 'Packs tested', kind: 'number', unit: 'units' },
-    { name: 'leaking', label: 'Packs that leak', kind: 'number', unit: 'units' },
+    { name: 'tested', label: 'Packs tested', kind: 'number', unit: 'packs' },
+    { name: 'leaking', label: 'Packs that leak', kind: 'number', unit: 'packs' },
     { name: 'packingDone', label: 'Packing of the batch is finished (end check)', kind: 'yes-no' },
   ],
   settings: [

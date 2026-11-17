@@ -136,11 +136,15 @@ export function c7SamplingPlan(i: C7Input): Outcome<{ readonly letter: string; r
     const sample = Math.max(...plans.map((p) => p.sampleSize));
     const decided = plans.every((p) => p.pass !== undefined);
     const pass = decided ? plans.every((p) => p.pass === true) : true;
+    // Plain words first (owner, 17 Nov 2026): how many to test and the accept and reject numbers; the table's code
+    // letter last, and the letter whose plan the AQL takes only when it moves.
+    const moved = plans.filter((p) => p.letter !== letter && !p.hundredPercent);
     const shown =
-      `Lot ${N}, level ${i.level}: code letter ${letter}. ` +
+      `${plans.every((p) => p.hundredPercent) ? `Inspect all ${N}` : `Sample ${sample} of ${N}`} (level ${i.level}). ` +
       plans
-        .map((p) => `${p.name} AQL ${p.aql}${p.aql.trim() === '0' ? ' (zero accepted, plant rule)' : ''}: ${p.hundredPercent ? `inspect all ${p.sampleSize}` : `sample ${p.sampleSize}${p.letter === letter ? '' : ` (plan of letter ${p.letter})`}`}, accept ${p.accept}, reject ${p.reject}${p.found === undefined ? '' : `; found ${p.found}: ${p.pass === true ? 'accept' : 'REJECT'}`}`)
-        .join('; ');
+        .map((p) => `${p.name}${p.sampleSize !== sample ? ` (${p.hundredPercent ? `all ${p.sampleSize}` : `sample ${p.sampleSize}`})` : ''}: accept ${p.accept}, reject ${p.reject} (AQL ${p.aql}${p.aql.trim() === '0' ? ', zero accepted, plant rule' : ''})${p.found === undefined ? '' : `; found ${p.found}: ${p.pass === true ? 'accept' : 'REJECT'}`}`)
+        .join('; ') +
+      `. Code letter ${letter}${moved.length ? `; ${moved.map((p) => `the plan for AQL ${p.aql} is at letter ${p.letter}`).join(', ')}` : ''}.`;
     const check: Check = { pass, level: pass ? 'pass' : 'fail', rounded: decided ? (pass ? 'accept' : 'reject') : 'plan only', shown };
     return { ok: true, value: new Dec(sample), unit: 'units', letter, plans, shown, ...(decided ? { check } : {}) };
   });

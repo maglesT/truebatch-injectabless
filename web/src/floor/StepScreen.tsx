@@ -11,11 +11,11 @@ import { DemoSkip } from './DemoSkip.js';
 import { ReasonDialog } from './ReasonDialog.js';
 import { FillingPanel } from './FillingPanel.js';
 import { CERTIFICATE, fieldLabel, handEntered, LINK_OF } from '../../../shared/engine/links.js';
-import { cutShort, notYetText } from '../../../shared/engine/batch.js';
+import { askedFields, cutShort, notYetText } from '../../../shared/engine/batch.js';
 import { lineQuantity, stepFields } from '../../../shared/engine/values.js';
 import { plantText } from '../../../shared/plant-time.js';
 import { needsText, stepNeeds } from '../../../shared/engine/state.js';
-import { dispensingRooms, inLogbook, machineRefusal, roomRefusal, untypedNote } from '../../../shared/engine/picks.js';
+import { dispensingRooms, emptyNote, inLogbook, machineRefusal, roomRefusal } from '../../../shared/engine/picks.js';
 import { materialLines } from '../../../shared/master/schema.js';
 import { unitName } from '../../../shared/engine/stock.js';
 
@@ -67,7 +67,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   const [md, setMd] = useState<Record<'machine' | 'room', PickItem[]>>({ machine: [], room: [] });
   const last = row.events.at(-1)?.id ?? 0;
   // The block's fields and the label questions of what was entered by hand (a link absent or down).
-  const fields = [...stepFields(block, st), ...row.handFields];
+  const fields = [...stepFields({ ...block, fields: askedFields(doc, block) }, st), ...row.handFields];
   const line = Object.values(st.settings).find((v): v is { formula: string } => typeof v === 'object' && 'formula' in v);
   const material = line && materialLines(doc).find((l) => l.key === line.formula)?.materialItemId;
   const lots = useLinked<{ lotNumber: string }>(block.fields.some((f) => f.kind === 'lot') && material ? `/api/mms/lots?material=${encodeURIComponent(material)}` : null, 'lots');
@@ -101,10 +101,13 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   // What each machine or room field offers: as the server accepts it (shared/engine/picks.ts), and while the Logbook
   // is linked only what the Logbook has; the note says what is left out and why.
   const logbook = useLogbookItems(block.fields.some((f) => f.kind === 'machine' || f.kind === 'room'));
-  const pickOf = (f: BlockField) => inLogbook(f.kind === 'room' ? md.room.filter((r) => r.active && !roomRefusal(stage, r))
-    : f.kind === 'machine' ? md.machine.filter((m) => m.active && !machineRefusal(stage, f, m, md.room, dispensingRooms(doc, md.room))) : [], logbook);
+  const fits = (f: BlockField) => (f.kind === 'room' ? md.room.filter((r) => r.active && !roomRefusal(stage, r))
+    : f.kind === 'machine' ? md.machine.filter((m) => m.active && !machineRefusal(stage, f, m, md.room, dispensingRooms(doc, md.room))) : []);
+  const pickOf = (f: BlockField) => inLogbook(fits(f), logbook);
   const picksFor = (f: BlockField) => pickOf(f).offered;
-  const noteFor = (f: BlockField) => [untypedNote(f, md.machine), pickOf(f).note];
+  // An empty picker says why (once master data is read); otherwise only what the Logbook leaves out.
+  const mdRead = md.room.length > 0 && (md.machine.length > 0 || !block.fields.some((x) => x.kind === 'machine'));
+  const noteFor = (f: BlockField) => [mdRead && !fits(f).length ? emptyNote(stage, f, md.machine, md.room, dispensingRooms(doc, md.room)) : null, pickOf(f).note];
 
   const post = (action: string, body: object = {}, key = row.id) => api('POST', `/api/batches/${d.batch.id}/steps/${key}/${action}`, body);
   const run = async (fn: () => Promise<unknown>) => {

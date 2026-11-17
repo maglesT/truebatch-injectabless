@@ -4,7 +4,7 @@ import { api, type Me } from '../api.js';
 import { SignDialog } from '../components/SignDialog.js';
 import { product } from '../product.js';
 import {
-  batchLink, changed, go, headline, pdfLink, plainClock, plainError, stateLabel, STATUS_CHIP, stepLink, stepOf, stepTitle, timeLeft, tone, useBlocks, words, useServerNow,
+  batchLink, changed, go, headline, pdfLink, plainClock, plainError, stateLabel, STATUS_CHIP, statusText, stepLink, stepOf, stepTitle, timeLeft, tone, useBlocks, words, useServerNow,
   type BatchDetail, type Block, type StepRow,
 } from '../api-floor.js';
 import { StepScreen } from './StepScreen.js';
@@ -72,7 +72,7 @@ export function BatchHeader({ d }: { d: BatchDetail }) {
         </div>
       </div>
       <span className="bh-side">
-        <span className={`chip ${STATUS_CHIP[d.batch.status] ?? ''}`}>{d.batch.status}</span>
+        <span className={`chip ${STATUS_CHIP[d.batch.status] ?? ''}`}>{statusText(d.batch.status, true)}</span>
         <a className="button" href={pdfLink(d.batch.id)} download>{product.packing ? 'Packing record' : 'Batch record'} (PDF)</a>
       </span>
     </section>
@@ -188,6 +188,8 @@ function Approval({ d, blocks, reload }: { d: BatchDetail; blocks: Block[]; relo
   }).join('');
   const can = d.batch.actions.includes('production-approve');
   const problems = [...d.batch.open, ...d.batch.late].map(words);
+  // Demo installations only: the waits ended at once, said to production as QA's review says them.
+  const skips = d.steps.flatMap((s) => s.events.filter((e) => e.kind === 'demo_wait_skipped').map((e) => ({ s, e })));
   const sign = async ({ proof }: { proof: string }) => {
     try {
       await api('POST', `/api/batches/${d.batch.id}/production-approve`, { proof, contentHash: d.batch.contentHash });
@@ -211,6 +213,8 @@ function Approval({ d, blocks, reload }: { d: BatchDetail; blocks: Block[]; relo
         <ul className="checklist-plain">
           {d.stages.map((s) => <li key={s.key} className={s.closed ? 'ok' : 'no'}><i>{s.closed ? '✓' : '✕'}</i><span>Stage {s.name} {s.closed ? 'closed' : 'not closed'}{stageYield(s.index)}</span></li>)}
           <li className={d.batch.late.length ? 'no' : 'ok'}><i>{d.batch.late.length ? '✕' : '✓'}</i><span>{d.batch.late.length ? 'A timer ran over without a deviation note' : 'Every timer that ran over has a deviation note'}</span></li>
+          {skips.length > 0 && <li className="no"><i>!</i><span>DEMO: {skips.length} wait{skips.length === 1 ? '' : 's'} skipped (QA sees them in the review)
+            {skips.map(({ s, e }) => <small key={e.id} className="muted" style={{ display: 'block' }}>{doc.stages[s.key.stage]!.name} › {stepTitle(doc, blocks, stepOf(doc, s.key))}: {String(e.payload.label ?? '')}, by {e.personName}, {plainClock(e.at)}</small>)}</span></li>}
         </ul>
         {d.batch.deviations.length > 0 && (<>
           <h3>Deviation notes</h3>
@@ -220,7 +224,7 @@ function Approval({ d, blocks, reload }: { d: BatchDetail; blocks: Block[]; relo
           <div className="notice" role="note"><p><b>Not ready for production approval yet:</b></p><ul>{problems.map((p, i) => <li key={i}>{p}</li>)}</ul></div>
         )}
         {d.batch.status === 'manufacturing complete' && !can && <p className="notice">{problems.length ? problems.join(' ') : 'Production approval needs the production supervisor permission.'}</p>}
-        {!['in production', 'manufacturing complete'].includes(d.batch.status) && <p className="all-good"><span aria-hidden="true">✓</span> The record is {d.batch.status}.</p>}
+        {!['in production', 'manufacturing complete'].includes(d.batch.status) && <p className="all-good"><span aria-hidden="true">✓</span> The record is {statusText(d.batch.status)}.</p>}
         {can && <div className="action-bar"><p className="why">Every stage is closed. Your signature means: the record is complete and correct.</p>
           <button className="big primary" onClick={() => setSigning(true)}>Sign: production approved</button></div>}
       </section>

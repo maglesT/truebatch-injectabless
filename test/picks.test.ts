@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { findBlock } from '../shared/blocks/index.js';
-import { dispensingRooms, machineRefusal, untypedNote } from '../shared/engine/picks.js';
+import { dispensingRooms, emptyNote, machineRefusal, untypedNote } from '../shared/engine/picks.js';
 import { skeletonList, skeletonStages } from '../web/src/designer/skeletons.js';
 
 // The equipment and instrument types of the demo master data (owner's list, 15 Nov 2026) and of an injectables plant,
@@ -76,6 +76,15 @@ describe('machine pickers on the demo master-data types', () => {
       { code: 'SF-01', type: 'Compounding vessel', room: null }, { code: 'SF-02', type: null, room: 'RM-103' }];
     expect(items.map((m) => machineRefusal(stage, sifter, m, ROOMS))).toEqual([null, 'EQ-X stands in RM-107, not in a room this stage allows (Granulation)',
       'SF-01 stands in no room in master data, so it is not in a room this stage allows (Granulation)', expect.stringContaining('SF-02 has no type in master data')]);
-    expect(untypedNote(sifter, items)).toBe('Not offered, because master data gives no type: SF-02. Engineering sets the type (and the room) in master data.');
+    expect(untypedNote(sifter, items)).toBe('1 machine has no type in master data, so it is not offered.');
+  });
+
+  it('TI-11 an empty machine picker says why: where the machines of its type stand, or that master data has none (17 Nov 2026 Tablets run, F17)', () => {
+    const stage = { ...stages[0]!, roomTypes: ['RM-103'] };
+    const vessel = field('dissolve', 'machine');
+    const all = [{ code: 'EQ-V-01', type: 'Compounding vessel', room: 'RM-107' }, { code: 'EQ-N', type: null, room: null }, { code: 'EQ-AC-01', type: 'Autoclave', room: 'RM-103' }];
+    expect(emptyNote(stage, vessel, all, ROOMS)).toBe('No vessel or mixer can be used here: EQ-V-01 stands in RM-107, not in a room this stage allows (RM-103). '
+      + '1 machine has no type in master data, so it is not offered. Engineering moves one into a room this stage allows, or adds one, in master data (the Logbook shows where each stands).');
+    expect(emptyNote(stage, vessel, all.slice(1), ROOMS)).toBe('Master data has no active vessel or mixer. 1 machine has no type in master data, so it is not offered. Engineering adds it in master data.');
   });
 });

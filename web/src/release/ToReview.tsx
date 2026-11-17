@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, can, type Me } from '../api.js';
-import { batchLink, go, plainClock, plainError, releaseLink } from '../api-floor.js';
+import { batchLink, go, plainClock, plainError, releaseLink, statusText } from '../api-floor.js';
 import { Terminate } from './Terminate.js';
 import '../floor/floor.css';
 import './release.css';
@@ -48,7 +48,7 @@ export function ToReview({ me }: { me: Me }) {
                     <span className="age-dot" aria-hidden="true" />
                     <span className="pending-what">
                       <strong><a href={batchLink(b.id)}>{b.batchNo} · {b.productName}</a></strong>
-                      <small>{b.productCode} · {b.status}, issued {plainClock(b.since)}</small>
+                      <small>{b.productCode} · {statusText(b.status)}, issued {plainClock(b.since)}</small>
                     </span>
                     {b.actions.includes('terminate') && <Terminate id={b.id} batchNo={b.batchNo} onDone={() => setTick((n) => n + 1)} />}
                   </div>
@@ -57,7 +57,7 @@ export function ToReview({ me }: { me: Me }) {
                     <span className={b.openDeviations ? 'age-dot late' : 'age-dot'} aria-hidden="true" />
                     <span className="pending-what">
                       <strong>{b.batchNo} · {b.productName}</strong>
-                      <small>{b.productCode} · {b.status} by {b.by}, {plainClock(b.since)}</small>
+                      <small>{b.productCode} · {statusText(b.status)} by {b.by}, {plainClock(b.since)}</small>
                       <span className="pending-badges">
                         {b.openDeviations > 0 && <span className="chip chip-bad">{b.openDeviations} open deviation{b.openDeviations === 1 ? '' : 's'}</span>}
                         {b.actions.some((a) => a !== 'terminate') && <span className="chip chip-ok">Ready for your signature</span>}

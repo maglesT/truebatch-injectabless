@@ -90,6 +90,15 @@ export function batchView(doc: MasterDoc, events: readonly StepEvent[], batchEve
   return { status, open, late, deviations: devs, yieldOut };
 }
 
+/**
+ * A batch status in words for people (the key stays as it is in the API and the published views): a packing batch
+ * whose steps are all done is "packing complete"; `capital`: the first letter in capitals, as a chip or a heading.
+ */
+export function statusWords(status: string, packing: boolean, capital = false): string {
+  const w = packing && status === 'manufacturing complete' ? 'packing complete' : status;
+  return capital ? w.charAt(0).toUpperCase() + w.slice(1) : w;
+}
+
 /** Why the person may not do the batch action now; null when they may. */
 export function batchRefusal(action: BatchAction, v: BatchView, user: { id?: number; permissions: readonly string[] }, note?: number): { status: 403 | 409; error: string; problems: string[] } | null {
   const rule = BATCH_ACTIONS[action];

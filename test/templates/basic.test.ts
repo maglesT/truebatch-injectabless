@@ -237,12 +237,13 @@ describe('T6 Ratio and powder indices', () => {
 
 describe('T21 Lesser / greater', () => {
   it('T21: bilayer expected tablets (formulation 6): the smaller layer count', () => {
-    // layer 1: 40.5 kg ÷ 270 mg = 150000; layer 2: 33.0 kg ÷ 225 mg = 146666.7 → the lesser is layer 2
+    // layer 1: 40.5 kg ÷ 270 mg = 150000; layer 2: 33.0 kg ÷ 225 mg = 146666.7, to the whole tablet 146667 → the lesser is layer 2
     const l1 = ok(t6Ratio({ mode: 'ratio', a: '40.5 kg', b: '270 mg', unit: 'tablets' }));
     const l2 = ok(t6Ratio({ mode: 'ratio', a: '33.0 kg', b: '225 mg', unit: 'tablets' }));
     const r = ok(t21LesserGreater({ which: 'lesser', values: [{ name: 'layer 1', value: `${l1.value.toFixed(1)} tablets` }, { name: 'layer 2', value: `${l2.value.toFixed(1)} tablets` }] }));
     expect(r.from).toBe('layer 2');
-    expect(r.value.toFixed(1)).toBe('146666.7');
+    expect(r.value.toFixed(1)).toBe('146667.0');
+    expect(l2.shown).toBe('33.0 kg ÷ 225 mg = 146666.6…, rounded to whole tablets = 146667 tablets');
   });
 
   it.each([

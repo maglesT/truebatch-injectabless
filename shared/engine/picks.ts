@@ -31,7 +31,7 @@ export function machineRefusal(stage: Stage, f: BlockField, m: PickMachine, room
   if (!balance && stage.machineTypes.length && !among(stage.machineTypes, m.type)) return `${m.code} is not one of the machine types this stage allows (${stage.machineTypes.join(', ')})`;
   const type = (m.type ?? '').toLowerCase();
   if (!type && f.types?.length) return `${m.code} has no type in master data, so it is not offered as a ${f.label.toLowerCase()}`;
-  if ((f.types?.length && !f.types.some((w) => type.includes(w))) || f.notTypes?.some((w) => type.includes(w))) return `${m.code} is not a ${f.label.toLowerCase()} (master data: ${m.type ?? 'no type'})`;
+  if (!fitsType(f, m)) return `${m.code} is not a ${f.label.toLowerCase()} (master data: ${m.type ?? 'no type'})`;
   const room = m.room ? rooms.find((r) => r.code === m.room) : undefined;
   if (balance && room && LAB_AREA.test(room.area ?? '')) return `${m.code} stands in ${room.code} (${room.area}), a laboratory area: weigh with a balance of a dispensing room of the master or of a room this stage allows`;
   if (!stage.roomTypes.length || (balance && among(dispensing, m.room))) return null;
@@ -40,13 +40,40 @@ export function machineRefusal(stage: Stage, f: BlockField, m: PickMachine, room
   return null;
 }
 
-/** What the picker says of the active machines it leaves out for having no type in master data (they cannot be matched to the field). */
+/** Whether master data's type of a machine is one the field takes (any type when the field names none). */
+export function fitsType(f: BlockField, m: PickMachine): boolean {
+  const type = (m.type ?? '').toLowerCase();
+  return !(f.types?.length && !f.types.some((w) => type.includes(w))) && !f.notTypes?.some((w) => type.includes(w));
+}
+
+/**
+ * The active machines left out for having no type in master data (they cannot be matched to the field), in a few
+ * words. Engineering's housekeeping: said only where it matters, when the picker offers nothing (owner, 17 Nov 2026).
+ */
 export function untypedNote(f: BlockField, machines: readonly (PickMachine & { active?: boolean })[]): string | null {
   if (f.kind !== 'machine' || !f.types?.length) return null;
-  const codes = machines.filter((m) => m.active !== false && !m.type?.trim()).map((m) => m.code);
-  if (!codes.length) return null;
-  const shown = codes.length > 6 ? `${codes.slice(0, 6).join(', ')} and ${codes.length - 6} more` : codes.join(', ');
-  return `Not offered, because master data gives no type: ${shown}. Engineering sets the type (and the room) in master data.`;
+  const n = machines.filter((m) => m.active !== false && !m.type?.trim()).length;
+  return n ? `${n} machine${n === 1 ? ' has' : 's have'} no type in master data, so ${n === 1 ? 'it is' : 'they are'} not offered.` : null;
+}
+
+/**
+ * Why a machine or room picker offers nothing (owner, 17 Nov 2026: an empty picker says why): the machines of the
+ * field's type and where they stand (or that master data has none of that type), and the untyped ones in a few words.
+ */
+export function emptyNote(stage: Stage, f: BlockField, machines: readonly (PickMachine & { active?: boolean })[], rooms: readonly (PickRoom & { active?: boolean })[],
+  dispensing: readonly string[] = []): string {
+  const allowed = stage.roomTypes.length ? ` (${stage.roomTypes.join(', ')})` : '';
+  if (f.kind === 'room') return `No room this stage allows${allowed} is active in master data. Engineering adds or activates it in master data.`;
+  const what = f.label.toLowerCase();
+  const ofType = machines.filter((m) => m.active !== false && (!f.types?.length || m.type?.trim()) && fitsType(f, m));
+  const why = ofType.map((m) => machineRefusal(stage, f, m, rooms, dispensing)).filter((x): x is string => !!x);
+  const untyped = untypedNote(f, machines);
+  const shown = why.length > 3 ? `${why.slice(0, 3).join('; ')}; and ${why.length - 3} more` : why.join('; ');
+  return [
+    why.length ? `No ${what} can be used here: ${shown}.` : `Master data has no active ${what}.`,
+    untyped,
+    why.length ? 'Engineering moves one into a room this stage allows, or adds one, in master data (the Logbook shows where each stands).' : 'Engineering adds it in master data.',
+  ].filter(Boolean).join(' ');
 }
 
 /**

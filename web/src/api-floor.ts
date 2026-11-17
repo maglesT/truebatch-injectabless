@@ -9,6 +9,8 @@ import { unitName, type Returned } from '../../shared/engine/stock.js';
 import { PROVIDER_NAME, type Source } from '../../shared/engine/links.js';
 import { stepTitle as sharedStepTitle, TERMINATED_STATE } from '../../shared/engine/batch.js';
 import { plantText, sep } from '../../shared/plant-time.js';
+import { statusWords } from '../../shared/engine/release.js';
+import { product } from './product.js';
 
 export type { Block, BlockField, MasterDoc, Step, Action, State, StepKey, Stored, Value, Source };
 
@@ -133,6 +135,8 @@ export function stateLabel(state: State, terminated: unknown): [string, string] 
   const t = terminated ? TERMINATED_STATE[state] : undefined;
   return t ? [t[0]!.toUpperCase() + t.slice(1), ''] : STATE_LABEL[state];
 }
+/** A batch status in words (a packing batch is "packing complete"); `capital` for a chip. */
+export const statusText = (status: string, capital = false) => statusWords(status, product.packing, capital);
 export const STATUS_CHIP: Record<string, string> = {
   'in production': 'chip-info', 'manufacturing complete': 'chip-warn', 'production approved': 'chip-ok', 'QC approved': 'chip-ok', released: 'chip-ok', rejected: 'chip-bad',
 };

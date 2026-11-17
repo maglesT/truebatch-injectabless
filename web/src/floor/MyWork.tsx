@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, type Me } from '../api.js';
-import { batchLink, go, plainError, STATE_LABEL, stepLink, timeLeft, useServerNow, type WorkBadge, type WorkItem } from '../api-floor.js';
+import { batchLink, go, plainError, STATE_LABEL, statusText, stepLink, timeLeft, useServerNow, type WorkBadge, type WorkItem } from '../api-floor.js';
 import './floor.css';
 
 // "My work": the batches in production the person may act on, the checks waiting for them (never their own work,
@@ -9,6 +9,9 @@ export function MyWork({ me }: { me: Me }) {
   const [rows, setRows] = useState<WorkItem[] | null>(null);
   const [error, setError] = useState('');
   const [serverNow, setServerNow] = useState<string>();
+  // The batches the person worked on that left production: the finished record stays one tap away.
+  const [finished, setFinished] = useState<{ id: number; batchNo: string; productName: string; status: string }[]>([]);
+  useEffect(() => { void api<typeof finished>('GET', '/api/batches/finished', undefined, true).then(setFinished, () => {}); }, []);
   const now = useServerNow(serverNow);
 
   useEffect(() => {
@@ -67,7 +70,7 @@ export function MyWork({ me }: { me: Me }) {
                       <span className={late ? 'age-dot late' : 'age-dot'} aria-hidden="true" />
                       <span className="pending-what">
                         <strong>{b.batchNo} · {b.productName}</strong>
-                        <small>{b.current ? `${b.current.stage} · ${b.current.title} · ${STATE_LABEL[b.current.state][0]}` : b.status} · stage {Math.min(b.stagesClosed + 1, b.stageCount)} of {b.stageCount}</small>
+                        <small>{b.current ? `${b.current.stage} · ${b.current.title} · ${STATE_LABEL[b.current.state][0]}` : statusText(b.status, true)} · stage {Math.min(b.stagesClosed + 1, b.stageCount)} of {b.stageCount}</small>
                         {b.badges.length > 0 && <span className="pending-badges">{b.badges.map((x, i) => <Badge key={i} x={x} now={now} />)}</span>}
                       </span>
                       <span className="pending-go">Open →</span>
@@ -77,6 +80,20 @@ export function MyWork({ me }: { me: Me }) {
               </div>
             )}
           </section>
+          {finished.length > 0 && (
+            <section className="dash-panel" aria-label="Finished on the floor">
+              <div className="panel-head"><h2>Finished on the floor</h2><span className="muted">batches you worked on, now with production, QC or QA</span></div>
+              <div className="pending-list">
+                {finished.map((b) => (
+                  <button key={b.id} className="pending-row" onClick={() => go(batchLink(b.id))}>
+                    <span className="age-dot" aria-hidden="true" />
+                    <span className="pending-what"><strong>{b.batchNo} · {b.productName}</strong><small>{statusText(b.status, true)}</small></span>
+                    <span className="pending-go">Open →</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
         </>
       )}
     </div>

@@ -41,7 +41,7 @@ const CFM = d('28316.846592').times(60); // mL/h: 1 ft³ = 28 316.846592 mL exac
 // symbol, kind, factor (to base), offset — base unit of each kind is the one with factor 1.
 const TABLE: [string, Kind, Dec | string, string?][] = [
   ['', 'number', '1'],
-  ['units', 'count', '1'], ['tablets', 'count', '1'],
+  ['units', 'count', '1'], ['tablets', 'count', '1'], ['packs', 'count', '1'], ['nos', 'count', '1'], // nos: pieces, as master data counts them
   ['µg', 'mass', '0.000001'], ['mg', 'mass', '0.001'], ['g', 'mass', '1'], ['kg', 'mass', '1000'],
   ['mm³', 'volume', '0.001'], ['µL', 'volume', '0.001'], ['mL', 'volume', '1'], ['L', 'volume', '1000'], ['m³', 'volume', '1000000'],
   ['US gal', 'volume', US_GALLON], ['imp gal', 'volume', '4546.09'], // an imperial gallon is 20 % larger
@@ -131,7 +131,7 @@ const ALIASES: Record<string, string> = {
   ug: 'µg', 'mcg/mg': 'µg/mg', 'ug/mg': 'µg/mg', mcg: 'µg', μg: 'µg', ml: 'mL', l: 'L', uL: 'µL', μL: 'µL', 'cm3': 'mL', 'cm³': 'mL', mm3: 'mm³', deg: '°', 'mg/cm2': 'mg/cm²', 'g/m2': 'g/m²', um: 'µm', μm: 'µm',
   mm2: 'mm²', cm2: 'cm²', sec: 's', hr: 'h', degC: '°C', degF: '°F', kP: 'kp', Kp: 'kp',
   '% w/w': '%w/w', '% w/v': '%w/v', '% RH': '%RH', RH: '%RH', cfu: 'CFU', 'cfu/g': 'CFU/g', 'cfu/mg': 'CFU/mg',
-  'kg/cm²': 'kgf/cm²', 'N/mm2': 'N/mm²', 'g/m3': 'g/m³', 'ft³/min': 'cfm', 'ft3/min': 'cfm', meq: 'mEq', mEQ: 'mEq', 'US gallon': 'US gal', 'imperial gallon': 'imp gal', 'kg/cm2': 'kgf/cm²', 'g/cm3': 'g/cm³', 'm3/h': 'm³/h', tablet: 'tablets', unit: 'units',
+  'kg/cm²': 'kgf/cm²', 'N/mm2': 'N/mm²', 'g/m3': 'g/m³', 'ft³/min': 'cfm', 'ft3/min': 'cfm', meq: 'mEq', mEQ: 'mEq', 'US gallon': 'US gal', 'imperial gallon': 'imp gal', 'kg/cm2': 'kgf/cm²', 'g/cm3': 'g/cm³', 'm3/h': 'm³/h', tablet: 'tablets', unit: 'units', pack: 'packs', no: 'nos', 'nos.': 'nos',
   // TrueBatch Injectables.
   'bar(g)': 'bar g', barg: 'bar g', 'mbar(g)': 'mbar g', psig: 'psi g', 'psi(g)': 'psi g', 'kPa(g)': 'kPa g', 'kg/cm² g': 'kgf/cm² g', 'kg/cm2 g': 'kgf/cm² g',
   torr: 'Torr', mtorr: 'mTorr', ubar: 'µbar', 'mbar L/s': 'mbar·L/s', 'mbar.L/s': 'mbar·L/s', scfh: 'SCFH', F0: 'F-min',
