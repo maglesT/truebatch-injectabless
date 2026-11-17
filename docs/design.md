@@ -218,7 +218,8 @@ answering) or **ok**.
   who typed the number closes it.
   **The number Deviations gives a note** (gap 6, owner 17 Nov 2026): a note written without a number is filed by
   Deviations' automatic filing as a deviation whose `source_ref` is `<product>:note:<note id>`
-  (`truebatch_injectables:note:…`, `truebatch_injectables_packing:note:…`). While the link answers, the batch reads
+  (`truebatch_injectables:note:…`, `truebatch_injectables_packing:note:…`; `deviation_note_v1.source_ref` says the same
+  since `0019`, whole-suite run S22). While the link answers, the batch reads
   `deviation_v1` by that source_ref (`server/links.ts` bySourceRefs; no new view, no new read) and the note becomes a
   linked deviation with that number (`shared/engine/release.ts` filedKey, deviationText, deviationNumber, as TrueBatch
   Tablets): the step row, the step's history, the batch alerts and approval list say "Deviation DEV-2026-0040 (filed
@@ -292,7 +293,9 @@ answering) or **ok**.
   `step_name` are the step that names it **last** (the latest started), so the Logbook's "last used by … (stage ›
   step)" names where it was last used. `0016`: a machine or room named only in line clearance steps (a room, the
   filling line) was used by the stage, so its `step_name` is the stage's name ("Compounding"); a machine operated in
-  a process step keeps that step. `material_use_v1` gives the quantity in the
+  a process step keeps that step. `0020` (whole-suite run, S17): a use starts when the item was first recorded on a
+  step, not at the step's start (a room refused until its changeover cleaning was done is not in use during it).
+  `material_use_v1` gives the quantity in the
   material's unit in master data, read when the step is signed done (g and mg exactly in kg for a kg material).
   **Yield columns** (owner, 17 Nov 2026; names set by the server lead for every TrueBatch product, for Packing and
   OEE), appended at the end of `batch_fact_v1` (`0017`): `good_quantity`, the good units of the master's last
