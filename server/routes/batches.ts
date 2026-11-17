@@ -490,6 +490,21 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
     return { link: r.state, deviations: r.state === 'ok' ? r.value : [] };
   });
 
+  // TI-10, pull don't type (owner, 17 Nov 2026): the batch that last used a room or line before this one, from this
+  // product's own records, for the line clearance's "previous product and batch" (one tap; typed only when unknown).
+  app.get<{ Params: { id: string }; Querystring: { item?: string } }>('/api/batches/:id/previous-use', anyUser, async (req, reply) => {
+    const id = parseId(req.params.id);
+    const item = String(req.query.item ?? '');
+    if (id === null || !item) return reply.code(404).send({ error: 'not_found' });
+    const [u] = await sql<{ batchNo: string; productCode: string | null; productName: string | null }[]>`
+      select b.batch_no as "batchNo", v.doc->'header'->>'productCode' as "productCode", v.doc->'header'->>'productName' as "productName"
+      from step_events e join batches b on b.id = e.batch_id join master_versions v on v.id = b.master_version_id
+      where e.batch_id <> ${id} and e.kind in ('value', 'corrected') and b.issued_at < (select issued_at from batches where id = ${id})
+        and exists (select 1 from jsonb_each(e.payload->'values') f where jsonb_typeof(f.value) = 'object' and f.value->>'itemId' = ${item})
+      order by e.at desc limit 1`;
+    return { previous: u ? { ...u, text: `${[u.productCode, u.productName].filter(Boolean).join(' · ')}, batch ${u.batchNo}` } : null };
+  });
+
   // The lots of a material MMS has released and in date today, for the lot's pick list.
   app.get<{ Querystring: { material?: string } }>('/api/mms/lots', anyUser, async (req) => {
     const r = await app.links.mms.usable(String(req.query.material ?? ''), new Date().toLocaleDateString('en-CA', { timeZone: PLANT_TZ }));

@@ -162,7 +162,9 @@ answering) or **ok**.
   the Logbook's reasons are shown word for word (each without its own closing stop inside our sentence); a status
   older than 5 minutes counts as down. While the link answers, the machine and room pickers offer only what the
   Logbook has and name the ones left out (`shared/engine/picks.ts`, `inLogbook`); absent or down, every one is offered. Line clearance takes
-  clean, cleaned on and cleaned by from it. By hand: the status-label questions, each answered yes.
+  clean, cleaned on and cleaned by from it; the previous product and batch is offered from this product's own batches
+  that named the room or line before (one tap; typed only when another product used it since). An empty picker says
+  why: where the machines of its type stand, or that master data has none (owner, 17 Nov 2026). By hand: the status-label questions, each answered yes.
 - **MMS** (`lot_v1`, `lot_test_v1`, planned, with numbers): the lot must exist, be the line's material, released, in
   date and not past retest; assay, water, LOD and content come as numbers in %, the assay on the master's basis. By
   hand: the lot label's status and date, the certificate values and their report number. A quantity taken from a lot
@@ -188,7 +190,9 @@ answering) or **ok**.
   picked machine or room keeps its room's area for this. A weighing instrument (a balance, by the type rule of
   `shared/engine/picks.ts`) is never a use: shared by the batches weighing on it, it is neither in use by a batch nor
   dirty between weighings; the record keeps which balance was used and the Logbook checks its calibration as before. Both views add `step_name` at the end ("Granulation › Granulate to
-  an end point", kept with the step's start); `step` stays the keys. `material_use_v1` gives the quantity in the
+  an end point", kept with the step's start); `step` stays the keys. `0014` (17 Nov 2026): the use's `step` and
+  `step_name` are the step that names it **last** (the latest started), so the Logbook's "last used by … (stage ›
+  step)" names where it was last used. `material_use_v1` gives the quantity in the
   material's unit in master data, read when the step is signed done (g and mg exactly in kg for a kg material).
 - **QA terminates a batch** (owner, 16 Nov 2026): a batch still in production (before production approval) that
   cannot be finished is terminated by QA (`qa.release`) from the batch screen or the "To review" list, with a reason
@@ -226,7 +230,11 @@ answering) or **ok**.
   The library (`shared/blocks/`) holds the 11 blocks the injectables library reuses from TrueBatch Tablets and the
   sterile blocks of library v1; the tablet steps are not in the product. A text setting may have a fixed list the
   author picks from.
-- A fixed, short list of units.
+- A fixed, short list of units. Counts are whole (owner, 17 Nov 2026, as TrueBatch Tablets): packs from filled units
+  are whole packs (rounded down); a count is named as people count it (units, packs, nos).
+- A result is shown by its figure and its limit in a few words, with one verdict (the screen's chip, the PDF's
+  verdict line); its worked line stays with it ("How it was worked out"; in the PDF under the figure)
+  (`shared/engine/plain.ts`, owner 17 Nov 2026). Times are shown to the minute.
 - A master version is stored as one JSON document.
 - The designer is forms and ordered lists.
 - Server timers as the Logbook does them. In a demo installation only (`TRUEBATCH_DEMO=1`, set by the platform for the

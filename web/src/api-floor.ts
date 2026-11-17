@@ -181,19 +181,8 @@ export function useServerNow(serverNow: string | undefined): number {
   return tick + offset;
 }
 
-/** A result's headline (rounded as the limit is written, or the end of its worked line) and its tone. */
-export function headline(r: Stored): string | null {
-  if (!r.ok) return null;
-  // The expiry (T27) is a month ("10/2028"), not the shelf life it is worked out from.
-  if (typeof r.expiry === 'string' && /^\d{4}-\d{2}$/.test(r.expiry)) return `${r.expiry.slice(5)}/${r.expiry.slice(0, 4)}`;
-  const rounded = (r.check as { rounded?: string } | undefined)?.rounded;
-  // Against a target (C1 "around"): the difference from the target, in %.
-  if (rounded !== undefined && typeof r.deviation === 'string') return `${r.deviation.startsWith('-') ? '' : '+'}${rounded} %`;
-  if (rounded !== undefined && r.unit !== 'units') return rounded;
-  if (r.unit === 'units') return null;
-  const m = /=\s*([^=;]+)$/.exec(r.shown.split('; ')[0] ?? '');
-  return m ? m[1]!.trim() : `${r.value} ${r.unit}`;
-}
+/** A result's headline (shared/engine/plain.ts, as the PDF). */
+export { headline, plainLine, withoutVerdict } from '../../shared/engine/plain.js';
 export function tone(r: Stored | undefined): 'ok' | 'bad' | 'warn' | null {
   if (!r) return null;
   if (!r.ok) return 'warn';

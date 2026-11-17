@@ -4,7 +4,7 @@
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces.js';
 import { findBlock, type Block } from '../shared/blocks/index.js';
 import { materialLines, type Step } from '../shared/master/schema.js';
-import { batchText, batchView, deviations, fieldLabel, handFields, lateItems, lineQuantity, notYetText, cutShort, terminatedText, TERMINATED_STATE, openSteps, PROVIDER_NAME, deviationStatusWords, stepTitle, unitName, type DeviationStatus, type EventKind, type Source, type Stored, type StepView, type Value } from '../shared/engine/index.js';
+import { batchText, batchView, deviations, fieldLabel, handFields, lateItems, lineQuantity, notYetText, cutShort, terminatedText, TERMINATED_STATE, openSteps, PROVIDER_NAME, deviationStatusWords, stepTitle, unitName, headline, limitOf, withoutVerdict, statusWords, CERTIFICATE, type DeviationStatus, type EventKind, type Source, type Stored, type StepView, type Value } from '../shared/engine/index.js';
 import type { LoadedBatch } from './routes/batches.js';
 import { pageFrame, plant, runs } from './pdf.js';
 import { plantText } from '../shared/plant-time.js';
@@ -34,12 +34,15 @@ const isItem = (v: Value): v is { itemId: string; code: string; name: string; ve
 export function valueText(v: Value | undefined, stockUnit?: string): string {
   if (v === undefined) return '—';
   if (Array.isArray(v)) return v.map((x) => x.value).join(', ') + (v[0]?.unit ? ` ${unitName(v[0].unit, stockUnit)}` : '');
-  if (isItem(v)) return `${v.code} · ${v.name} (v${v.version})`;
+  // Master data's version of a machine or room stays in the event; the record names the item (owner, 17 Nov 2026).
+  if (isItem(v)) return `${v.code} · ${v.name}`;
   if (typeof v === 'object') return `${v.value}${v.unit ? ` ${unitName(v.unit, stockUnit)}` : ''}`;
   return plantText(v);
 }
 /** The value at the end of a worked line ("… = 10.152 kg"). */
 const endOf = (r: Stored) => (r.ok ? (/=\s*([^=;]+)$/.exec(r.shown)?.[1]?.trim() ?? `${r.value} ${r.unit}`) : '');
+// A formula line's role in words, never its key (owner, 17 Nov 2026).
+const ROLE: Record<string, string> = { api: 'API', excipient: 'Excipient', solvent: 'Solvent' };
 const checksOf = (r: Stored) => (r.ok ? Object.entries(r).filter(([k, v]) => /check$/i.test(k) && v && typeof v === 'object') as [string, { pass: boolean; shown: string }][] : []);
 
 const small = (text: string, extra: Record<string, unknown> = {}): Content => ({ text: runs(text), fontSize: 7.5, ...extra }) as Content;
@@ -81,7 +84,7 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
     { text: runs(`${record} ${r.batch.batchNo}`), fontSize: 16, bold: true },
     { text: runs(`${h.productCode} · ${h.productName}`), fontSize: 11, margin: [0, 2, 0, 8] },
     { table: { widths: [90, '*', 90, '*', 90, '*'], body: [
-      [th('Product'), small(`${h.productCode} · ${h.productName}`), th('Batch no.'), small(r.batch.batchNo, { bold: true }), th('Status'), small(view.status, { bold: true })],
+      [th('Product'), small(`${h.productCode} · ${h.productName}`), th('Batch no.'), small(r.batch.batchNo, { bold: true }), th('Status'), small(statusWords(view.status, !!doc.pack, true), { bold: true })],
       doc.pack ? [th('Pack'), small(`${doc.pack.type}, ${doc.pack.unitsPerPack} units per pack, ${doc.pack.packsPerCarton} packs per carton; ${doc.pack.destination}${doc.pack.mrp ? `, MRP Rs. ${doc.pack.mrp}` : ''}`),
         th('Filled units'), small(`${doc.pack.bulkCode} · batch ${valueText(facts?.values.bulk)} · ${valueText(facts?.values.units)} issued · line ${valueText(facts?.values.line)}${facts?.results.expiry?.ok ? ` · ${facts.results.expiry.shown}` : ''}`),
         th('Master version'), small(`version ${r.versionNo}`)]
@@ -96,7 +99,13 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
   if (doc.pack) content.push(heading('Packing materials'), table([150, 70, 60, '*', '*'], ['Material', 'Kind', 'Per pack', 'Lots and quantities issued', 'Reconciliation'], doc.pack.materials.map((m) => [
     small(`${m.code} · ${m.name}`), small(`${m.kind}${m.printed ? ', printed' : ''}${m.coded ? ', coded' : ''}`), small(`${m.perPack} ${unitName(m.unit, r.units?.get(m.materialItemId))}`),
     small(steps.filter((v) => naming(v, m.key, 'pack-material-issue')).map((v) => `${v.values.lot === undefined ? 'not issued' : `Lot ${valueText(v.values.lot)}: ${valueText(v.values.issued, unitOf(v))}`} · ${stepName(v)}`).join('\n') || notYet('issued')),
-    small(steps.filter((v) => naming(v, m.key, 'printed-reconciliation')).map((v) => (v.results.reconciliation?.ok ? v.results.reconciliation.shown : notYet('reconciled'))).join('\n') || (m.printed ? notYet('reconciled') : '—')),
+    // A count in master data's name for it (nos), as the per-pack column; the verdict once, after the line.
+    small(steps.filter((v) => naming(v, m.key, 'printed-reconciliation')).map((v) => {
+      const rec = v.results.reconciliation;
+      if (!rec?.ok) return notYet('reconciled');
+      const shown = withoutVerdict(rec.shown).replace(/\bunits\b/g, unitName('units', r.units?.get(m.materialItemId)));
+      return `${shown}: ${checksOf(rec).every(([, c]) => c.pass) ? 'PASS' : 'FAIL'}`;
+    }).join('\n') || (m.printed ? notYet('reconciled') : '—')),
   ])));
 
   // The formula, with the lots and the quantities dispensed (the weighing steps that name the line).
@@ -104,7 +113,7 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
   if (!doc.pack) content.push(table([150, 90, 55, 80, '*'], ['Material', 'Role', `mg per ${h.batchUnit === 'units' ? 'unit' : 'mL'}`, 'Batch quantity', 'Lots and dispensed quantities'], doc.formula.map((l) => {
     const q = lineQuantity(doc, [], { stage: 0, sub: 1, step: 0, round: 1 }, l, false, {});
     const weighed = steps.filter((v) => Object.values(stepOf(v).settings).some((s) => typeof s === 'object' && 'formula' in s && s.formula === l.key && findBlock(stepOf(v).block)?.gmp === 'weighing'));
-    return [small(`${l.code} · ${l.name}`), small(l.role), small(l.mg ?? 'q.s.'), small(endOf(q)),
+    return [small(`${l.code} · ${l.name}`), small(ROLE[l.role] ?? l.role), small(l.mg ?? 'q.s.'), small(endOf(q)),
       small(weighed.map((v) => {
         const net = v.results.net;
         if (!net) return `${notYet('weighed')} · ${stepName(v)}`;
@@ -132,7 +141,10 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
           if (e.kind === 'demo_wait_skipped') return small(`DEMO: wait skipped by ${who(e.person)} at ${plant(e.at)} · ${String(e.payload.label ?? '')}`, { color: RED, bold: true });
           const sig = sigOf.get(e.id);
           const extra = e.payload.reason ? ` · reason: ${e.payload.reason}` : e.payload.text ? ` · ${e.payload.reference ? `${e.payload.reference}: ` : ''}${e.payload.text}` : '';
-          return small(`${EVENT[e.kind]}: ${who(e.person)}, ${plant(e.at)}${sig ? ` · signed "${MEANING[sig.meaning] ?? sig.meaning}"` : ''}${extra}`,
+          // Packing: the batch facts are recorded when the batch is issued (the issuer starts the first step); the
+          // operator then receives the filled units and signs it done.
+          const kind = doc.pack && v.id === '0.1.0.1' && e.kind === 'started' ? 'Batch facts recorded at issue' : EVENT[e.kind];
+          return small(`${kind}: ${who(e.person)}, ${plant(e.at)}${sig ? ` · signed "${MEANING[sig.meaning] ?? sig.meaning}"` : ''}${extra}`,
             e.kind === 'late' || e.kind === 'sent_back' ? { color: RED } : {});
         }) },
       ];
@@ -168,8 +180,8 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
   content.push(decisions.length ? { stack: decisions.map((b) => small(b === ended ? endedText! :
     `${MEANING[b.kind] ?? b.kind}: ${b.personName}, ${plant(b.at)}${b.payload.reportNo ? ` · QC report ${b.payload.reportNo}` : ''}${b.payload.emReview ? ` · EM review: ${b.payload.emReview}` : ''}${b.payload.reason ? ` · reason: ${b.payload.reason}` : ''}`,
     { fontSize: 9, bold: b.kind === 'released' || b.kind === 'rejected', color: b.kind === 'rejected' ? RED : undefined, margin: [0, 0, 0, 2] })) }
-    : { text: `No decision yet: the batch is ${view.status}.`, italics: true, fontSize: 9 });
-  if (view.status !== 'released' && view.status !== 'rejected') content.push(small(`This copy was made while the batch is ${view.status}: it is not a released record.`, { color: RED, margin: [0, 4, 0, 0] }));
+    : { text: `No decision yet: the batch is ${statusWords(view.status, !!doc.pack)}.`, italics: true, fontSize: 9 });
+  if (view.status !== 'released' && view.status !== 'rejected') content.push(small(`This copy was made while the batch is ${statusWords(view.status, !!doc.pack)}: it is not a released record.`, { color: RED, margin: [0, 4, 0, 0] }));
 
   return pageFrame(`${doc.pack ? 'TrueBatch Injectables Packing' : 'TrueBatch Injectables'} · ${record} ${r.batch.batchNo} · ${h.productCode} ${h.productName}`, by, content, printedAt, demo);
 }
@@ -180,7 +192,7 @@ function valueLines(block: Block, v: StepView, who: (id: number | null) => strin
   const names = new Set([...block.fields, ...handFields(block.fields, v.source)].map((f) => f.name).concat(Object.keys(v.values), v.replaced.map((x) => x.field)));
   return [...names].filter((name) => v.values[name] !== undefined || v.replaced.some((x) => x.field === name)).map((name) => {
     const changes = v.replaced.filter((x) => x.field === name);
-    const now = runs(`${fieldLabel(block.fields, name)}: ${valueText(v.values[name], stockUnit)}${sourceText(v.source[name])}`);
+    const now = runs(`${fieldLabel(block.fields, name)}: ${valueText(v.values[name], stockUnit)}${name in CERTIFICATE ? certificateText(v.source[name]) : sourceText(v.source[name])}`);
     if (!changes.length) return { text: now, fontSize: 7.5 };
     return { stack: [
       { text: [...now, { text: '  CHANGED', bold: true, color: RED }], fontSize: 7.5 },
@@ -193,6 +205,12 @@ function valueLines(block: Block, v: StepView, who: (id: number | null) => strin
 // Where a value came from: pulled through a link (as read), or typed by hand while the link was off or down.
 const sourceText = (s: Source | undefined) => (!s ? '' : s.from === 'hand' ? ` (BY HAND: ${PROVIDER_NAME[s.link]} ${s.state === 'down' ? 'link down' : 'not linked'})` : ` (${plantText(s.shown)})`);
 
+// A certificate value from MMS: its basis and report, without the value said again ("· as is, MMS report QC/RM/26/1171").
+function certificateText(s: Source | undefined): string {
+  const m = s && s.from !== 'hand' ? /^\S+ [\d.]+ %(?: \(([^)]*)\))?, report (.+)$/.exec(s.shown) : null;
+  return m ? ` · ${m[1] ? `${m[1]}, ` : ''}${PROVIDER_NAME[(s as { from: keyof typeof PROVIDER_NAME }).from]} report ${m[2]}` : sourceText(s);
+}
+
 /** The worked calculation lines, with the limits and pass or fail. */
 function resultLines(block: Block, st: Step, v: StepView, who: (id: number | null) => string, terminated: boolean): Content[] {
   const label = (name: string) => block.calcs.find((c) => c.name === name)?.label ?? block.settings.find((s) => s.name === name)?.label ?? name;
@@ -204,10 +222,16 @@ function resultLines(block: Block, st: Step, v: StepView, who: (id: number | nul
     const text = (t: string) => plantText(notYet ? notYetText(t, terminated) : t);
     // A check's worked line may start with its own question ("Packing finished: no", "Line clear after packing: …"):
     // the label is not said twice.
-    const shown = text(r.shown);
+    // A figure leads, with its limit (owner, 17 Nov 2026); the worked lines follow without their verdict, which the
+    // verdict line under them says once.
+    const h = headline(r);
+    const limit = limitOf(r);
+    const shown = withoutVerdict(text(r.shown));
+    const lead = h ? `${label(name)}: ${h}${limit ? ` (limit ${limit})` : ''}` : shown.toLowerCase().startsWith(label(name).toLowerCase()) ? shown : `${label(name)}: ${shown}`;
     return [
-      small(shown.toLowerCase().startsWith(label(name).toLowerCase()) ? shown : `${label(name)}: ${shown}`),
-      ...checks.filter(([, c]) => c.shown !== r.shown).map(([, c]) => small(text(c.shown), { margin: [8, 0, 0, 0] })),
+      small(lead, h ? { bold: true } : {}),
+      ...(h ? [small(shown, { color: '#555555', margin: [8, 0, 0, 0] })] : []),
+      ...checks.filter(([, c]) => c.shown !== r.shown).map(([, c]) => small(withoutVerdict(text(c.shown)), { color: '#555555', margin: [8, 0, 0, 0] })),
       ...checks.map(([, c]) => small(c.pass ? 'PASS' : notYet ? (terminated ? 'NOT REACHED: terminated' : 'NOT YET: the rounds go on') : 'FAIL: out of limits', { bold: true, color: c.pass ? '#1b6e3a' : notYet ? '#666666' : RED, margin: [8, 0, 0, 2] })),
     ];
   });

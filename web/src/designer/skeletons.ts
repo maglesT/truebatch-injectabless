@@ -144,7 +144,7 @@ export function packingStages(pack: Pack): Stage[] {
   const serial = pack.serialisation;
   return [
     // The issue is a warehouse step (no room, no line clearance); a master limits the line it issues to by the stage's machine types.
-    packStage('issue', 'Issue to the line', 'Warehouse officer', [packStep('bulk-issue', 'bulk'), ...pack.materials.map(issueStep)]),
+    packStage('issue', 'Issue to the line', 'Packing operator', [packStep('bulk-issue', 'bulk'), ...pack.materials.map(issueStep)]),
     packStage('packing', 'Labelling and cartoning', 'Packing operator', [packStep('pack-clearance', 'clearance'), packStep('line-setup', 'setup'),
       ...(serial ? [packStep('vision-challenge', 'camera'), packStep('serial-received', 'serials')] : []), packStep('coding-check', 'coding'),
       ...(blister ? [packStep('forming-check', 'forming'), packStep('leak-test', 'leak', { vacuumUnit: 'mbar', level: 'S-2', aql: '0.65' })] : []),

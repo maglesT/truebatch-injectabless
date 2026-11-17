@@ -75,8 +75,9 @@ export function PackMaterials({ doc, md, onChange }: { doc: MasterDoc; md: Maste
         </tbody>
       </table>
       {!pack.materials.length && <p className="muted small">No packing materials yet.</p>}
+      {/* A new material's key is made from its code, short and stable (17 Nov 2026 run, F34); keys already in a master stay. */}
       {adding ? <Picker label="Packing material" items={md.materials.map((m) => ({ id: m.itemId, code: m.code, name: m.name, note: m.category ?? undefined, off: m.active ? undefined : 'inactive' }))}
-        onPick={(i) => { put([...pack.materials, { key: newKey(i.name, pack.materials.map((m) => m.key)), materialItemId: i.id, code: i.code, name: i.name, kind: 'other', printed: false, coded: false, perPack: '1', unit: 'units' }]); setAdding(false); }} />
+        onPick={(i) => { put([...pack.materials, { key: newKey(i.code, pack.materials.map((m) => m.key)), materialItemId: i.id, code: i.code, name: i.name, kind: 'other', printed: false, coded: false, perPack: '1', unit: 'units' }]); setAdding(false); }} />
         : <button type="button" onClick={() => setAdding(true)}>+ Add a packing material</button>}
     </div>
   );

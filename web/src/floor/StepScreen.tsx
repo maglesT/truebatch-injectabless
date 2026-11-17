@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, type Me } from '../api.js';
 import { SignDialog } from '../components/SignDialog.js';
 import {
-  blockOf, changed, go, headline, plainClock, plainError, rawOf, sourceWords, stateLabel, stepLink, stepOf, stepTitle, timeLeft, tone, unitOf, useLinked, useLogbookItems, valueText, words,
+  blockOf, changed, go, headline, plainClock, plainLine, withoutVerdict, plainError, rawOf, sourceWords, stateLabel, stepLink, stepOf, stepTitle, timeLeft, tone, unitOf, useLinked, useLogbookItems, valueText, words,
   type BatchDetail, type Block, type BlockField, type FloorEvent, type History, type PickItem, type Step, type StepRow, type Stored,
 } from '../api-floor.js';
 import { Alerts } from './BatchScreen.js';
@@ -84,6 +84,18 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
     return () => { live = false; };
   }, [material]);
   const shownUnit = (f: BlockField) => unitName(unitOf(f, st), mdUnit);
+  // Line clearance: the room's or line's previous batch (TI-10, pull don't type).
+  const place = block.gmp === 'line-clearance' ? block.fields.find((f) => f.kind === 'room' || f.kind === 'machine') : undefined;
+  const placeId = place && (row.values[place.name] as { itemId?: string } | undefined)?.itemId;
+  const [prev, setPrev] = useState<{ of: string; text: string | null } | null>(null);
+  useEffect(() => {
+    if (!placeId || !block.fields.some((f) => f.name === 'previous')) return;
+    let live = true;
+    void api<{ previous: { text: string } | null }>('GET', `/api/batches/${d.batch.id}/previous-use?item=${encodeURIComponent(placeId)}`)
+      .then((r) => live && setPrev({ of: placeId, text: r.previous?.text ?? null }), () => {});
+    return () => { live = false; };
+  }, [placeId, d.batch.id, block]);
+  const previous = prev && prev.of === placeId ? prev.text : null;
   const deviationPicks = useLinked<{ number: string; title: string | null }>(`/api/batches/${d.batch.id}/deviations`, 'deviations');
   const lotField = block.fields.find((f) => f.kind === 'lot');
   const lotPulled = lotField && row.source[lotField.name] && row.source[lotField.name]!.from !== 'hand';
@@ -167,6 +179,17 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
 
   const fieldView = (f: BlockField) => {
     const v = row.values[f.name];
+    // Line clearance: the previous product and batch of the room or line, pulled from the batches that used it.
+    if (f.name === 'previous' && block.gmp === 'line-clearance' && v === undefined && can('record') && previous) {
+      return (
+        <div key={f.name} className="fl-field">
+          <div className="lbl"><span>{f.label}</span></div>
+          <div className="recorded"><span>{previous}</span><button className="big" onClick={() => void record(f.name, previous)}>Use this</button></div>
+          <p className="muted small">The last batch that used it, from the batch records. If another product used it since, type it below.</p>
+          <FieldInput f={f} unit="" disabled={!can('record')} onSave={(raw) => record(f.name, raw)} />
+        </div>
+      );
+    }
     const unit = shownUnit(f);
     const src = row.source[f.name];
     // Pulled through a link: shown, never typed over. Certificate values come only with an MMS lot.
@@ -257,7 +280,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
           <section className="dash-panel" aria-label="Results">
             <div className="panel-head"><h2>Results</h2><span className="muted">worked out by the server</span></div>
             {resultRows.length === 0 ? <p className="muted">The results appear here as soon as the values are saved.</p> : (
-              <div className="results">{resultRows.map((x) => <ResultCard key={x.n} label={x.label} r={x.r} big={block.gmp === 'yield'} stop={x.n === row.notYet} terminated={cutShort(d.batch.terminated, row, rounds)} />)}</div>
+              <div className="results">{resultRows.map((x) => <ResultCard key={x.n} label={x.label} r={x.r} mdUnit={mdUnit} big={block.gmp === 'yield'} stop={x.n === row.notYet} terminated={cutShort(d.batch.terminated, row, rounds)} />)}</div>
             )}
           </section>
           {repeatUntil && rounds.length > 0 && (
@@ -343,19 +366,27 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   );
 }
 
-function ResultCard({ label, r, big, stop, terminated }: { label: string; r: Stored; big?: boolean; stop?: boolean; terminated?: boolean }) {
+function ResultCard({ label, r, mdUnit, big, stop, terminated }: { label: string; r: Stored; mdUnit?: string | null; big?: boolean; stop?: boolean; terminated?: boolean }) {
   if (!r.ok) return <div className="result warn"><div className="rh"><span>{label}</span></div><div className="shown">{r.message}</div></div>;
   const t = tone(r);
-  const h = headline(r);
+  const h = headline(r)?.replace(/\bunits\b/g, unitName('units', mdUnit)) ?? null;
   // The stop check of a repeat-until round is not a failure until the rounds run out (the server says which: notYet).
   const cls = stop && t === 'bad' ? '' : t ?? '';
-  const shown = (x: string) => plantText(stop ? notYetText(x, terminated) : x);
+  // The chip is the one verdict: the worked lines lose theirs (owner, 17 Nov 2026).
+  // A count in master data's name for the material's unit (nos), as its fields.
+  const shown = (x: string) => plantText(withoutVerdict(stop ? notYetText(x, terminated) : x)).replace(/\bunits\b/g, unitName('units', mdUnit));
   const word = t === 'ok' ? 'Within limits' : t === 'bad' ? (stop ? (terminated ? 'Not reached' : 'Not yet: repeat') : 'Out of limits') : t === 'warn' ? 'Alert' : null;
+  const worked = <>{shown(r.shown)}{r.check && r.check.shown !== r.shown ? <><br />{shown(r.check.shown)}</> : null}</>;
+  const line = plainLine(r);
   return (
     <div className={`result ${cls}${big ? ' big' : ''}`}>
       <div className="rh"><span>{label}</span>{word && <span className={`chip ${cls === 'ok' ? 'chip-ok' : cls === 'bad' ? 'chip-bad' : 'chip-warn'}`}>{word}</span>}</div>
       {h && <div className="rv">{h}</div>}
-      <div className="shown">{shown(r.shown)}{r.check && r.check.shown !== r.shown ? <><br />{shown(r.check.shown)}</> : null}</div>
+      {/* A figure leads, with its limit in a few words; the worked line stays one tap away. Without a figure the line is the result. */}
+      {h ? (<>
+        {line && <div className="plain">{line}</div>}
+        <details className="shown"><summary>How it was worked out</summary>{worked}</details>
+      </>) : <div className="shown">{worked}</div>}
     </div>
   );
 }

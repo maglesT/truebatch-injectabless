@@ -25,8 +25,11 @@ export function plantDate(date: string): string {
   return m && month && Number(m[3]) >= 1 && Number(m[3]) <= 31 ? `${Number(m[3])} ${month} ${m[1]}` : date;
 }
 
-/** Every time stamp in a text in plant time (with seconds when the stamp has them), and every date as "31 Oct 2029". */
+/**
+ * Every time stamp in a text in plant time, to the minute like every other time on the screens and in the PDF (owner,
+ * 17 Nov 2026: no seconds; the record keeps the exact instant), and every date as "31 Oct 2029".
+ */
 export const plantText = (text: string) => text.replace(STAMP, (m) => {
   const d = new Date(m.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00'));
-  return Number.isNaN(d.getTime()) ? m : plantClock(d, /T?\d{2}:\d{2}:\d{2}/.test(m.slice(10)));
+  return Number.isNaN(d.getTime()) ? m : plantClock(d);
 }).replace(DATE, (m) => plantDate(m));

@@ -167,6 +167,15 @@ describe('walking a stage', () => {
     expect(await t.owner`select 1 from audit_log where action = 'step.checked' and object_id = ${String(id)}`).toHaveLength(1);
   });
 
+  it('TI-10 the line clearance offers the previous product and batch of a room or machine from the batches that used it (pull, don\'t type)', async () => {
+    const later = await issue(await effectiveMaster());
+    const r = (await as('asha', 'GET', `/api/batches/${later.id}/previous-use?item=eq-bal`)).json() as { previous: { batchNo: string; text: string } | null };
+    const first = ((await as('asha', 'GET', `/api/batches/${id}`)).json() as { batch: { batchNo: string } }).batch.batchNo;
+    expect(r.previous).toMatchObject({ batchNo: first, text: `PRD-001 · Examplol 100 mg film-coated tablets, batch ${first}` });
+    // Nothing used it before the first batch: typed by hand.
+    expect(((await as('asha', 'GET', `/api/batches/${id}/previous-use?item=eq-bal`)).json() as { previous: unknown }).previous).toBeNull();
+  });
+
   it('a mix cannot be done before its minimum time; after it, the preparation closes and the next stage opens', async () => {
     expect((await act('asha', id, '0.1.1.1', 'start')).statusCode).toBe(200);
     await act('asha', id, '0.1.1.1', 'record', { values: { machine: 'eq-str', ...handLabels('machine', 'machine'), speed: '300' } });
@@ -281,17 +290,22 @@ describe('walking a stage', () => {
   it('TI-22 the batch record PDF shows the corrected value struck through with its reason, the worked lines, limits, notes and who did what', async () => {
     const text = await recordText(id);
     expect(text).toMatch(/^TrueBatch Injectables · Batch record TI\d{6} · PRD-001 Examplol 100 mg film-coated tablets/);
-    expect(text).toContain('Status | in production');
+    expect(text).toContain('Status | In production');
     expect(text).toContain('Changed values | marked CHANGED');
     expect(text).toContain('Tare weight: 0.849 kg  CHANGED');
     expect(text).toMatch(/was ~0\.850 kg~ · reason: Tare misread · ASHA, \d+ \w+ 2026, \d\d:\d\d IST/);
-    expect(text).toContain('Net weight: 11.000 kg − 0.849 kg = 10.151 kg');
+    // A figure leads, its worked line follows (Tablets 17 Nov 2026 run, F30): one verdict, on its own line.
+    expect(text).toContain('Net weight: 10.151 kg\n11.000 kg − 0.849 kg = 10.151 kg');
     // The label questions typed by hand by their labels, never their names.
     expect(text).toContain('Balance: the calibration label is in date: yes');
     expect(text).not.toMatch(/\b(?:balance|lot|machine|room)\.[a-zA-Z]/);
-    expect(text).toContain('limit ± 0.5 %: within limits');
+    expect(text).toContain('(limit ± 0.5 %)');
+    // Machines and rooms by code and name, without master data's version.
+    expect(text).toContain('Balance: BAL-01 · Balance 60 kg');
+    expect(text).not.toMatch(/ \(v\d+\)/);
+    expect(text).not.toContain('within limits\nPASS');
     expect(text).toContain('FAIL: out of limits');
-    expect(text).toContain('MAT-001 · Examplol | api | 100.0 | 10.000 kg | Lot API-2611: 10.151 kg (target');
+    expect(text).toContain('MAT-001 · Examplol | API | 100.0 | 10.000 kg | Lot API-2611: 10.151 kg (target');
     expect(text).toMatch(/Checked: RAVI, .* IST · signed "Verified \(second person\)"/);
     expect(text).toMatch(/Sent back: RAVI, .* · reason: Tare looks wrong/);
     expect(text).toMatch(/DEV-26-003 \| Granulation · 2\.2 Weigh a material: Lactose monohydrate \| Lactose 0\.9 % over the corrected target \| ASHA, .* \| OPEN/);
@@ -393,7 +407,7 @@ describe('production approval, QC approval and QA release', () => {
     expect(res.rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
     expect((await as('viewer', 'GET', '/api/batches/999999/pdf')).statusCode).toBe(404);
     const text = await recordText(id);
-    expect(text).toContain('Status | released');
+    expect(text).toContain('Status | Released');
     expect(text).toMatch(/QC approved: QUINN, .* IST · QC report QC-26-0042/);
     expect(text).toMatch(/Released: MEERA, .* IST/);
     expect(text).toMatch(/DEV-26-010 \| .* \| pH meter found out of calibration \| ASHA, .* \| closed by MEERA, .*: Meter recalibrated; results confirmed by a second meter/);
@@ -493,7 +507,7 @@ describe('QA terminates a batch that cannot be finished (owner, 16 Nov 2026)', (
 
   it('TI-22 the PDF and the review show "Terminated by … at …: reason"', async () => {
     const text = await recordText(id);
-    expect(text).toContain('Status | rejected');
+    expect(text).toContain('Status | Rejected');
     expect(text.match(/Terminated by MEERA at \d{1,2} \w{3} 20\d\d, \d\d:\d\d IST: The stirrer broke down; the binder cannot be made/g)).toHaveLength(2);
     expect(text).toContain('Rejected | MEERA');
     // Nothing it never did reads as still to come (owner, 16 Nov 2026).

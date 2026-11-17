@@ -650,7 +650,10 @@ describe('the views TrueBatch publishes', () => {
     await e(b1, 1, 2, 1, 'started', {}, '2026-11-15 09:10+00');
     await e(b1, 1, 2, 1, 'value', { values: { room } }, '2026-11-15 09:11+00');
     await e(b1, 1, 2, 1, 'done', {}, '2026-11-15 09:20+00');
-    expect(await rows('EQ-USE-1')).toMatchObject([{ equipment_code: 'RM-104', step: 'binder/weigh-pvp', started_at: new Date('2026-11-15T08:00:00Z'), ended_at: null }]);
+    // Its step is the one that named it last (17 Nov 2026 run, F41): the Logbook's "last used by … (stage › step)".
+    const last = `${doc.stages[1]!.key}/${doc.stages[1]!.steps[1]!.key}`;
+    expect(await rows('EQ-USE-1')).toMatchObject([{ equipment_code: 'RM-104', step: last, step_name: `${doc.stages[1]!.name} › ${doc.stages[1]!.steps[1]!.key}`,
+      started_at: new Date('2026-11-15T08:00:00Z'), ended_at: null }]);
     // Dirty after the last stage that names it.
     await closed(b1, 1, '2026-11-15 10:00+00');
     expect(await ends('EQ-USE-1')).toEqual([['RM-104', new Date('2026-11-15T10:00:00Z')]]);
