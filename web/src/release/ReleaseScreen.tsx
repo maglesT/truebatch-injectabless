@@ -32,6 +32,8 @@ interface Review {
   unlinked: { number: string; status: string; title: string | null }[];
   // Owner 17 Nov 2026: signatures whose training was ticked by the signer because Recruitment was not reachable.
   trainingTyped: { step: string; event: number; kind: string; code: string; title?: string; state: 'absent' | 'down'; personName: string | null; at: string }[];
+  // Packing (whole-suite run, S24): the bulk batch's deviations still open in the Deviations system; release waits for them.
+  bulkOpen: { bulk: string; open: { number: string; status: string; title: string | null }[] } | null;
   deviationsLink: string;
   notApplicable: FloorEvent[];
   // Demo installations only: the waits ended at once (server/demo.ts).
@@ -79,9 +81,11 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
   const decided = d.batch.status === 'released' || d.batch.status === 'rejected';
   const yields = d.steps.filter((s) => s.results.yield?.ok);
   const openDevs = r.deviations.filter((x) => x.open);
+  const bulkOpen = r.bulkOpen?.open ?? [];
   const qcTurn = d.batch.status === 'production approved';
   const qaTurn = d.batch.status === 'QC approved';
-  const blockers = [...openDevs.map((x) => `Deviation ${x.reference} (${name(x.step)}) is ${x.status ? `still open in the Deviations system (${deviationStatusWords(x.status)}): it is closed there first.` : 'open: close it first.'}`), ...d.batch.yieldOut.map(plain)];
+  const blockers = [...openDevs.map((x) => `Deviation ${x.reference} (${name(x.step)}) is ${x.status ? `still open in the Deviations system (${deviationStatusWords(x.status)}): it is closed there first.` : 'open: close it first.'}`),
+    ...bulkOpen.map((x) => `Deviation ${x.number} of the bulk batch ${r.bulkOpen!.bulk} is still open in the Deviations system (${deviationStatusWords(x.status)}): it is closed there first.`), ...d.batch.yieldOut.map(plain)];
   const handLabel = (step: string, field: string) => field === 'reference' ? 'deviation number' : fieldLabel(step, field);
 
   const sign = async ({ proof }: { proof: string }) => {
@@ -110,7 +114,7 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
         <Kpi n={r.sentBack.length} label="Sent back by the checker" tone="warn" />
         <Kpi n={r.late.length} label="Late (timers ran over)" tone="bad" />
         <Kpi n={r.outOfLimits.length} label="Out of limits" tone="bad" />
-        <Kpi n={openDevs.length} label={r.deviations.length ? `Open deviations (${r.deviations.length} in all)` : 'Open deviations'} tone="bad" />
+        <Kpi n={openDevs.length + bulkOpen.length} label={r.deviations.length ? `Open deviations (${r.deviations.length} in all)` : 'Open deviations'} tone="bad" />
         <Kpi n={r.hand.length} label="Typed by hand, not pulled through a link" tone="warn" />
       </div>
       {r.deviationsLink === 'down' && <p className="notice warn">The Deviations link is down: the deviation statuses shown are TrueBatch's own (closed by hand).</p>}
@@ -141,6 +145,8 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
             {x.open && !x.status && !decided && can(me, 'qa.release') && <button onClick={() => setClosing(x)}>Close the deviation…</button>}</li>))}</Group>
         {r.unlinked.length > 0 && <Group title="Deviations naming this batch that no note links" empty="">{r.unlinked.map((x) => (
           <li key={x.number} className="bad"><b>{x.number}</b><span>{x.title}</span><small>{deviationStatusWords(x.status)} in the Deviations system</small></li>))}</Group>}
+        {r.bulkOpen && <Group title={`Open deviations of the bulk batch ${r.bulkOpen.bulk}`} empty="">{r.bulkOpen.open.map((x) => (
+          <li key={x.number} className="bad"><b>{x.number}</b><span>{x.title}</span><small>{deviationStatusWords(x.status)} in the Deviations system: closed there before release</small></li>))}</Group>}
         <Group title="Typed by hand (a link was off or down)" empty="Every linked value came through its link.">{r.hand.map((h, i) => (
           <li key={i}><b>{name(h.step)} · {handLabel(h.step, h.field)}</b><span>{PROVIDER_NAME[h.link]} {h.state === 'down' ? 'link was down' : 'not linked'}</span>
             <small>{h.personName}, {plainClock(h.at)}</small></li>))}</Group>

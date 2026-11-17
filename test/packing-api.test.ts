@@ -33,6 +33,9 @@ beforeAll(async () => {
       create schema ${TB};
       create table ${TB}.batch_fact_v1 (batch_id uuid, batch_number text, product_code text, strength text, mbr_version_id uuid, family_code text, record_kind text,
         status text, issued_at timestamptz, completed_at timestamptz, released boolean, read_at timestamptz default now(), data_as_of timestamptz default now(), manufactured_on date);
+      -- The Deviations system's deviation_v1 (in the same fake schema): the bulk batch's open deviations block release (S24).
+      create table ${TB}.deviation_v1 (number text, status text, classification text, opened_at timestamptz, closed_at timestamptz, product text, batch text,
+        batch_norm text, outcome text, read_at timestamptz default now(), data_as_of timestamptz default now(), title text, source_ref text);
       grant usage on schema ${TB} to ${PACKING_APP_ROLE};
       grant select on all tables in schema ${TB} to ${PACKING_APP_ROLE};
       insert into ${TB}.batch_fact_v1 (batch_number, product_code, record_kind, status, issued_at, released, manufactured_on) values
@@ -42,7 +45,7 @@ beforeAll(async () => {
         ('TI260004', 'PRD-001', 'PROCESSING', 'RELEASED', '2026-11-06 06:00+00', true, '2026-11-06'),
         ('TI260005', 'PRD-001', 'PROCESSING', 'RELEASED', '2026-11-07 06:00+00', true, null);`);
     provider = connect(TEST_DATABASE_URL, { role: PACKING_APP_ROLE, link: true });
-    return links({ truebatch_injectables: provider }, { truebatch_injectables: TB });
+    return links({ truebatch_injectables: provider, deviations: provider }, { truebatch_injectables: TB, deviations: TB });
   }, false, PACKING);
   t.master.products_.push({ ...item('pk-1', 'PK-001', 'Examplocin 1 g injection, 10 vials per carton'), strength: '1 g', dosageForm: 'injection' },
     { ...item('prd-1', 'PRD-001', 'Examplocin 1 g injection (filled vials)'), strength: '1 g', dosageForm: 'injection' });
@@ -291,6 +294,19 @@ describe('a packing batch from the filled units of a released batch', () => {
     expect(b.batch).toMatchObject({ status: 'QC approved', actions: ['release', 'reject'] });
     const toReview = (await as('qa1', 'GET', '/api/batches/to-review')).json() as { id: number; waiting: string }[];
     expect(toReview.find((x) => x.id === id)).toMatchObject({ waiting: 'QA' });
+    // Whole-suite run, S24: the bulk batch's deviation still open in the Deviations system is shown in the review and
+    // blocks release until it is closed there (a closed one, or another batch's, does not).
+    await t.owner.unsafe(`insert into ${TB}.deviation_v1 (number, status, batch, batch_norm, title, closed_at) values
+      ('DEV-2026-0045', 'closure', 'TI260001', 'ti260001', 'Room refused at line clearance', null),
+      ('DEV-2026-0044', 'closed', 'TI260001', 'ti260001', 'Closed before', now()),
+      ('DEV-2026-0046', 'investigation', 'TI260003', 'ti260003', 'Another bulk batch', null)`);
+    const review = async () => ((await as('qa1', 'GET', `/api/batches/${id}/review`)).json() as { bulkOpen: unknown }).bulkOpen;
+    expect(await review()).toEqual({ bulk: 'TI260001', open: [{ number: 'DEV-2026-0045', status: 'closure', title: 'Room refused at line clearance', closedAt: null }] });
+    const held = await as('qa1', 'POST', `/api/batches/${id}/release`, { proof: proofFor('qa1'), contentHash: b.batch.contentHash });
+    expect(held.statusCode).toBe(409);
+    expect(held.json()).toMatchObject({ problems: ['Deviation DEV-2026-0045 of the bulk batch TI260001 is still open in the Deviations system (waiting for closure): it is closed there first'] });
+    await t.owner.unsafe(`update ${TB}.deviation_v1 set status = 'closed', closed_at = now() where number = 'DEV-2026-0045'`);
+    expect(await review()).toBeNull();
     const rel = await as('qa1', 'POST', `/api/batches/${id}/release`, { proof: proofFor('qa1'), contentHash: b.batch.contentHash });
     expect(rel.statusCode, rel.body).toBe(200);
     expect((await get(id, 'qa1')).batch.status).toBe('released');

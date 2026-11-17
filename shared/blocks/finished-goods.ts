@@ -10,7 +10,9 @@ export const finishedGoods: Block = {
   fields: [
     { name: 'packs', label: 'Good packs in finished cartons', kind: 'number', unit: 'packs' },
     { name: 'cartons', label: 'Finished cartons', kind: 'number', unit: 'nos' },
-    { name: 'shippers', label: 'Shippers', kind: 'number', unit: 'nos', optional: true },
+    // packing_batch_v1.shippers: MMS takes it when stores receive the packed batch (whole-suite run, S26: the label says
+    // so, as stores asked for the count again). Only the words changed, so the same version.
+    { name: 'shippers', label: 'Shippers (outer cases; MMS takes this count at receipt)', kind: 'number', unit: 'nos', optional: true },
     { name: 'samples', label: 'Packs taken as reserve and QC samples', kind: 'number', unit: 'packs' },
     { name: 'returned', label: 'Good filled units returned (not packed)', kind: 'number', unit: 'units' },
     { name: 'rejects', label: 'Filled units rejected on the line (damaged, mislabelled)', kind: 'number', unit: 'units' },
