@@ -82,24 +82,26 @@ export const qmsClient = (l: Link) => ({
 });
 
 // ---- Logbook: report.equipment_status_v1 (planned), the status the Logbook computes. fit_for_use leaves out a use in
-// progress (that is in_use_batch).
+// progress (that is in_use_batch). only_product (its last column, owner 17 Nov 2026): the product code that alone may
+// use the item next, after an antibiotic and until a product-changeover cleaning is verified; null: any product. Read
+// through to_jsonb, so a view from before the column was appended reads as null.
 export interface EquipmentStatus {
   code: string; state: string; fitForUse: boolean; blockers: string[]; warnings: string[]; inUseBatch: string | null;
-  cleanedAt: string | null; cleanedBy: string | null; checkedAt: string;
+  cleanedAt: string | null; cleanedBy: string | null; checkedAt: string; onlyProduct: string | null;
 }
 // A status older than this is not used (never stale data): the link counts as down.
 export const STATUS_MAX_AGE_MS = 5 * 60_000;
 export const logbookClient = (l: Link) => ({
   status: (masterId: string) => l.read(async (q, v) => {
     const [r] = await q<{ code: string; state: string; fit_for_use: boolean; blockers: string[] | null; warnings: string[] | null; in_use_batch: string | null;
-      cleaned_at: string | null; cleaned_by: string | null; checked_at: Date; age_ms: number }[]>`
+      cleaned_at: string | null; cleaned_by: string | null; checked_at: Date; age_ms: number; only_product: string | null }[]>`
       select code, state, fit_for_use, blockers, warnings, in_use_batch, cleaned_at::text, cleaned_by, checked_at,
-        extract(epoch from now() - checked_at) * 1000 as age_ms
-      from ${v('equipment_status_v1')} where master_id::text = ${masterId} limit 1`;
+        extract(epoch from now() - checked_at) * 1000 as age_ms, nullif(to_jsonb(s) ->> 'only_product', '') as only_product
+      from ${v('equipment_status_v1')} s where master_id::text = ${masterId} limit 1`;
     if (!r) return null;
     if (Number(r.age_ms) > STATUS_MAX_AGE_MS) return 'stale' as const;
     return { code: r.code, state: r.state, fitForUse: r.fit_for_use, blockers: r.blockers ?? [], warnings: r.warnings ?? [], inUseBatch: r.in_use_batch,
-      cleanedAt: r.cleaned_at, cleanedBy: r.cleaned_by, checkedAt: r.checked_at.toISOString() } satisfies EquipmentStatus;
+      cleanedAt: r.cleaned_at, cleanedBy: r.cleaned_by, checkedAt: r.checked_at.toISOString(), onlyProduct: r.only_product } satisfies EquipmentStatus;
   }),
   // The master-data ids of every machine, instrument and room the Logbook has, for the pick lists (only these can be used).
   known: () => l.read(async (q, v) => (await q<{ id: string }[]>`select distinct master_id::text as id from ${v('equipment_status_v1')} where master_id is not null`).map((r) => r.id)),

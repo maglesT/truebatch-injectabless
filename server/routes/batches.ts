@@ -118,7 +118,7 @@ async function readValues(app: FastifyInstance, doc: MasterDoc, key: StepKey, ra
       const room = 'room' in item ? item.room : item.code;
       const area = 'area' in item ? item.area : rooms.find((r) => r.code === room)?.area ?? null;
       out[name] = { itemId: item.itemId, code: item.code, name: item.name, version: item.version, type, room, area };
-      pulled = await pullItem(app, block, f, item, batchNo);
+      pulled = await pullItem(app, block, f, item, batchNo, doc.header.productCode);
     } else {
       const v = readValue(f, x, '');
       if (typeof v !== 'string') { problems.push((v as { error: string }).error); continue; }

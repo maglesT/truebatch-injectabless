@@ -148,6 +148,7 @@ describe('the link client: absent, down (refused or not answering) and ok', () =
 });
 
 describe('the labels people saw', () => {
+
   it('a label question shows its label, not its name, wherever it is listed, and whether the link is back or not', () => {
     const weigh = findBlock({ id: 'weigh', version: 1 })!.fields;
     expect(fieldLabel(weigh, 'balance')).toBe('Balance');
@@ -779,5 +780,33 @@ describe('the views TrueBatch publishes', () => {
 
   it('nobody reads the views without a link: the app login itself has no grant', async () => {
     await expect(t.sql.unsafe(`select * from ${rep()}.batch_fact_v1`)).rejects.toMatchObject({ code: '42501' });
+  });
+});
+
+describe('TI-11 Logbook: an antibiotic\'s line kept for it', () => {
+  it('TI-11 after an antibiotic only that product may follow until the Logbook verifies a product-changeover cleaning (its only_product); a view without the column reads as any product', async () => {
+    // The stand-in view has no only_product yet (as the Logbook's before it was appended): read as null.
+    expect(await t.app.links.logbook.status('eq-str')).toMatchObject({ state: 'ok', value: { code: 'STR-01', onlyProduct: null } });
+    await t.owner.unsafe(`alter table ${S.lb}.equipment_status_v1 add column only_product text`);
+    try {
+      await t.owner.unsafe(`update ${S.lb}.equipment_status_v1 set only_product = 'FG-PWD-EXC1' where master_id = 'eq-str'`);
+      const c = await issue(small([{ machineTypes: ['stirrer'], steps: [{ block: { id: 'mix', version: 1 }, settings: {} }, yieldStep] }]));
+      await act('asha', c.id, '0.1.0.1', 'start');
+      expect(await problems(record(c.id, '0.1.0.1', { machine: 'eq-str' }))).toEqual(
+        ['STR-01 was last used for an antibiotic (FG-PWD-EXC1): a product-changeover cleaning is needed in the Logbook before P.']);
+      // The same product follows: allowed, pulled.
+      await t.owner.unsafe(`update ${S.lb}.equipment_status_v1 set only_product = 'P' where master_id = 'eq-str'`);
+      expect((await record(c.id, '0.1.0.1', { machine: 'eq-str', speed: '300' })).statusCode).toBe(200);
+      expect((await stepOf(c.id, '0.1.0.1')).source.machine).toMatchObject({ from: 'logbook' });
+      // Logbook down: by hand, as before.
+      await t.owner.unsafe(`update ${S.lb}.equipment_status_v1 set only_product = 'FG-PWD-EXC1' where master_id = 'eq-str'`);
+      await cut(S.lb);
+      try {
+        expect((await record(c.id, '0.1.0.1', { machine: 'eq-str' })).statusCode).toBe(200);
+      } finally { await restore(S.lb); }
+      expect((await stepOf(c.id, '0.1.0.1')).source.machine).toEqual({ from: 'hand', link: 'logbook', state: 'down' });
+    } finally {
+      await t.owner.unsafe(`alter table ${S.lb}.equipment_status_v1 drop column only_product`);
+    }
   });
 });
