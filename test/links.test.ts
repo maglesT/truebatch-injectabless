@@ -339,8 +339,30 @@ describe('TI-12 a lot typed by hand after an MMS lot', () => {
     } finally { await restore(S.mms); }
     const s = await stepOf(x.id, '0.1.0.1');
     expect(s.source.lot).toEqual({ from: 'hand', link: 'mms', state: 'down' });
-    expect(s.source['lot.expiry']).toMatchObject({ from: 'hand' });
+    expect(s.source['lot.expiry']).toBeUndefined();   // typed from the label, no longer MMS's
     expect(s.values).toMatchObject({ lot: 'API-ASIS', 'lot.expiry': '2099-12-31' });
+  });
+
+  it('TI-12 the previous lot\'s date or certificate value is never signed with a new lot: the step waits until they are recorded for it', async () => {
+    const d = tablet();
+    const g = d.stages[1]!;
+    d.stages = [{ ...g, uses: [], steps: [g.steps[0]!, g.steps[2]!, g.steps[6]!] }];
+    const x = await issue(d);
+    await act('asha', x.id, '0.1.0.1', 'start');
+    expect((await record(x.id, '0.1.0.1', { lot: 'API-OK', balance: 'eq-bal', gross: '1.000', tare: '0.850' })).statusCode).toBe(200);
+    await cut(S.mms);
+    try {
+      // Only the lot typed: the step still holds API-OK's use-by date and assay.
+      expect((await record(x.id, '0.1.0.1', { lot: 'API-ASIS' })).statusCode).toBe(200);
+      const stale = await sign('asha', x.id, '0.1.0.1', 'done');
+      expect(stale.statusCode).toBe(409);
+      expect(JSON.stringify(stale.json())).toMatch(/expiry or retest date on the label, whichever is first is the previous lot's: record it for lot API-ASIS/);
+      expect(JSON.stringify(stale.json())).toMatch(/is the previous lot's/);
+      // Picking the same lot again is not a new lot.
+      { const r = await record(x.id, '0.1.0.1', { ...handLabels('lot', 'lot'), assay: '99.0', lod: '0.5' }); expect(r.statusCode, r.body).toBe(200); }
+      expect((await record(x.id, '0.1.0.1', { lot: 'API-ASIS' })).statusCode).toBe(200);
+      expect(JSON.stringify((await sign('asha', x.id, '0.1.0.1', 'done')).json())).not.toMatch(/previous lot/);
+    } finally { await restore(S.mms); }
   });
 });
 
