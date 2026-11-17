@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { findBlock } from '../shared/blocks/index.js';
 import { masterChecks } from '../shared/master/checks.js';
 import { masterSchema, type MasterDoc } from '../shared/master/schema.js';
-import { stepFrom } from '../web/src/designer/model.js';
+import { neededKind, stepFrom } from '../web/src/designer/model.js';
 import { unplaced } from './engine-fixture.js';
 
 type Change = (d: MasterDoc) => void;
@@ -62,6 +62,10 @@ describe('master checks of the injectables library', () => {
     hasNot(ft({}), /product factor|gauge and absolute/);
     has(ft({ wettedWith: 'product' }), /needs the validated product factor/);
     has(ft({ makerLimit: '3.45 bar' }), /gauge and absolute pressure are never mixed/);
+    // The test temperature range is a temperature, whatever the result unit (17 Nov 2026 run, F5).
+    has(ft({ temperatureRange: { low: '15', high: '30', unit: 'bar g' } }), /Test temperature range \(the maker's\): a temperature limit is needed here, not gauge pressure \(bar g\)/);
+    hasNot(ft({}), /a temperature limit is needed/);
+    expect(neededKind(findBlock({ id: 'filter-test', version: 1 })!, 'temperatureRange', { resultUnit: 'bar g' })).toBe('temperature');
   });
 
   it('TI-24 checks 41, 42, 43 ⛔⚠️ a terminal route needs terminal sterilisation; a heat treatment is not; a low F0 is answered', () => {

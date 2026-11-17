@@ -4,7 +4,7 @@ import { blocking, masterChecks } from '../shared/master/checks.js';
 import { masterSchema } from '../shared/master/schema.js';
 import { describeMaster, diffMasters, stepText } from '../web/src/designer/describe.js';
 import { dispensing, workedExample } from '../web/src/designer/example.js';
-import { answerDoc, earlierRefs, neededKind, scaleDoc, stepFrom } from '../web/src/designer/model.js';
+import { answerDoc, earlierRefs, neededKind, qtyText, scaleDoc, stepFrom, unitsOf } from '../web/src/designer/model.js';
 import { sentence, sentenceText } from '../web/src/designer/sentences.js';
 import { stepTitle } from '../shared/engine/batch.js';
 import { defaultDispensingRooms, skeletonList, skeletonStages } from '../web/src/designer/skeletons.js';
@@ -100,15 +100,15 @@ describe('master designer', () => {
     // The bulk yield on the batch mass by the density (engine change 1); the units from the header.
     expect(lyo[0]!.steps.at(-1)!.settings.theoretical).toEqual({ header: 'batchMass' });
     expect(lyo.at(-1)!.steps.at(-1)!.settings.theoretical).toEqual({ header: 'units' });
-    // TI-11: a master that weighs names its dispensing rooms; a new one starts with the rooms of the Dispensing area
-    // exactly (not the liquids block's "Liquid dispensing" booth, nor an inactive room).
+    // TI-11: a master that weighs names its dispensing rooms; a new one starts with the rooms of the Sterile dispensing area
+    // exactly (not the tablet "Dispensing" booth, nor the liquids block's "Liquid dispensing" booth, nor an inactive room).
     const h = header('aseptic');
     const bare = masterSchema.parse({ header: { ...h, dispensingRooms: undefined }, formula: [], stages: skeletonStages('liquid-aseptic', h) });
     expect(masterChecks(bare).filter((p) => p.path === 'header.dispensingRooms')).toEqual([{ level: 'error', path: 'header.dispensingRooms', rule: 'TI-11',
       message: 'The master weighs but names no dispensing rooms: choose them in the header (rooms of master data)' }]);
     expect(defaultDispensingRooms([{ code: 'RM-101', area: 'Dispensing', active: true }, { code: 'RM-102', area: 'Dispensing', active: false },
       { code: 'RM-301', area: 'Liquid dispensing', active: true }, { code: 'RM-103', area: 'Granulation', active: true },
-      { code: 'RM-201', area: 'Sterile dispensing', active: true }])).toEqual(['RM-101', 'RM-201']);
+      { code: 'RM-201', area: 'Sterile dispensing', active: true }, { code: 'RM-202', area: 'Sterile dispensing', active: false }])).toEqual(['RM-201']);
   });
 
   it('the plain view titles each step as the floor does and never shows a step\'s internal key', () => {
@@ -126,6 +126,37 @@ describe('master designer', () => {
   it('a limit on a T6 result is of its own kind: diavolumes (a ratio of two volumes) have no unit, not litres', () => {
     expect(neededKind(block('tff'), 'diavolumeLimit')).toBe('number');
     expect(neededKind(block('tff'), 'tmpLimit')).not.toBe('number');
+  });
+
+  it('the unit pick lists offer every unit of the unit table: gauge pressure, pH, particles/m³ (17 Nov 2026 run, F6)', () => {
+    const symbols = (k?: Parameters<typeof unitsOf>[0]) => unitsOf(k).map((u) => u.symbol);
+    expect(symbols('gauge pressure')).toEqual(expect.arrayContaining(['bar g', 'mbar g', 'psi g', 'kPa g']));
+    expect(symbols('pH')).toEqual(['pH']);
+    expect(symbols()).toEqual(expect.arrayContaining(['pH', 'particles/m³', 'bar g', '°C']));
+    // The filter test's maker's limit (a quantity) is of the result's kind, so its unit list offers bar g.
+    const ft = BLOCKS.find((b) => b.id === 'filter-test')!;
+    expect(symbols(neededKind(ft, 'makerLimit', { resultUnit: 'bar g' }))).toContain('bar g');
+    expect(symbols(neededKind(ft, 'temperatureRange', { resultUnit: 'bar g' }))).toContain('°C');
+  });
+
+  it('the plain view leaves out an optional limit that is not set, and keeps pH as written (17 Nov 2026 run, F10)', () => {
+    const d = tablet();
+    const bulk = block('bulk-test');
+    const said = (settings: object) => bulk.calcs.map((c) => sentenceText(d, bulk, settings as never, sentence(bulk, c))).filter(Boolean);
+    expect(said({})).toEqual(['Appearance: the answer must be "yes".']);
+    expect(said({ phLimit: { low: '6.5', high: '7.5', unit: 'pH' } })).toEqual(['The pH must be within 6.5 to 7.5 pH.', 'Appearance: the answer must be "yes".']);
+    const ft = block('filter-test');
+    const integrity = (settings: object) => sentenceText(d, ft, settings as never, sentence(ft, ft.calcs.find((c) => c.template === 'I19')!));
+    const text = integrity({ test: 'bubble point', makerLimit: '3.2 bar g', wettedWith: 'water', temperatureRange: { low: '15', high: '25', unit: '°C' } });
+    expect(text).not.toContain('(not set)');
+    expect(text).toContain('3.2 bar g, water and the test temperature');
+  });
+
+  it('a batch quantity under 0.01 kg reads in g, so a small excipient is not rounded away', () => {
+    expect(qtyText({ ok: true, value: '0.0025', unit: 'kg', shown: '' })).toBe('2.500 g');
+    expect(qtyText({ ok: true, value: '1.2625', unit: 'kg', shown: '' })).toBe('1.263 kg');
+    expect(qtyText({ ok: true, value: '0', unit: 'kg', shown: '' })).toBe('0.000 kg');
+    expect(qtyText({ ok: false, message: 'x' })).toBe('—');
   });
 
   it('a weigh step added from the library starts with the usual tolerance', () => {

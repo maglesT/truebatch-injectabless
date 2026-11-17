@@ -64,6 +64,7 @@ export function HeaderFields({ header, onChange, products, rooms }: { header: He
       </div>
       {/* TI-11: a balance is offered in these rooms or in a room the stage allows. */}
       <ChipSet label="Dispensing rooms (where the materials are weighed)" values={header.dispensingRooms ?? []} options={rooms.filter((r) => r.active).map((r) => r.code)}
+        text={(code) => { const r = rooms.find((x) => x.code === code); return r ? `${r.code} · ${r.name}${r.area ? ` (${r.area})` : ''}` : code; }}
         onChange={(dispensingRooms) => onChange({ ...header, dispensingRooms })} empty="None chosen yet: choose the rooms of master data where the materials are weighed" />
     </div>
   );
@@ -77,7 +78,7 @@ type Start = { kind: 'empty' } | { kind: 'skeleton'; id: string } | { kind: 'cop
 export function NewMaster({ md, masters, copyOf, onCreated, onCancel }: {
   md: MasterData; masters: MasterRow[]; copyOf?: MasterRow; onCreated: (id: number) => void; onCancel: () => void;
 }) {
-  // A new master starts with the rooms of the Dispensing area as its dispensing rooms (a copy: those it names).
+  // A new master starts with the rooms of the Sterile dispensing area as its dispensing rooms (a copy: those it names).
   // A packing master: a batch in filled units, no dispensing rooms.
   const [header, setHeader] = useState<Header>({ ...(app.packing ? {} : { dispensingRooms: defaultDispensingRooms(md.rooms) }),
     ...(copyOf?.header ?? { productItemId: '', productCode: '', productName: '', batchSize: '', batchUnit: app.packing ? 'units' : 'L' }) });

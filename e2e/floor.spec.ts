@@ -92,7 +92,7 @@ test('TI-14 floor journey: start, a value out of limits needs a deviation note, 
   await op.getByRole('button', { name: `← Batch ${batch.batchNo}` }).click();
   await expect(op.locator('.step-row').first()).toContainText('Checked', { timeout: 5_000 });
   await op.getByRole('button', { name: /Stage yield/ }).click();
-  await expect(op.locator('.step-title')).toContainText('Stage end · Blending');
+  await expect(op.locator('.step-title')).toContainText('Blending · stage yield');
   await op.getByRole('button', { name: 'Start', exact: true }).click();
   for (const [label, v] of [['Output', '0.099'], ['Samples', '0.000'], ['Rejects', '0.001']] as const) {
     await op.getByLabel(label).fill(v);

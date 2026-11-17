@@ -94,9 +94,10 @@ const SKELETONS: { id: string; route?: Route; name: string; text: string; stages
 export const skeletonList = (route?: Route) => SKELETONS.filter((k) => !route || !k.route || k.route === route || (route === 'both' && k.route === 'aseptic'))
   .map(({ id, name, text }) => ({ id, name, text }));
 
-/** The dispensing rooms a new master starts with (TI-11): the active rooms whose area is exactly "Dispensing" or "Sterile dispensing". */
+/** The dispensing rooms a new master starts with (TI-11): the active rooms whose area is exactly "Sterile dispensing" (an injectable is
+ *  weighed in the sterile dispensing booth; the plain "Dispensing" area is the tablet one). The author adds or removes rooms in the header. */
 export const defaultDispensingRooms = (rooms: readonly { code: string; area: string | null; active: boolean }[]) =>
-  rooms.filter((r) => r.active && (r.area === 'Dispensing' || r.area === 'Sterile dispensing')).map((r) => r.code);
+  rooms.filter((r) => r.active && r.area === 'Sterile dispensing').map((r) => r.code);
 
 /** The stages of a starting master for this header. */
 export function skeletonStages(id: string, h: Header): Stage[] {

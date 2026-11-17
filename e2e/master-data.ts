@@ -22,7 +22,7 @@ export function seedMasterData(m: FakeMaster) {
   // These rooms only, not the fixtures' rooms of the server tests.
   m.rooms_.splice(0);
   m.rooms_.push(
-    { ...item('rm-dsp', 'DSP-01', 'Dispensing booth 1'), area: 'Dispensing', grade: 'D' },
+    { ...item('rm-dsp', 'DSP-01', 'Sterile dispensing booth 1'), area: 'Sterile dispensing', grade: 'D' },
     { ...item('rm-bln', 'BLN-01', 'Blending room 1'), area: 'Blending', grade: 'D' },
     { ...item('rm-cmp', 'CMP-01', 'Compression room 1'), area: 'Compression', grade: 'D' },
   );

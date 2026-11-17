@@ -4,9 +4,13 @@ import type { Block } from '../../../shared/blocks/index.js';
 import { findBlock } from '../../../shared/blocks/index.js';
 import { refsIn } from '../../../shared/blocks/format.js';
 import { materialLines, type Limit, type MasterDoc, type SettingValue } from '../../../shared/master/schema.js';
+import { stepTitle } from '../../../shared/engine/batch.js';
 import { HEADER_LABEL, unitLabel } from './model.js';
 
 export type Part = string | { setting: string } | { field: string } | { calc: string } | { prev: string };
+
+/** A label inside a sentence: each word lower-cased, except one with a capital after its first letter (pH, RSD, CFU). */
+export const lower = (label: string) => label.split(' ').map((w) => (/^.+[A-Z]/u.test(w) ? w : w.toLowerCase())).join(' ');
 type Calc = Block['calcs'][number];
 
 // Packing: the master's pack facts and the batch facts recorded at issue, in words.
@@ -22,7 +26,7 @@ function input(block: Block, x: unknown): Part {
   if (typeof x !== 'string' || !x.startsWith('$')) return written(block, x);
   const raw = x.slice(1).replace(/\?$/, '');
   if (FACTS[raw]) return FACTS[raw];
-  if (raw.startsWith('earlier.')) return `the ${block.fields.find((f) => f.name === raw.slice(8))?.label.toLowerCase() ?? raw} read in earlier rounds`;
+  if (raw.startsWith('earlier.')) return `the ${lower(block.fields.find((f) => f.name === raw.slice(8))?.label ?? raw)} read in earlier rounds`;
   if (raw.startsWith('prev.')) return { prev: raw.slice(5) };
   if (block.settings.some((s) => s.name === raw)) return { setting: raw };
   if (block.fields.some((f) => f.name === raw)) return { field: raw };
@@ -34,7 +38,7 @@ function written(block: Block, x: unknown): string {
   if (typeof x === 'string') {
     if (!x.startsWith('$')) return x;
     const raw = x.slice(1).replace(/\?$/, '').replace(/^prev\./, '');
-    return `the ${[...block.fields, ...block.settings, ...block.calcs].find((y) => y.name === raw)?.label.toLowerCase() ?? raw}`;
+    return `the ${lower([...block.fields, ...block.settings, ...block.calcs].find((y) => y.name === raw)?.label ?? raw)}`;
   }
   if (Array.isArray(x)) return x.map((y) => written(block, y)).join(' and ');
   if (x && typeof x === 'object') {
@@ -54,7 +58,7 @@ export function sentence(block: Block, c: Calc): Part[] {
   const a = c.args as Record<string, unknown>;
   const p = (x: unknown) => input(block, x);
   const limit = (pre = '; it must be ') => (a.limit === undefined ? [] : [pre, p(a.limit)]);
-  const label = c.label.toLowerCase();
+  const label = lower(c.label);
   switch (c.template) {
     case 'T1': return [`The ${label} is `, p(a.a), ' minus ', p(a.b), '.'];
     case 'T3': return [`The ${label} is `, p(a.actual), ' as a percentage of ', p(a.theoretical), ...limit(), '.'];
@@ -122,13 +126,26 @@ export function settingText(doc: MasterDoc, v: SettingValue | undefined): string
   const t = s?.steps.find((x) => x.key === tk);
   const b = t && findBlock(t.block);
   const what = b ? [...b.fields, ...b.calcs].find((x) => x.name === name)?.label : undefined;
-  return `the ${(what ?? name ?? '').toLowerCase()} of step ${b?.name ?? tk} in ${s?.name ?? sk}`;
+  // The step by its title as on the floor ("Issue Vial label (PM-LBL-EXF)"), not its block's name.
+  return `the ${lower(what ?? name ?? '')} of step ${t ? stepTitle(doc, t) : tk} in ${s?.name ?? sk}`;
 }
 
-/** A whole sentence in words, with the master's settings filled in (for the review view). */
+/**
+ * A whole sentence in words, with the master's settings filled in (for the review view). An optional setting that is
+ * not set is left out with the words before it, as the engine leaves it out; a check on it ("… must be") is left out
+ * whole (an empty text).
+ */
 export function sentenceText(doc: MasterDoc, block: Block, settings: Record<string, SettingValue>, parts: Part[]): string {
-  const label = (n: string) => [...block.fields, ...block.calcs].find((x) => x.name === n)?.label.toLowerCase() ?? n;
-  return parts.map((x) => (typeof x === 'string' ? x
+  const label = (n: string) => lower([...block.fields, ...block.calcs].find((x) => x.name === n)?.label ?? n);
+  const out = [...parts];
+  for (let i = out.length - 1; i >= 0; i--) {
+    const x = out[i]!;
+    if (typeof x !== 'object' || !('setting' in x) || settings[x.setting] !== undefined || !block.settings.find((s) => s.name === x.setting)?.optional) continue;
+    const before = out[i - 1];
+    if (typeof before === 'string' && /^ must /.test(before)) return '';
+    out.splice(typeof before === 'string' ? i - 1 : i, typeof before === 'string' ? 2 : 1);
+  }
+  return out.map((x) => (typeof x === 'string' ? x
     : 'setting' in x ? settingText(doc, settings[x.setting])
     : 'field' in x ? `the ${label(x.field)}`
     : 'calc' in x ? `the ${label(x.calc)}`

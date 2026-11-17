@@ -4,10 +4,11 @@
  * The calculation checks (calculationChecks below) are error-proofing of the calculations, not GMP rules.
  */
 import { findBlock, type Block } from '../blocks/index.js';
+import { refsIn } from '../blocks/format.js';
 import { Dec, c1WithinLimits, findUnit, t10Compensating, t11SaltFactor, t2Total, t8BatchScaling, type Q } from '../templates/index.js';
 import { decimalsOf } from '../templates/core.js';
 import { evaluate, headerValue, lineQuantity } from '../engine/values.js';
-import { kindOf, kindOfUnit } from './kinds.js';
+import { kindOf, kindOfUnit, neededKind } from './kinds.js';
 import { materialLines, type Answer, type FormulaLine, type Limit, type MasterDoc, type SettingValue } from './schema.js';
 import { isBalance } from '../engine/picks.js';
 import { sterileChecks } from './sterile-checks.js';
@@ -104,7 +105,9 @@ export function masterChecks(doc: MasterDoc): Problem[] {
           // Only a plain limit check (C1: one value against this limit) says exactly what kind the limit must be.
           const c1 = block.calcs.find((c) => c.template === 'C1' && typeof c.args.limit === 'string' && c.args.limit.replace(/^\$|\?$/g, '') === name);
           const value = c1 && typeof c1.args.value === 'string' ? c1.args.value.replace(/^\$|\?$/g, '') : undefined;
-          const needed = value ? kindOf(block, value, st.settings) : undefined, has = kindOfUnit(v.unit);
+          // And I19's test temperature range: a temperature, whatever the result unit is (F5 of the 17 Nov 2026 run).
+          const i19 = block.calcs.some((c) => c.template === 'I19' && refsIn(c.args.temperatureRange).includes(name));
+          const needed = value ? kindOf(block, value, st.settings) : i19 ? neededKind(block, name, st.settings) : undefined, has = kindOfUnit(v.unit);
           if (needed && has && needed !== has) error(`${p}.settings.${name}`, `${bs.label}: a ${needed} limit is needed here, not ${has} (${v.unit})`);
         }
       }

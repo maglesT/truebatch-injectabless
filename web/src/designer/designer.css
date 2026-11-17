@@ -92,6 +92,8 @@ input.dec { text-align: right; font-variant-numeric: tabular-nums; padding: 7px 
 .formula-table tr.sel td { background: var(--brand-soft); }
 .formula-table tr.bad-row td:first-child, tr.bad-row td:first-child { box-shadow: inset 4px 0 0 var(--bad); }
 .num { text-align: right; font-variant-numeric: tabular-nums; }
+/* A number cell stays a table cell (the floor's .num is a flex box for an input and its unit). */
+td.num { display: table-cell; max-width: none; }
 .totals { display: flex; flex-wrap: wrap; gap: 10px; }
 .total { display: grid; gap: 1px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: #fcfaf8; min-width: 220px; }
 .total b { font-size: 1.2rem; font-variant-numeric: tabular-nums; }

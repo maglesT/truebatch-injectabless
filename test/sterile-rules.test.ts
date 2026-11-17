@@ -113,4 +113,12 @@ describe('the sterility assurance summary at release', () => {
     expect(r1.said.join(' ')).toMatch(/not yet, the rounds go on/);
     expect(summaryOf(row({ done: goingOn, defectCheck: { ...pass, check: { pass: false, level: 'fail', shown: 'Defective units: 2 units: OUT OF LIMITS' } } }, 'done'), block).bad).toBe(true);
   });
+
+  it('a short duration reads in minutes or seconds, not as a long raw figure (17 Nov 2026 run, F23)', async () => {
+    const { shortTime } = await import('../web/src/release/SterileSummary.js');
+    expect(shortTime('Settle plate exposure: 0.0002777… h rounded to 0 decimals (as the limit is written) = 0 h'))
+      .toBe('Settle plate exposure: about 1 s; in h rounded to 0 decimals (as the limit is written) = 0 h');
+    expect(shortTime('0.2541666… h')).toBe('about 15.25 min');
+    expect(shortTime('4.1234… h and 3.5 h')).toBe('about 4.12 h and 3.5 h');
+  });
 });

@@ -2,7 +2,7 @@
  * Recorded values and the results of the block's calculations. Every GMP number comes from the templates library:
  * this file only picks the inputs (fields, settings, earlier steps, formula lines) and calls the templates.
  */
-import { Dec, type Outcome, type Q, type ResultValue } from '../templates/index.js';
+import { Dec, findUnit, type Outcome, type Q, type ResultValue } from '../templates/index.js';
 import { findBlock, type Block, type BlockField } from '../blocks/index.js';
 import type { FormulaLine, HEADER_VALUES, Limit, MasterDoc, Pack, SettingValue, Step } from '../master/schema.js';
 import { callTemplate } from './templates.js';
@@ -17,8 +17,11 @@ export type Value = { value: string; unit: string } | { value: string; unit: str
 export type Stored = ({ ok: true; value: string; unit: string; shown: string; check?: { pass: boolean; level: string; shown: string } } & Record<string, unknown>) | { ok: false; message: string };
 export const store = (o: Outcome<object>): Stored => JSON.parse(JSON.stringify(o)) as Stored;
 // A result passed on as an input: its full value, written with at least 3 decimals for the worked line (only zeros
-// are added, nothing is rounded).
-const exact = (v: Dec | string, unit: string): Q => { const d = new Dec(v); return { value: d.toFixed(Math.max(d.decimalPlaces(), 3)), unit }; };
+// are added, nothing is rounded); a whole count (units, packs) stays whole: "3000 units", not "3000.000 units".
+const exact = (v: Dec | string, unit: string): Q => {
+  const d = new Dec(v);
+  return { value: d.toFixed(findUnit(unit)?.kind === 'count' && d.isInteger() ? 0 : Math.max(d.decimalPlaces(), 3)), unit };
+};
 const asQ = (r: Stored): Q | undefined => (r.ok ? exact(r.value, r.unit) : undefined);
 
 /** The checks inside a result that failed (check, rsdCheck, unaccountedCheck ...). */

@@ -141,6 +141,9 @@ const ALIASES: Record<string, string> = {
   vial: 'vials', ampoule: 'ampoules', syringe: 'syringes', cartridge: 'cartridges', bag: 'bags', bottle: 'bottles', plate: 'plates', m2: 'm²', month: 'months',
 };
 
+/** Every unit symbol with its kind, in table order (the designer's unit pick lists). */
+export const UNIT_LIST: readonly { symbol: string; kind: Kind }[] = TABLE.map(([symbol, kind]) => ({ symbol, kind }));
+
 const UNITS = new Map<string, Unit>(TABLE.map(([symbol, kind, factor, offset]) => [symbol, { symbol, kind, factor: d(factor.toString()), offset: d(offset ?? '0') }]));
 
 export function findUnit(symbol: string): Unit | undefined {
