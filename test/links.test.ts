@@ -204,6 +204,19 @@ describe('TI-11 Logbook: equipment and rooms fit for use', () => {
     expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str5' }))).toEqual(['STR-05 is not in the Logbook, so it cannot be used.']);
   });
 
+  it('TI-11 F19 the aseptic set-up records the isolator or RABS: refused while the Logbook says it is not fit (glove test, decontamination); taken when fit', async () => {
+    t.master.equipment_.push({ ...item('eq-iso', 'ISO-01', 'Isolator'), kind: 'equipment', type: 'Isolator', room: null },
+      { ...item('eq-rabs', 'RAB-01', 'RABS'), kind: 'equipment', type: 'RABS', room: null });
+    await t.owner.unsafe(`insert into ${S.lb}.equipment_status_v1 (master_id, code, kind, state, fit_for_use, blockers, warnings, checked_at) values
+      ('eq-iso', 'ISO-01', 'equipment', 'clean', false, '{"Glove test overdue.","Decontamination expired."}', '{}', now()),
+      ('eq-rabs', 'RAB-01', 'equipment', 'clean', true, '{}', '{}', now())`);
+    const c = await issue(small([{ steps: [{ block: { id: 'aseptic-ready', version: 2 }, checker: true, settings: {} }, yieldStep] }]));
+    await act('asha', c.id, '0.1.0.1', 'start');
+    expect(await problems(record(c.id, '0.1.0.1', { isolator: 'eq-iso' }))).toEqual(['ISO-01 is not fit for use (Logbook): Glove test overdue; Decontamination expired.']);
+    expect((await record(c.id, '0.1.0.1', { isolator: 'eq-rabs' })).statusCode).toBe(200);
+    expect((await stepOf(c.id, '0.1.0.1')).source.isolator).toMatchObject({ from: 'logbook', shown: 'RAB-01: clean' });
+  });
+
   it('TI-11 a machine fit for use is pulled with its status: no label questions, no extra check', async () => {
     expect((await record(b.id, '0.1.1.1', { machine: 'eq-str', speed: '300' })).statusCode).toBe(200);
     const s = await stepOf(b.id, '0.1.1.1');
@@ -577,6 +590,29 @@ describe('the views TrueBatch publishes', () => {
     const rows = await t.owner.unsafe(`select lot_number, quantity::text, unit, step_name from ${rep()}.material_use_v1 where batch_number = 'MAT-USE-2' order by lot_number`);
     expect(rows).toEqual([{ lot_number: 'API-G1', quantity: '0.6005', unit: 'kg', step_name: 'Granulation › Weigh a material: Examplol' },
       { lot_number: 'LAC-G1', quantity: '12.5', unit: 'mg', step_name: 'Granulation › weigh-lactose' }]);
+  });
+
+  it('F20 material_use_v1 publishes containers and closures issued by count: issued less returned, in units, by lot (MMS matches the lot number)', async () => {
+    const [u] = await t.owner<{ id: number }[]>`select id::int from users order by id limit 1`;
+    const issueStep = (what: string) => ({ block: { id: 'container-issue', version: 1 }, checker: true, settings: { what, expected: { header: 'units' } } });
+    const doc = small([{ steps: [issueStep('vials'), issueStep('stoppers')] }]);
+    const [v] = await t.owner<{ id: number }[]>`insert into master_versions (version_no, doc, created_by) values (1, ${t.owner.json(doc as never)}, ${u!.id}) returning id::int`;
+    const [b] = await t.owner<{ id: number }[]>`insert into batches (batch_no, master_version_id, issued_by) values ('MAT-USE-3', ${v!.id}, ${u!.id}) returning id::int`;
+    const e = (step: number, kind: string, payload: object, at: string) => t.owner`insert into step_events (batch_id, stage, sub, step, round, kind, payload, person_id, at)
+      values (${b!.id}, 0, 1, ${step}, 1, ${kind}, ${t.owner.json(payload as never)}, ${u!.id}, ${at})`;
+    const n = (value: string) => ({ value, unit: 'units' });
+    // The vials issued and signed; the stoppers recorded, not signed (not issued yet).
+    await e(0, 'started', { where: 'Containers and closures › Issue the vials' }, '2026-11-17 08:00+00');
+    await e(0, 'value', { values: { lot: 'P26-0012', issued: n('9800') }, results: {} }, '2026-11-17 08:05+00');
+    await e(0, 'done', {}, '2026-11-17 08:06+00');
+    await e(1, 'value', { values: { lot: 'P26-0013', issued: n('9800') }, results: {} }, '2026-11-17 08:10+00');
+    const rows = async () => t.owner.unsafe(`select lot_number, material_code, material_master_id, quantity::text, unit, dispensed_at, step, status, step_name
+      from ${rep()}.material_use_v1 where batch_number = 'MAT-USE-3'`);
+    expect(await rows()).toEqual([{ lot_number: 'P26-0012', material_code: null, material_master_id: null, quantity: '9800', unit: 'units',
+      dispensed_at: new Date('2026-11-17T08:06:00Z'), step: 's0/t0', status: 'dispensed', step_name: 'Containers and closures › Issue the vials' }]);
+    // At the end, the count returned unused (a correction of the signed step): MMS gets the rest back.
+    await e(0, 'corrected', { values: { returned: n('150') }, results: {}, reason: 'Count returned at the end' }, '2026-11-17 18:00+00');
+    expect(await rows()).toMatchObject([{ lot_number: 'P26-0012', quantity: '9650', unit: 'units', status: 'corrected' }]);
   });
 
   it('equipment_use_v1: one use per batch and machine or room, open across the stages of the batch that name it or may run in its room; another batch, another use; a balance, none', async () => {

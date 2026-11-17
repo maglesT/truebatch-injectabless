@@ -30,6 +30,13 @@ export const asepticReady: Block = {
   calcs: [observe('ready', 'Ready for aseptic work', ['people', 'gloves', 'airflow', 'assembly'])],
 };
 
+// 24, version 2 (owner, 17 Nov 2026, demo finding F19): the isolator or RABS is a machine pulled from the Logbook, first,
+// so its glove test and decontamination there decide whether it may be used. Version 1 stays for the recorded batches.
+export const asepticReady2: Block = {
+  ...asepticReady, version: 2,
+  fields: [{ name: 'isolator', label: 'Isolator or RABS', kind: 'machine', types: ['isolator', 'rabs'] }, ...asepticReady.fields],
+};
+
 // 25. Isolator or RABS decontamination (VHP): the cycle, the H2O2 at the end of aeration, indicators; its use-by.
 export const isolatorDecon: Block = {
   id: 'isolator-decon', version: 1, name: 'Isolator or RABS decontamination', checker: true,
