@@ -3,7 +3,7 @@ import { connect, type Sql } from '../server/db.js';
 import { links } from '../server/links.js';
 import { PACKING } from '../packing/product.js';
 import { PACKING_APP_ROLE } from '../packing/migrate.js';
-import { inLotUnit, issuedLots, materialUses, returnProblems, unitName, perPackText, type StepView } from '../shared/engine/index.js';
+import { bulkIssueProblem, bulkLeft, inLotUnit, issuedLots, materialUses, returnProblems, unitName, perPackText, type StepView } from '../shared/engine/index.js';
 import { call, freshApp, handLabels, login, proofFor, seedUser, TEST_DATABASE_URL, type TestApp } from './helpers.js';
 import { pack, packing } from './packing-fixture.js';
 
@@ -121,9 +121,11 @@ describe('a packing material lot is not issued beyond what MMS shows available',
 
   it('TI-21 what a terminated batch gave back to stores is available again (owner, 16 Nov 2026)', async () => {
     const b = (await as('qa1', 'GET', `/api/batches/${first}`)).json() as { batch: { contentHash: string; issued: object[] } };
-    expect(b.batch.issued).toEqual([{ lot: 'CTN-1', material: expect.stringMatching(/^PM-103 /), value: '600', unit: 'nos' }]);
+    // The filled units issued to it first (what went back of them can be issued again: bulkLeft), then its lots.
+    expect(b.batch.issued).toEqual([{ lot: 'TI260001', material: 'filled units PRD-001 · Examplocin 1 g injection (filled vials)', value: '10000', unit: 'units' },
+      { lot: 'CTN-1', material: expect.stringMatching(/^PM-103 /), value: '600', unit: 'nos' }]);
     const r = await as('qa1', 'POST', `/api/batches/${first}/terminate`, { proof: proofFor('qa1'), contentHash: b.batch.contentHash, reason: 'Line down',
-      returns: [{ lot: 'CTN-1', value: '200', unit: 'nos' }] });
+      returns: [{ lot: 'TI260001', value: '10000', unit: 'units' }, { lot: 'CTN-1', value: '200', unit: 'nos' }] });
     expect(r.statusCode, r.body).toBe(200);
     // 1000 in stock less 400 still used by the terminated batch: 600 available for the other one.
     expect((await record(second, { lot: 'CTN-1', issued: '601', matches: 'yes' })).json()).toMatchObject({ problems: [expect.stringMatching(/^Lot CTN-1 has 600 nos available in MMS \(1000 nos in stock less 400 nos already used/)] });
@@ -160,6 +162,20 @@ describe('a packing material lot is not issued beyond what MMS shows available',
     expect(returnProblems(issued, [{ lot: 'L-1', value: '151', unit: 'm' }, { lot: 'X-9', value: '1', unit: 'm' }])).toEqual(['Lot X-9 (m) was not issued to this batch.',
       'Lot L-1: 150 m was issued to this batch; 151 m cannot have gone back to stores.', expect.stringMatching(/^Say how much of lot C-1 \(PM-103 · .*\) went back to stores unused: 0 if none\.$/)]);
     expect(returnProblems([], [])).toEqual([]);
+  });
+
+  it('packing (suite B2, 17 Nov 2026): what is left of a batch of filled units is its good units less the other packing batches\' issues, net of what a terminated one gave back; a part issue up to it', () => {
+    const others = [{ batchNo: 'TIP260001', units: '3000', returned: null }, { batchNo: 'TIP260002', units: '1000', returned: '400' }, { batchNo: 'TIP260003', units: '500', returned: '500' }];
+    const left = bulkLeft('4800', others);
+    expect(left).toEqual({ issued: '3600', left: '1200' });
+    expect(bulkLeft('4800', [])).toEqual({ issued: '0', left: '4800' });
+    expect(bulkLeft('3000', others)).toEqual({ issued: '3600', left: '0' });
+    expect(bulkIssueProblem('TI260001', null, '4800', left)).toBeNull();
+    expect(bulkIssueProblem('TI260001', '1200', '4800', left)).toBeNull();
+    expect(bulkIssueProblem('TI260001', '500', '4800', left)).toBeNull();
+    expect(bulkIssueProblem('TI260001', '1201', '4800', left)).toBe('Only 1200 units of batch TI260001 are left to issue (4800 good units, 3600 already issued to other packing batches): issue 1200 or less.');
+    expect(bulkIssueProblem('TI260001', '0', '4800', left)).toBe('Filled units issued: give more than 0 units.');
+    expect(bulkIssueProblem('TI260001', null, '3000', bulkLeft('3000', others))).toBe('All 3000 good units of batch TI260001 are already issued to other packing batches: nothing is left to issue.');
   });
 
   it('a quantity field shows master data\'s name for the same unit (nos for units), never another unit', () => {
