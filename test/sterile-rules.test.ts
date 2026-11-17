@@ -42,6 +42,35 @@ describe('the sterile rules in the master', () => {
     expect(rules(d)).toEqual([expect.stringMatching(/^- An aseptic master tests the sterilising filter before use/)]);
   });
 
+  // 17 Nov 2026: aseptic blow-fill-seal (a liquid, filtered) and a sterile powder filled as it is (no filtration).
+  const bfs = (): MasterDoc => { const d = vial(); d.stages[1]!.steps = [step('aseptic-ready', 'ready'), step('interventions', 'log'), step('ffs-run', 'bfs'), step('qa-sample', 'sterility')];
+    d.stages[2]!.steps.unshift(step('leak-test-100', 'leak')); return d; };
+  const powder = (): MasterDoc => { const d = vial(); d.header = { ...d.header, batchUnit: 'units', batchSize: '20000', claimPer: 'container (filled content)' };
+    delete d.header.densityGPerMl; delete d.header.fillVolumeMl; delete d.header.fillExcessMl;
+    d.stages[0] = { ...d.stages[0]!, name: 'Sterile dispensing', steps: [step('weigh', 'weigh')] };
+    d.stages[1]!.steps = d.stages[1]!.steps.map((t) => (t.block.id === 'fill' ? step('powder-fill', 'fill') : t)); return d; };
+
+  it('TI-23 TI-25 TI-28 an aseptic blow-fill-seal master and a sterile powder master hold every sterile rule; a powder has no filtration', () => {
+    expect(rules(bfs())).toEqual([]);
+    expect(rules(powder())).toEqual([]);
+    // Blow-fill-seal is a liquid: filtered and its filter tested as any aseptic liquid; a powder filtered after all tests its filter.
+    const unfiltered = bfs(); unfiltered.stages[0]!.steps = unfiltered.stages[0]!.steps.filter((t) => t.block.id !== 'filtration');
+    expect(rules(unfiltered)).toEqual(['TI-25 An aseptic master has its sterile filtration (with the bioburden sample just before the filter)']);
+    const filtered = powder(); filtered.stages[0]!.steps.push(step('filtration', 'filter'));
+    expect(rules(filtered)).toEqual([expect.stringMatching(/^- An aseptic master tests the sterilising filter before use/), 'TI-25 The sterilising filter is integrity tested after use']);
+    // The interventions log in the aseptic stage of each; the samples, closing and inspection as for a vial.
+    for (const d of [bfs(), powder()]) {
+      d.stages[1]!.steps = d.stages[1]!.steps.filter((t) => t.block.id !== 'interventions');
+      expect(rules(d)).toEqual(['TI-28 The aseptic filling stage Aseptic filling has an interventions and stoppages log']);
+    }
+    const p = powder(); p.stages[1]!.steps = p.stages[1]!.steps.filter((t) => !['qa-sample', 'seal-check'].includes(t.block.id)); p.stages[2]!.steps = [];
+    expect(rules(p)).toEqual(['TI-26 The master takes the sterility and endotoxin samples where the release needs them (each sub-batch or load)',
+      'TI-29 The master closes and checks the containers (seal check or 100 % container-closure test)', 'TI-30 Every filled unit is inspected (100 % visual inspection)']);
+    // Library check 37 holds for blow-fill-seal: nothing added between the sterile filtration and the fill.
+    const added = bfs(); added.stages[1]!.steps.splice(2, 0, step('charge', 'late'));
+    expect(unplaced(masterChecks(added)).filter((x) => x.rule === 'TI-25').map((x) => x.message)).toEqual([expect.stringMatching(/comes between the sterile filtration and filling/)]);
+  });
+
   it('TI-26 the master takes the sterility and endotoxin samples; incubated results are read in a stage that starts after the sampling', () => {
     expect(without(1, 'qa-sample')).toContain('TI-26 The master takes the sterility and endotoxin samples where the release needs them (each sub-batch or load)');
     const d = vial(); d.stages[2]!.steps.push(step('incubated-results', 'plates'));
@@ -120,7 +149,7 @@ describe('the sterility assurance summary at release', () => {
     const iso = { itemId: 'i', code: 'EQS-ISO-01', name: 'Filling isolator', version: 1, type: 'Isolator', room: 'RM-207', area: 'Aseptic filling' };
     const row = (values: object, source: object) => ({ key: { stage: 0, sub: 1, step: 0, round: 1 }, id: '0.1.0.1', results: {}, values, source }) as never;
     expect(summaryOf(row({ isolator: iso, people: 'yes' }, { isolator: { from: 'logbook', asOf: null, shown: 'EQS-ISO-01: clean' } }), latestBlock('aseptic-ready')).said[0])
-      .toBe('Isolator or RABS: EQS-ISO-01 · Filling isolator (Logbook at use: EQS-ISO-01: clean)');
+      .toBe('Isolator, RABS or blow-fill-seal machine: EQS-ISO-01 · Filling isolator (Logbook at use: EQS-ISO-01: clean)');
     const cap = { ...iso, code: 'EQS-CAP-01', name: 'Vial capping machine', type: 'Capping machine' };
     expect(summaryOf(row({ capper: cap }, { capper: { from: 'hand', link: 'logbook', state: 'down' } }), latestBlock('seal-check')).said[0])
       .toBe('Capping machine: EQS-CAP-01 · Vial capping machine (Logbook down at use: its status answered by hand)');

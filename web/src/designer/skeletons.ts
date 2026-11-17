@@ -40,6 +40,18 @@ const asepticFill = (between: StepPlan[], o: { fill?: StepPlan[]; close?: StepPl
   steps: [s('aseptic-ready'), s('interventions'), s('em-filling'), s('transfer-in'), ...(o.fill ?? [s('fill')]), ...between,
     // The samples are a QA hold: taken once the units are closed, so capping never waits for QA.
     ...(o.close ?? [issue('seals'), s('seal-check')]), s('qa-sample', 'sterility', 'Sterility and endotoxin samples'), ...(o.back ?? VIAL_PARTS).map(back), s('unit-reconcile')] });
+// Aseptic blow-fill-seal (owner, 17 Nov 2026): the machine forms its containers from plastic granules issued by weight
+// from an MMS lot (the container issue in kg, as Packing issues a material by weight) and weighed back at the end; it
+// closes them itself (no stoppers or seals) and the leak test is in inspection.
+const granules: StepPlan = { block: 'container-issue', key: 'issue-granules', name: 'Issue the plastic granules', settings: () => ({ unit: 'kg', expected: '' }) };
+const granulesBack: StepPlan = { block: 'container-return', key: 'back-granules', name: 'Weigh back the plastic granules', settings: () => ({ unit: 'kg' }) };
+const bfs: StagePlan = { key: 'filling', name: 'Aseptic blow-fill-seal', role: 'Aseptic operator', rooms: ['Aseptic filling'], aseptic: true, uses: ['compounding'],
+  steps: [s('aseptic-ready'), s('interventions'), s('em-filling'), granules, s('ffs-run'), s('qa-sample', 'sterility', 'Sterility and endotoxin samples'), granulesBack, s('unit-reconcile')] };
+// Sterile powder (owner, 17 Nov 2026): the sterile drug substance is weighed in the sterile dispensing area, as any
+// formula material, in a preparation stage as the containers are (no yield: the filling stage reconciles the units); no
+// compounding and no filtration.
+const dispensing: StagePlan = { key: 'dispensing', name: 'Sterile dispensing', kind: 'preparation', role: 'Dispensing operator', rooms: ['Sterile dispensing'], produces: ['dispensed sterile powder', 24],
+  steps: [s('weigh', 'weigh-api', 'Weigh the sterile powder')] };
 const resultsLater = (after: string): StagePlan => ({ key: 'results', name: 'Results later (EM plates, bioburden)', kind: 'preparation', role: 'QC microbiologist', rooms: [],
   startsAfter: after, steps: [s('incubated-results', 'plates', 'EM plates read')] });
 const terminal = (fillName: string, fill: StepPlan[], uses: string[], parts: string[] = []): StagePlan[] => [
@@ -94,6 +106,16 @@ const SKELETONS: { id: string; route?: Route; name: string; text: string; stages
       components,
       asepticFill([s('qa-sample', 'middle', 'Content sample, middle of filling'), s('qa-sample', 'end', 'Content sample, end of filling')]),
       resultsLater('filling/fill'), inspection()],
+  },
+  {
+    id: 'bfs-aseptic', route: 'aseptic', name: 'Ampoules or nebules, blow-fill-seal, aseptic',
+    text: 'Compounding and sterile filtration with filter tests, aseptic blow-fill-seal from plastic granules with clean-air checks and interventions, the plates read later, leak test and inspection.',
+    stages: [compounding(filtrationSteps), bfs, resultsLater('filling/ffs-run'), inspection([s('leak-test-100')])],
+  },
+  {
+    id: 'powder-aseptic', route: 'aseptic', name: 'Sterile powder in vials, aseptic powder filling',
+    text: 'Sterile dispensing of the powder, vials washed and depyrogenated, stoppers sterilised, aseptic powder filling with clean-air checks and interventions, the plates read later, inspection.',
+    stages: [dispensing, components, asepticFill([], { fill: [s('powder-fill')], uses: ['dispensing', 'components'] }), resultsLater('filling/powder-fill'), inspection()],
   },
 ];
 
