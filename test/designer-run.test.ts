@@ -5,7 +5,7 @@ import { placeChecks } from '../shared/master/places.js';
 import { masterSchema } from '../shared/master/schema.js';
 import { describeMaster } from '../web/src/designer/describe.js';
 import { verdictless } from '../web/src/designer/example.js';
-import { grouped } from '../web/src/designer/model.js';
+import { grouped, ownProducts } from '../web/src/designer/model.js';
 import { sentence, sentenceText } from '../web/src/designer/sentences.js';
 import { skeletonList, skeletonStages } from '../web/src/designer/skeletons.js';
 import { tablet } from './engine-fixture.js';
@@ -80,6 +80,13 @@ describe('designer findings of the TrueBatch Tablets 17 Nov 2026 run', () => {
     expect(lines.find((l) => l.includes('Produces bulk solution'))).toMatch(/to be used within 720 hours \(30 days\)\./);
     expect(grouped('10.0 mL × 50000 units = 500.000 L')).toBe('10.0 mL × 50,000 units = 500.000 L');
     expect(grouped('CC-2026-0016, 49225.7 units, 100000 units')).toBe('CC-2026-0016, 49225.7 units, 1,00,000 units');
+  });
+
+  it('pick lists offer master data\'s bulk products for a master, its packs for a packing master; no kind yet: both (F3, F14)', () => {
+    const p = (code: string, kind?: 'bulk' | 'pack' | null) => ({ code, kind });
+    const all = [p('FG-ONDA2', 'bulk'), p('PK-ONDA2-V10', 'pack'), p('FG-CEFT1', null), p('FG-HEP5')];
+    expect(ownProducts(all, 'bulk').map((x) => x.code)).toEqual(['FG-ONDA2', 'FG-CEFT1', 'FG-HEP5']);
+    expect(ownProducts(all, 'pack').map((x) => x.code)).toEqual(['PK-ONDA2-V10', 'FG-CEFT1', 'FG-HEP5']);
   });
 
   it('no internal codes of rules, templates, failure cases or library checks in what the master check says; the rule stays', () => {

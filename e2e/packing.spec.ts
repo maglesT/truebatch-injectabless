@@ -34,6 +34,9 @@ test('TI-P2 packing journey: packing master from the skeleton (labelling, carton
   // The product's own words: the page is headed as its tab.
   await expect(author.page.getByRole('heading', { level: 1 })).toHaveText('Packing masters');
   await author.page.getByRole('button', { name: 'New master' }).click();
+  // The pack is picked from master data's packs, the product packed from its bulk products (and those without a kind yet).
+  await expect(author.page.locator('.picker').first().locator('.pick b')).toHaveText(['PK-001', 'PRD-002']);
+  await expect(author.page.locator('.picker').nth(1).locator('.pick b')).toHaveText(['PRD-001', 'PRD-002']);
   await author.page.getByLabel('Pack product').fill('PK-001');
   await author.page.locator('.picker').first().getByRole('button', { name: /PK-001/ }).click();
   await author.page.getByLabel('Product packed').fill('PRD-001');

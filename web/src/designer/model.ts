@@ -166,3 +166,8 @@ export function answerDoc(doc: MasterDoc, p: Problem, choice: string, reason: st
   if (!p.question) return doc;
   return { ...doc, answers: { ...doc.answers, [p.question.key]: { about: p.message, choice, reason: reason.trim() } } };
 }
+
+/** The products of master data this master offers: the bulk products (TrueBatch Injectables) or the packs (Packing),
+ *  plus those master data gives no kind yet. */
+export const ownProducts = <P extends { kind?: 'bulk' | 'pack' | null }>(products: readonly P[], kind: 'bulk' | 'pack'): P[] =>
+  products.filter((p) => (p.kind ?? kind) === kind);

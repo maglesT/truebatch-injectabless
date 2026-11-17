@@ -9,7 +9,7 @@ export interface MasterRow {
 export interface Version { id: number; masterId: number; versionNo: number; state: MasterState; doc: MasterDoc; createdBy: number; createdAt: string }
 
 interface Item { itemId: string; code: string; name: string; version: number; active: boolean }
-export interface Product extends Item { strength: string | null; dosageForm: string | null }
+export interface Product extends Item { strength: string | null; dosageForm: string | null; kind?: 'bulk' | 'pack' | null }
 export interface Material extends Item { category: string | null; unit: string | null }
 export interface Equipment extends Item { kind: 'equipment' | 'instrument'; type: string | null; room: string | null }
 export interface Room extends Item { area: string | null; grade: string | null }

@@ -34,8 +34,10 @@ await schemaOwner.end();
 
 const master = fakeMaster();
 const item = (itemId: string, code: string, name: string) => ({ itemId, code, name, version: 1, active: true });
-master.products_.push({ ...item('pk-1', 'PK-001', 'Examplocin 1 g injection, 10 vials per carton'), strength: '1 g', dosageForm: 'injection' },
-  { ...item('prd-1', 'PRD-001', 'Examplocin 1 g injection (filled vials)'), strength: '1 g', dosageForm: 'injection' });
+// Master data's kind: the pack and the product it is packed from; PRD-002 has no kind yet (offered in both lists).
+master.products_.push({ ...item('pk-1', 'PK-001', 'Examplocin 1 g injection, 10 vials per carton'), strength: '1 g', dosageForm: 'injection', kind: 'pack' },
+  { ...item('prd-1', 'PRD-001', 'Examplocin 1 g injection (filled vials)'), strength: '1 g', dosageForm: 'injection', kind: 'bulk' },
+  { ...item('prd-2', 'PRD-002', 'Examplocin 2 g injection (filled vials)'), strength: '2 g', dosageForm: 'injection' });
 master.materials_.push({ ...item('pm-lbl', 'PM-101', 'Vial label'), category: 'packing', unit: 'nos' },
   { ...item('pm-ctn', 'PM-103', 'Carton'), category: 'packing', unit: 'nos' });
 master.equipment_.push({ ...item('ln-1', 'LL-01', 'Labelling line 1'), kind: 'equipment', type: 'labelling line', room: 'PK-01' },

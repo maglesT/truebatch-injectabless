@@ -5,7 +5,9 @@ import type { Sql } from './db.js';
 // name and version as at signing (PL-07); that copy belongs to the record, not to a master-data cache.
 
 interface Base { itemId: string; code: string; name: string; version: number; active: boolean }
-export interface MasterProduct extends Base { strength: string | null; dosageForm: string | null }
+// kind: 'bulk' (made in TrueBatch Injectables) or 'pack' (packed in TrueBatch Injectables Packing); null when master data does
+// not say (not set yet, or an older platform whose view has no kind column).
+export interface MasterProduct extends Base { strength: string | null; dosageForm: string | null; kind?: 'bulk' | 'pack' | null }
 export interface MasterMaterial extends Base { category: string | null; unit: string | null }
 export interface MasterEquipment extends Base { kind: 'equipment' | 'instrument'; type: string | null; room: string | null }
 export interface MasterRoom extends Base { area: string | null; grade: string | null }
@@ -36,8 +38,11 @@ export function sqlMaster(md: Sql): Master {
     try { return await q(); } catch (e) { if (isCut(e)) throw new ConnectionOff(); throw e; }
   };
   return {
+    // kind is read through the row as JSON, so a view without the column (an older platform) gives null, not an error.
     products: () => read(async () => [...await md<MasterProduct[]>`
-      select id as "itemId", code, name, version, active, strength, dosage_form as "dosageForm" from report.product_v1 order by code`]),
+      select id as "itemId", code, name, version, active, strength, dosage_form as "dosageForm",
+        case when to_jsonb(p)->>'kind' in ('bulk', 'pack') then to_jsonb(p)->>'kind' end as kind
+      from report.product_v1 p order by code`]),
     materials: () => read(async () => [...await md<MasterMaterial[]>`
       select id as "itemId", code, name, version, active, category, unit from report.material_v1 order by code`]),
     equipment: () => read(async () => [
