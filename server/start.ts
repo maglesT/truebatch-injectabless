@@ -21,7 +21,8 @@ export async function start(product: Product, webRoot?: string) {
   // The optional links: a connection only for a provider whose link is on.
   const linked = (url?: string) => (url ? connect(url, { link: true }) : null);
   const providers = { deviations: linked(config.DEVIATIONS_DATABASE_URL), qms: linked(config.QMS_DATABASE_URL),
-    logbook: linked(config.LOGBOOK_DATABASE_URL), mms: linked(config.MMS_DATABASE_URL), truebatch_injectables: linked(config.INJECTABLES_LINK_URL) };
+    logbook: linked(config.LOGBOOK_DATABASE_URL), mms: linked(config.MMS_DATABASE_URL), truebatch_injectables: linked(config.INJECTABLES_LINK_URL),
+    qual: linked(config.QUAL_DATABASE_URL) };
   const app = await buildApp({ sql, signOn, proofKey, master: sqlMaster(md), links: links(providers), logger: true, cookieSecure: config.COOKIE_SECURE,
     batchPrefix: config.BATCH_PREFIX, product, webRoot, demo: isDemo() });
 

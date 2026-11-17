@@ -7,6 +7,8 @@ import { batchRefusal, batchView, fieldLabel, handFields, type BatchEvent } from
 import { call, freshApp, handLabels, login, proofFor, seedUser, TEST_DATABASE_URL, type TestApp } from './helpers.js';
 import { at, ev, small, tablet, placed } from './engine-fixture.js';
 import { inLogbook } from '../shared/engine/picks.js';
+import { batchRecordDoc } from '../server/batch-record.js';
+import { deviationsRead, loadBatch, recordInput } from '../server/routes/batches.js';
 
 // The shared test master is built from test-only blocks (test/test-blocks.ts).
 vi.mock('../shared/blocks/index.js', async (original) => (await import('./test-blocks.js')).withTestBlocks(original as never));
@@ -18,7 +20,7 @@ vi.mock('../shared/blocks/index.js', async (original) => (await import('./test-b
 
 let t: TestApp;
 let provider: Sql;
-const S: Record<'dv' | 'qms' | 'lb' | 'mms', string> = { dv: '', qms: '', lb: '', mms: '' };
+const S: Record<'dv' | 'qms' | 'lb' | 'mms' | 'qual', string> = { dv: '', qms: '', lb: '', mms: '', qual: '' };
 const cookies: Record<string, string> = {};
 const ids: Record<string, number> = {};
 const item = (itemId: string, c: string, name: string) => ({ itemId, code: c, name, version: 1, active: true });
@@ -28,7 +30,7 @@ beforeAll(async () => {
     for (const k of Object.keys(S) as (keyof typeof S)[]) S[k] = `${db.schema}_${k}`;
     // The planned and published views, as tables with the same columns (the providers' own contracts).
     await db.owner.unsafe(`
-      create schema ${S.dv}; create schema ${S.qms}; create schema ${S.lb}; create schema ${S.mms};
+      create schema ${S.dv}; create schema ${S.qms}; create schema ${S.lb}; create schema ${S.mms}; create schema ${S.qual};
       create table ${S.dv}.deviation_v1 (number text, status text, classification text, opened_at timestamptz, closed_at timestamptz, product text, batch text,
         batch_norm text, outcome text, read_at timestamptz default now(), data_as_of timestamptz default now(), title text, source_ref text);
       create table ${S.qms}.change_v1 (number text, status text, title text, products text, qa_approved_at timestamptz, closed_at timestamptz,
@@ -41,8 +43,11 @@ beforeAll(async () => {
         read_at timestamptz default now(), data_as_of timestamptz default now(), stock numeric, unit text);
       create table ${S.mms}.lot_test_v1 (lot_number text, report_ref text, test text, specification text, result text, value numeric, unit text, basis text,
         tested_at timestamptz, read_at timestamptz default now(), data_as_of timestamptz default now());
-      grant usage on schema ${S.dv}, ${S.qms}, ${S.lb}, ${S.mms} to truebatch_injectables_app;
-      grant select on all tables in schema ${S.dv}, ${S.qms}, ${S.lb}, ${S.mms} to truebatch_injectables_app;
+      create table ${S.qual}.protocol_v1 (number text, item_id bigint, master_id text, item_code text, stage text, step text, approved_at timestamptz,
+        report_outcome text, report_release text, status_decided text, next_review_due_decided date, report_approved_at timestamptz,
+        read_at timestamptz default now(), data_as_of timestamptz default now());
+      grant usage on schema ${S.dv}, ${S.qms}, ${S.lb}, ${S.mms}, ${S.qual} to truebatch_injectables_app;
+      grant select on all tables in schema ${S.dv}, ${S.qms}, ${S.lb}, ${S.mms}, ${S.qual} to truebatch_injectables_app;
       insert into ${S.qms}.change_v1 (number, status, title, products, qa_approved_at) values
         ('CC-2026-0001', 'implementation', 'New supplier of lactose', 'PRD-001', now()), ('CC-2026-0002', 'qa', 'Press speed', null, null),
         ('CC-2026-0003', 'rejected', 'Drop the coating', null, now()),
@@ -64,11 +69,14 @@ beforeAll(async () => {
         ('API-ASIS', 'material', 'mat-api', 'MAT-001', 'approved', '2099-01-31', null, 'QC-26-102'),
         ('LAC-1', 'material', 'mat-lac', 'MAT-002', 'approved', '2099-01-31', null, 'QC-26-103');
       update ${S.mms}.lot_v1 set stock = 25, unit = 'kg' where lot_number = 'API-OK';
+      insert into ${S.qual}.protocol_v1 (number, master_id, item_code, stage, report_outcome, next_review_due_decided, report_approved_at) values
+        ('MF-2026-0001', 'eq-iso', 'ISO-01', 'media_fill', 'pass', '2099-01-31', now()), ('MF-2026-0002', 'eq-rabs', 'RAB-01', 'media_fill', 'pass', '2099-01-31', now()),
+        ('MF-2026-0004', 'rm-a1', 'ASF-01', 'media_fill', 'pass', '2099-01-31', now());
       insert into ${S.mms}.lot_test_v1 (lot_number, report_ref, test, result, value, unit, basis) values
         ('API-OK', 'QC-26-101', 'Assay', '99.1 %', 99.1, '%', 'dried'), ('API-OK', 'QC-26-101', 'LOD', '0.4 %', 0.4, '%', 'as is'),
         ('API-OK', 'QC-26-101', 'Identity', 'complies', null, null, null), ('API-ASIS', 'QC-26-102', 'Assay', '98.0 %', 98.0, '%', 'as is');`);
     provider = connect(TEST_DATABASE_URL, { role: 'truebatch_injectables_app', link: true });
-    return links({ deviations: provider, qms: provider, logbook: provider, mms: provider }, { deviations: S.dv, qms: S.qms, logbook: S.lb, mms: S.mms });
+    return links({ deviations: provider, qms: provider, logbook: provider, mms: provider, qual: provider }, { deviations: S.dv, qms: S.qms, logbook: S.lb, mms: S.mms, qual: S.qual });
   });
   t.master.products_.push({ ...item('prd-1', 'PRD-001', 'Examplol 100 mg film-coated tablets'), strength: '100 mg', dosageForm: 'tablet' },
     { ...item('p', 'P', 'P'), strength: null, dosageForm: 'tablet' });
@@ -103,7 +111,7 @@ async function issue(doc: ReturnType<typeof small>) {
   const { id } = res.json() as { id: number };
   for (const s of ['in_review', 'approved', 'effective']) await t.owner`update master_versions set state = ${s} where id = ${id}`;
   const b = await as('issuer', 'POST', '/api/batches', { masterVersionId: id, proof: proofFor('issuer') });
-  expect(b.statusCode).toBe(200);
+  expect(b.statusCode, b.body).toBe(200);
   return b.json() as { id: number; batchNo: string };
 }
 type StepJson = { id: string; state: string; values: Record<string, unknown>; source: Record<string, { from: string; state?: string; shown?: string }>;
@@ -116,15 +124,15 @@ const problems = async (p: ReturnType<typeof record>) => ((await p).json() as { 
 const yieldStep = { block: { id: 'stage-yield', version: 1 }, checker: true, settings: { theoretical: '0.100 kg', yieldLimit: { low: '97.0', high: '100.5', unit: '%' } } };
 
 describe('the link client: absent, down (refused or not answering) and ok', () => {
-  const reads = (l: Links) => [l.deviations.byNumbers(['DEV-1']), l.qms.change('CC-2026-0001'), l.logbook.status('eq-str'), l.mms.lot('API-OK')];
+  const reads = (l: Links) => [l.deviations.byNumbers(['DEV-1']), l.qms.change('CC-2026-0001'), l.logbook.status('eq-str'), l.mms.lot('API-OK'), l.qual.mediaFill(['eq-iso'])];
 
   it('absent: no URL (not licensed, or the link is off) reads nothing', async () => {
-    expect((await Promise.all(reads(links()))).map((r) => r.state)).toEqual(['absent', 'absent', 'absent', 'absent']);
+    expect((await Promise.all(reads(links()))).map((r) => r.state)).toEqual(['absent', 'absent', 'absent', 'absent', 'absent']);
   });
 
   it('ok: the rows as the provider has them now, nothing copied', async () => {
-    const [d, q, l, m] = await Promise.all(reads(t.app.links));
-    expect([d!.state, q!.state, l!.state, m!.state]).toEqual(['ok', 'ok', 'ok', 'ok']);
+    const [d, q, l, m, mf] = await Promise.all(reads(t.app.links));
+    expect([d!.state, q!.state, l!.state, m!.state, mf!.state]).toEqual(['ok', 'ok', 'ok', 'ok', 'ok']);
     expect(q).toMatchObject({ value: { number: 'CC-2026-0001', status: 'implementation', title: 'New supplier of lactose' } });
     expect(l).toMatchObject({ value: { code: 'STR-01', fitForUse: true, warnings: ['Use allowed under exception EXC-7'] } });
     expect(m).toMatchObject({ value: { lotNumber: 'API-OK', status: 'approved', tests: [{ test: 'Assay', value: '99.1', basis: 'dried' }, { test: 'LOD', value: '0.4' }] } });
@@ -135,14 +143,14 @@ describe('the link client: absent, down (refused or not answering) and ok', () =
   it('down: a refused read (grant revoked, view missing) or a provider that does not answer', async () => {
     for (const s of Object.values(S)) await cut(s);
     try {
-      expect((await Promise.all(reads(t.app.links))).map((r) => r.state)).toEqual(['down', 'down', 'down', 'down']);
+      expect((await Promise.all(reads(t.app.links))).map((r) => r.state)).toEqual(['down', 'down', 'down', 'down', 'down']);
     } finally {
       for (const s of Object.values(S)) await restore(s);
     }
-    const gone = links({ deviations: provider, qms: provider, logbook: provider, mms: provider }, { deviations: 'nope', qms: 'nope', logbook: 'nope', mms: 'nope' });
-    expect((await Promise.all(reads(gone))).map((r) => r.state)).toEqual(['down', 'down', 'down', 'down']);
+    const gone = links({ deviations: provider, qms: provider, logbook: provider, mms: provider, qual: provider }, { deviations: 'nope', qms: 'nope', logbook: 'nope', mms: 'nope', qual: 'nope' });
+    expect((await Promise.all(reads(gone))).map((r) => r.state)).toEqual(['down', 'down', 'down', 'down', 'down']);
     const nowhere = connect('postgres://truebatch_injectables_app:x@127.0.0.1:1/x', { link: true });
-    expect((await Promise.all(reads(links({ deviations: nowhere, qms: nowhere, logbook: nowhere, mms: nowhere })))).map((r) => r.state)).toEqual(['down', 'down', 'down', 'down']);
+    expect((await Promise.all(reads(links({ deviations: nowhere, qms: nowhere, logbook: nowhere, mms: nowhere, qual: nowhere })))).map((r) => r.state)).toEqual(['down', 'down', 'down', 'down', 'down']);
     await nowhere.end();
   });
 });
@@ -541,7 +549,8 @@ describe('the views TrueBatch publishes', () => {
     const batchwright = ['batch_id uuid', 'batch_number text', 'product_code text', 'strength text', 'mbr_version_id uuid', 'family_code text',
       'record_kind text', 'status text', 'issued_at timestamp with time zone', 'completed_at timestamp with time zone', 'released boolean',
       'read_at timestamp with time zone', 'data_as_of timestamp with time zone'];
-    expect(await columns('batch_fact_v1')).toEqual([...batchwright, 'manufactured_on date', 'product_name text', 'master_version integer']);
+    expect(await columns('batch_fact_v1')).toEqual([...batchwright, 'manufactured_on date', 'product_name text', 'master_version integer',
+      'good_quantity numeric', 'good_unit text', 'yield_percent numeric']);
     expect(await columns('equipment_use_v1')).toEqual(['batch_number text', 'equipment_code text', 'equipment_type text', 'room_code text', 'step text',
       'started_at timestamp with time zone', 'ended_at timestamp with time zone', 'read_at timestamp with time zone', 'data_as_of timestamp with time zone', 'step_name text']);
     expect(await columns('deviation_note_v1')).toEqual(['note_id bigint', 'source_ref text', 'batch_number text', 'product_code text', 'step text', 'note text',
@@ -586,6 +595,38 @@ describe('the views TrueBatch publishes', () => {
       (${started}, 0, 1, 0, 1, 'value', '{}', ${b!.by}, '2026-11-02 21:00+00')`;
     const rows = await t.owner.unsafe(`select batch_number, issued_at::date::text as issued, manufactured_on::text from ${rep()}.batch_fact_v1 where batch_number like 'MFG-%' order by batch_number`);
     expect(rows).toEqual([{ batch_number: 'MFG-NOT-STARTED', issued: '2026-10-30', manufactured_on: null }, { batch_number: 'MFG-STARTED', issued: '2026-10-30', manufactured_on: '2026-11-03' }]);
+  });
+
+  it('batch_fact_v1 good_quantity, good_unit, yield_percent (owner, 17 Nov 2026): the last reconciliation of units once signed, its current values; null until then', async () => {
+    const [u] = await t.owner<{ id: number }[]>`select id::int from users order by id limit 1`;
+    const rc = { block: { id: 'unit-reconcile', version: 1 }, settings: {} };
+    const doc = small([{ steps: [rc] }, { steps: [{}, rc] }]);
+    doc.header.productName = 'Examplazone injection 2 mg/mL, 1 mL prefilled syringe';
+    const [v] = await t.owner<{ id: number }[]>`insert into master_versions (version_no, doc, created_by) values (1, ${t.owner.json(doc as never)}, ${u!.id}) returning id::int`;
+    const [b] = await t.owner<{ id: number }[]>`insert into batches (batch_no, master_version_id, issued_by) values ('YLD-1', ${v!.id}, ${u!.id}) returning id::int`;
+    const counted = (stage: number, sub: number, step: number, kind: 'value' | 'corrected', good: string, yieldPct: string) => t.owner`
+      insert into step_events (batch_id, stage, sub, step, round, kind, payload, person_id) values (${b!.id}, ${stage}, ${sub}, ${step}, 1, ${kind},
+        ${t.owner.json({ values: { good: { value: good, unit: 'units' } }, results: { yield: { ok: true, value: yieldPct, unit: '%', shown: '' } } })}, ${u!.id})`;
+    const done = (stage: number, sub: number, step: number) => t.owner`
+      insert into step_events (batch_id, stage, sub, step, round, kind, payload, person_id) values (${b!.id}, ${stage}, ${sub}, ${step}, 1, 'done', '{}', ${u!.id})`;
+    const fact = async () => (await t.owner.unsafe(`select good_quantity::text, good_unit, yield_percent::text from ${rep()}.batch_fact_v1 where batch_number = 'YLD-1'`))[0];
+    // The filling's reconciliation is signed, the inspection's (the last) is not: unknown yet.
+    await counted(0, 1, 0, 'value', '1000', '100');
+    await done(0, 1, 0);
+    await counted(1, 1, 1, 'value', '950', '95');
+    expect(await fact()).toEqual({ good_quantity: null, good_unit: 'syringes', yield_percent: null });
+    await done(1, 1, 1);
+    expect(await fact()).toEqual({ good_quantity: '950', good_unit: 'syringes', yield_percent: '95' });
+    // A correction counts.
+    await counted(1, 1, 1, 'corrected', '948', '94.8');
+    expect(await fact()).toEqual({ good_quantity: '948', good_unit: 'syringes', yield_percent: '94.8' });
+    // Two sub-batches: their good units added, the yield of the total (948 of 1000 and 500 of 500: 1448 of 1500).
+    await counted(1, 2, 1, 'value', '500', '100');
+    await done(1, 2, 1);
+    expect(await fact()).toEqual({ good_quantity: '1448', good_unit: 'syringes', yield_percent: '96.53' });
+    // A product named without its container: units; a master without a reconciliation of units: null.
+    const others = await t.owner.unsafe(`select distinct good_unit, good_quantity from ${rep()}.batch_fact_v1 where product_code = 'P' and batch_number <> 'YLD-1'`);
+    expect(others).toEqual([{ good_unit: 'units', good_quantity: null }]);
   });
 
   it('batch_fact_v1 names the product and gives the master version as its number', async () => {
@@ -808,5 +849,123 @@ describe('TI-11 Logbook: an antibiotic\'s line kept for it', () => {
     } finally {
       await t.owner.unsafe(`alter table ${S.lb}.equipment_status_v1 drop column only_product`);
     }
+  });
+});
+
+describe('the aseptic set-up: the line\'s media fill from Qualification (owner, 17 Nov 2026)', () => {
+  let c: { id: number; batchNo: string };
+  const refusal = async () => problems(record(c.id, '0.1.1.1', { isolator: 'eq-iso3' }));
+  const media = (number: string, masterId: string, code: string, outcome: string, due: string, approvedDaysAgo: number) => t.owner.unsafe(`
+    insert into ${S.qual}.protocol_v1 (number, master_id, item_code, stage, report_outcome, next_review_due_decided, report_approved_at)
+    values ('${number}', '${masterId}', '${code}', 'media_fill', '${outcome}', ${due}, now() - interval '${approvedDaysAgo} days')`);
+  beforeAll(async () => {
+    t.master.rooms_.push({ ...item('rm-a3', 'ASF-03', 'Aseptic filling room (ampoules)'), area: 'aseptic filling', grade: 'B' });
+    t.master.equipment_.push({ ...item('eq-iso3', 'ISO-03', 'Ampoule isolator'), kind: 'equipment', type: 'Isolator', room: 'ASF-03' });
+    await t.owner.unsafe(`insert into ${S.lb}.equipment_status_v1 (master_id, code, kind, state, fit_for_use, blockers, warnings, checked_at, cleaned_at, cleaned_by) values
+      ('eq-iso3', 'ISO-03', 'equipment', 'clean', true, '{}', '{}', now(), null, null), ('rm-a3', 'ASF-03', 'area', 'clean', true, '{}', '{}', now(), now(), 'CLEANER ONE')`);
+    c = await issue(small([{ roomTypes: ['ASF-03'], steps: [{ block: { id: 'line-clearance', version: 1 }, checker: true, settings: {} },
+      { block: { id: 'aseptic-ready', version: 4 }, checker: false, settings: {} }, yieldStep] }]));
+    await act('asha', c.id, '0.1.0.1', 'start');
+    expect((await record(c.id, '0.1.0.1', { room: 'rm-a3', previousRemoved: 'yes', noOther: 'yes' })).statusCode).toBe(200);
+    const done = await sign('asha', c.id, '0.1.0.1', 'done');
+    expect(done.statusCode, done.body).toBe(200);
+    await act('asha', c.id, '0.1.1.1', 'start');
+  });
+
+  it('Qualification down: the media fill is typed as before (a past date refused) and marked typed by hand for QA\'s review', async () => {
+    await cut(S.qual);
+    try {
+      expect((await record(c.id, '0.1.1.1', { isolator: 'eq-iso3' })).statusCode).toBe(200);
+      expect(await problems(record(c.id, '0.1.1.1', { apsDue: '2020-01-31' }))).toEqual(['Line media fill next due: 31 Jan 2020 has passed: the item may not be used (re-sterilise or replace it).']);
+      expect((await record(c.id, '0.1.1.1', { apsReport: 'MF-PAPER-9', apsDue: '2099-01-31' })).statusCode).toBe(200);
+    } finally { await restore(S.qual); }
+    const s = await stepOf(c.id, '0.1.1.1');
+    expect(s.values).toMatchObject({ apsReport: 'MF-PAPER-9', apsDue: '2099-01-31' });
+    expect([s.source.apsReport, s.source.apsDue]).toEqual([{ from: 'hand', link: 'qual', state: 'down' }, { from: 'hand', link: 'qual', state: 'down' }]);
+    const r = (await as('meera', 'GET', `/api/batches/${c.id}/review`)).json() as { hand: { field: string; link: string; state: string }[] };
+    expect(r.hand.filter((h) => h.link === 'qual').map((h) => `${h.field} ${h.state}`).sort()).toEqual(['apsDue down', 'apsReport down']);
+  });
+
+  it('refused while Qualification has no approved media fill of the machine or its room, the last one failed, or its next date has passed', async () => {
+    expect(await refusal()).toEqual(['Qualification has no approved media fill of ISO-03 or ASF-03: no aseptic work on this line until one has passed.']);
+    // While Qualification answers the media fill is not typed: it comes with the machine.
+    expect(await problems(record(c.id, '0.1.1.1', { apsReport: 'MF-PAPER-10' }))).toEqual(
+      ['Line media fill report comes from Qualification: record the isolator, RABS or blow-fill-seal machine, and the line\'s media fill comes with it']);
+    // Not yet approved: not counted.
+    await t.owner.unsafe(`insert into ${S.qual}.protocol_v1 (number, master_id, item_code, stage, report_outcome) values ('MF-2026-0009', 'eq-iso3', 'ISO-03', 'media_fill', null)`);
+    expect(await refusal()).toEqual(['Qualification has no approved media fill of ISO-03 or ASF-03: no aseptic work on this line until one has passed.']);
+    await media('MF-2026-0010', 'eq-iso3', 'ISO-03', 'pass', `(now() at time zone 'Asia/Kolkata')::date - 1`, 30);
+    expect(await refusal()).toEqual([expect.stringMatching(/^The media fill of ISO-03 or ASF-03 was due on .+ \(Qualification MF-2026-0010\): no aseptic work on this line until it is repeated\.$/)]);
+    await media('MF-2026-0011', 'rm-a3', 'ASF-03', 'fail', 'null', 2);
+    expect(await refusal()).toEqual(['The last media fill of ISO-03 or ASF-03 failed (Qualification MF-2026-0011): no aseptic work on this line until one has passed.']);
+  });
+
+  it('the latest passed media fill of the line is pulled with its report number and next date, and cannot be typed over', async () => {
+    await media('MF-2026-0012', 'rm-a3', 'ASF-03', 'pass_conditions', `(now() at time zone 'Asia/Kolkata')::date + 150`, 1);
+    expect((await record(c.id, '0.1.1.1', { isolator: 'eq-iso3' })).statusCode).toBe(200);
+    const s = await stepOf(c.id, '0.1.1.1');
+    expect(s.values.apsReport).toBe('MF-2026-0012');
+    expect(s.values.apsDue).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(s.source.apsReport).toMatchObject({ from: 'qual', shown: expect.stringMatching(/^Qualification media fill MF-2026-0012 of ASF-03: pass with conditions, next \d{4}-\d{2}-\d{2}$/) });
+    expect(s.source.apsDue).toMatchObject({ from: 'qual' });
+    expect(await problems(record(c.id, '0.1.1.1', { apsReport: 'MF-PAPER-9' }))).toEqual(['Line media fill report comes from Qualification and cannot be typed over']);
+    expect(await problems(record(c.id, '0.1.1.1', { apsDue: '2099-12-31' }))).toEqual(['Line media fill next due comes from Qualification and cannot be typed over']);
+  });
+});
+
+describe('gap 6: the deviation number Deviations gave a note written without one (owner, 17 Nov 2026)', () => {
+  let b: { id: number; batchNo: string };
+  type Dev = { note: number; reference: string; open: boolean; status?: string; filed?: boolean };
+  const devs = async () => ((await as('meera', 'GET', `/api/batches/${b.id}`)).json() as { batch: { deviations: Dev[]; deviationsLink: string } }).batch;
+  beforeAll(async () => {
+    b = await issue(small([{ steps: [{ checker: true }, yieldStep] }]));
+  });
+
+  it('read by its source_ref ("truebatch_injectables:note:<note id>", as Deviations files it): shown with its number and status, and release waits until it is closed there', async () => {
+    expect((await act('asha', b.id, '0.1.0.1', 'note', { text: 'Stirrer stopped for 2 minutes' })).statusCode).toBe(200);
+    const [n] = await t.owner<{ id: number }[]>`select id::int from step_events where batch_id = ${b.id} and kind = 'note'`;
+    // Not filed yet: a note, no deviation.
+    expect((await devs()).deviations).toEqual([]);
+    await t.owner.unsafe(`insert into ${S.dv}.deviation_v1 (number, status, batch, batch_norm, title, source_ref) values
+      ('DEV-2026-0040', 'classification', '${b.batchNo}', '${b.batchNo.toLowerCase()}', 'Stirrer stopped', 'truebatch_injectables:note:${n!.id}'),
+      ('DEV-2026-0041', 'closed', 'OTHER2', 'other2', 'Tablets note of the same id', 'truebatch:note:${n!.id}')`);
+    expect((await devs()).deviations).toMatchObject([{ note: n!.id, reference: 'DEV-2026-0040', filed: true, open: true, status: 'classification' }]);
+    const r = (await as('meera', 'GET', `/api/batches/${b.id}/review`)).json() as { deviations: Dev[]; unlinked: { number: string }[] };
+    expect(r.deviations.map((d) => d.reference)).toEqual(['DEV-2026-0040']);
+    // It is the note's deviation, no longer one "no note links".
+    expect(r.unlinked).toEqual([]);
+    // QA cannot close it by hand: its status is Deviations'.
+    expect((await as('meera', 'POST', `/api/batches/${b.id}/close-deviation`, { note: n!.id, reason: 'Closed' })).json())
+      .toMatchObject({ problems: ['The status of DEV-2026-0040 comes from the Deviations system (now waiting for classification): it is closed there.'] });
+    // The batch record names it.
+    const l = (await loadBatch(t.sql, b.id))!;
+    const pdf = JSON.stringify(batchRecordDoc({ ...await recordInput(t.sql, l), deviationsRead: (await deviationsRead(t.app, l)).read }, 'QA'));
+    expect(pdf).toContain('"DEV-2026-0040"');
+    expect(pdf).toContain('OPEN: waiting for classification in the Deviations system');
+    await t.owner.unsafe(`update ${S.dv}.deviation_v1 set status = 'closed', closed_at = now() where number = 'DEV-2026-0040'`);
+    expect((await devs()).deviations).toMatchObject([{ reference: 'DEV-2026-0040', open: false, status: 'closed' }]);
+  });
+
+  it('release is refused while the filed deviation is open (the server passes it in under the note)', () => {
+    const doc = small([{ steps: [{ checker: true }] }]);
+    const note = ev('note', '0.1.0.1', { min: 4, payload: { text: 'Stirrer stopped' } });
+    const events = [ev('started', '0.1.0.1', { min: 1 }), ev('done', '0.1.0.1', { min: 2 }), ev('checked', '0.1.0.1', { person: 2, min: 3 }), note];
+    const approved: BatchEvent[] = [{ id: 1, kind: 'production_approved', payload: {}, person: 3, at: at(5) }, { id: 2, kind: 'qc_approved', payload: { reportNo: 'QC-1' }, person: 4, at: at(6) }];
+    const qa = { id: 9, permissions: ['truebatch_injectables.qa.release'] };
+    const release = (read: Map<string, { status: string; closedAt: null; number?: string }> | null) => batchRefusal('release', batchView(doc, events, approved, at(10), read), qa)?.problems ?? null;
+    expect(release(new Map([[`note:${note.id}`, { status: 'investigation', closedAt: null, number: 'DEV-2026-0040' }]])))
+      .toEqual(['Deviation DEV-2026-0040 (Stage 0 › Check a value against limits: pH) is still open in the Deviations system (under investigation): it is closed there first']);
+    expect(release(new Map([[`note:${note.id}`, { status: 'closed', closedAt: null, number: 'DEV-2026-0040' }]]))).toBeNull();
+    // Deviations down or absent: the note stays a note, as today (QA links a number by hand on a new note).
+    expect(release(null)).toBeNull();
+  });
+
+  it('Deviations down: the number is not read; a note keeps its typed number, as before', async () => {
+    await cut(S.dv);
+    try {
+      const d = await devs();
+      expect(d.deviationsLink).toBe('down');
+      expect(d.deviations).toEqual([]);
+    } finally { await restore(S.dv); }
   });
 });

@@ -5,7 +5,7 @@ import { audit } from '../audit.js';
 import { parseId, requirePermission, type SessionUser } from '../auth.js';
 import { usableItem } from '../master.js';
 import { dispensingRooms, machineRefusal, roomRefusal } from '../../shared/engine/picks.js';
-import { handProblem, lineOf, mfgDateProblem, pullBulk, pullItem, pullLot, pulledWords } from '../pull.js';
+import { handProblem, lineOf, MEDIA_FILL, mediaFillTyped, mfgDateProblem, pullBulk, pullItem, pullLot, pullMediaFill, pulledWords } from '../pull.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
 import { masterVersion } from './masters.js';
 import { batchRecordDoc, type RecordInput, type Signature } from '../batch-record.js';
@@ -80,11 +80,23 @@ async function materialUnits(master: FastifyInstance['master']): Promise<Map<str
 }
 const batchHash = (l: LoadedBatch) => contentHash('batch', l.batch.id, batchContent(l));
 const view = (l: LoadedBatch, read?: ReadonlyMap<string, DeviationStatus> | null) => batchView(l.doc, l.events, l.batchEvents, l.now, read);
-/** TI-21: the batch's deviation references as the Deviations system has them now; null when the link does not answer. */
-async function deviationsRead(app: FastifyInstance, l: LoadedBatch): Promise<{ read: Map<string, DeviationStatus> | null; link: LinkState }> {
-  const refs = [...new Set(l.events.flatMap((e) => (e.kind === 'note' && e.payload.reference ? [e.payload.reference] : [])))];
+/**
+ * TI-21: the batch's deviation references as the Deviations system has them now; null when the link does not answer.
+ * Gap 6: with them, the deviations Deviations filed from the notes written without a number, by the source_ref its
+ * automatic filing gives them ("<product>:note:<note id>"), under "note:<note id>" (shared/engine/release.ts).
+ */
+export async function deviationsRead(app: FastifyInstance, l: LoadedBatch): Promise<{ read: Map<string, DeviationStatus> | null; link: LinkState }> {
+  const notes = l.events.filter((e) => e.kind === 'note');
+  const refs = [...new Set(notes.flatMap((e) => (e.payload.reference ? [e.payload.reference] : [])))];
   const r = await app.links.deviations.byNumbers(refs);
-  return { read: r.state === 'ok' ? r.value : null, link: r.state };
+  if (r.state !== 'ok') return { read: null, link: r.state };
+  const read = new Map<string, DeviationStatus>(r.value);
+  const filed = notes.filter((e) => !e.payload.reference).map((e) => `${app.product.id}:note:${e.id}`);
+  if (!filed.length) return { read, link: 'ok' };
+  const f = await app.links.deviations.bySourceRefs(filed);
+  if (f.state !== 'ok') return { read: null, link: f.state };
+  for (const [ref, d] of f.value) read.set(`note:${ref.slice(ref.lastIndexOf(':') + 1)}`, d);
+  return { read, link: 'ok' };
 }
 
 // What a signer is shown of a step, and its hash: the signature is refused if the step changed since (PL-05).
@@ -119,6 +131,11 @@ async function readValues(app: FastifyInstance, doc: MasterDoc, key: StepKey, ra
       const area = 'area' in item ? item.area : rooms.find((r) => r.code === room)?.area ?? null;
       out[name] = { itemId: item.itemId, code: item.code, name: item.name, version: item.version, type, room, area };
       pulled = await pullItem(app, block, f, item, batchNo, doc.header.productCode);
+      // The aseptic set-up: the line's media fill comes with its isolator, RABS or blow-fill-seal machine.
+      if (block.id === 'aseptic-ready' && f.kind === 'machine') {
+        const m = await pullMediaFill(app, block, item, rooms, now, PLANT_TZ);
+        pulled = { ...pulled, values: { ...pulled.values, ...m.values }, sources: { ...pulled.sources, ...m.sources }, problems: [...pulled.problems, ...m.problems] };
+      }
     } else {
       const v = readValue(f, x, '');
       if (typeof v !== 'string') { problems.push((v as { error: string }).error); continue; }
@@ -143,6 +160,12 @@ async function readValues(app: FastifyInstance, doc: MasterDoc, key: StepKey, ra
     // its label, whatever an earlier lot from MMS gave (they are never signed with this lot: doneProblems).
     const lotHand = lot && (name.startsWith(`${lot.name}.`) || CERTIFICATE[name]) && isHand(sources[lot.name]);
     if (was && !isHand(was) && !lotHand) { problems.push(`${f.label} ${pulledWords(was)}`); continue; }
+    // The aseptic set-up's media fill: typed only while Qualification is absent or down (server/pull.ts).
+    if (block.id === 'aseptic-ready' && MEDIA_FILL.includes(name) && block.fields.some((x) => x.kind === 'machine')) {
+      const m = await mediaFillTyped(app, block, f);
+      if ('problem' in m) { problems.push(m.problem); continue; }
+      source[name] = m.source;
+    }
     if (lot && CERTIFICATE[name]) {
       const from = sources[lot.name];
       if (!from) { problems.push(`${f.label}: record the lot first`); continue; }
@@ -521,7 +544,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
   // Packing: the batches TrueBatch Injectables has released of a product, for the issue's pick list (pull, don't type).
   app.get<{ Querystring: { product?: string } }>('/api/bulk-batches', { preHandler: requirePermission('truebatch_injectables.batch.issue') }, async (req) => {
     const r = await app.links.truebatch_injectables.released(String(req.query.product ?? ''));
-    return { link: r.state, batches: r.state === 'ok' ? r.value.map((b) => ({ batchNo: b.batchNo, mfgDate: b.mfgDate })) : [] };
+    return { link: r.state, batches: r.state === 'ok' ? r.value.map((b) => ({ batchNo: b.batchNo, mfgDate: b.mfgDate, goodQuantity: b.goodQuantity })) : [] };
   });
 
   // TI-22: the batch record as a PDF: a complete copy with its values, calculations, changes, notes and signatures.

@@ -41,20 +41,26 @@ export function terminatedText<T extends string | Date>(t: { personName: string;
 /**
  * A note with a reference is a linked deviation. While the Deviations link answers, its status is Deviations' (TI-21):
  * open until closed (or rejected) there. Otherwise it is open until QA closes it by hand with a reason.
+ * Gap 6 (owner, 17 Nov 2026): a note written without a number that Deviations has filed as a deviation (its source_ref
+ * names the note) is linked too, with the number Deviations gave it (`filed`), while the link answers: `read` then
+ * also holds it under "note:<note id>".
  */
-export interface Deviation { note: number; step: string; reference: string; text: string; open: boolean; by: number | null; closed?: BatchEvent; status?: string; closedAt?: string | null; where?: string }
-/** A deviation as read from the Deviations system now (server/links.ts). */
-export interface DeviationStatus { status: string; closedAt: string | null }
+export interface Deviation { note: number; step: string; reference: string; text: string; open: boolean; by: number | null; closed?: BatchEvent; status?: string; closedAt?: string | null; where?: string; filed?: boolean }
+/** A deviation as read from the Deviations system now (server/links.ts); `number` for one filed from a note. */
+export interface DeviationStatus { status: string; closedAt: string | null; number?: string }
 export const DEVIATION_DONE = ['closed', 'rejected'];
 const DEVIATION_WORDS: Record<string, string> = { classification: 'waiting for classification', investigation: 'under investigation', capa: 'waiting for its CAPA', closure: 'waiting for closure' };
 /** A status of the Deviations system in plain words (its workflow step names are not shown as keys). */
 export const deviationStatusWords = (s: string) => DEVIATION_WORDS[s] ?? s.replaceAll('_', ' ');
 export function deviations(events: readonly StepEvent[], batchEvents: readonly BatchEvent[], read?: ReadonlyMap<string, DeviationStatus> | null): Deviation[] {
-  return events.filter((e) => e.kind === 'note' && e.payload.reference).map((e) => {
+  return events.filter((e) => e.kind === 'note').flatMap((e) => {
+    const filed = e.payload.reference ? undefined : read?.get(`note:${e.id}`);
+    const reference = e.payload.reference ?? filed?.number;
+    if (!reference) return [];
     const closed = batchEvents.find((b) => b.kind === 'deviation_closed' && b.payload.note === e.id);
-    const r = read?.get(e.payload.reference!);
-    const base = { note: e.id, step: keyId(e), reference: e.payload.reference!, text: e.payload.text ?? '', by: e.person, ...(closed ? { closed } : {}) };
-    return r ? { ...base, open: !DEVIATION_DONE.includes(r.status), status: r.status, closedAt: r.closedAt } : { ...base, open: !closed };
+    const r = filed ?? read?.get(reference);
+    const base = { note: e.id, step: keyId(e), reference, text: e.payload.text ?? '', by: e.person, ...(closed ? { closed } : {}), ...(filed ? { filed: true } : {}) };
+    return [r ? { ...base, open: !DEVIATION_DONE.includes(r.status), status: r.status, closedAt: r.closedAt } : { ...base, open: !closed }];
   });
 }
 

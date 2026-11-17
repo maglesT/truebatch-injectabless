@@ -21,7 +21,7 @@ export function IssueDialog({ row, onCancel }: { row: MasterRow; onCancel: () =>
   const [lines, setLines] = useState<PickItem[]>([]);
   const [machines, setMachines] = useState<PickItem[]>([]);
   const [rooms, setRooms] = useState<PickItem[]>([]);
-  const [bulk, setBulk] = useState<{ link: string; batches: { batchNo: string; mfgDate: string | null }[] } | null>(null);
+  const [bulk, setBulk] = useState<{ link: string; batches: { batchNo: string; mfgDate: string | null; goodQuantity: string | null }[] } | null>(null);
   useEffect(() => { getVersion(row.id).then(setV, (e) => setProblems([plainError(e)])); }, [row.id]);
   const doc = v?.doc;
   const block = doc?.stages[0]?.steps[0] ? findBlock(doc.stages[0].steps[0].block) : undefined;
@@ -40,12 +40,14 @@ export function IssueDialog({ row, onCancel }: { row: MasterRow; onCancel: () =>
   // The label questions of a value the server found typed by hand ("… is not recorded").
   const asked = handFields(block?.fields ?? [], Object.fromEntries((block?.fields ?? []).map((f) => [f.name, { from: 'hand', link: 'mms', state: 'absent' } as Source])))
     .filter((f) => problems.some((p) => p.startsWith(`${f.label} is not recorded`)));
-  // The date of manufacture comes with the batch while TrueBatch Injectables answers.
-  const fields = [...atIssue.filter((f) => f.name !== 'mfgDate' || (bulk && bulk.link !== 'ok')), ...asked];
+  // The date of manufacture comes with the batch while TrueBatch Injectables answers, and so do its good units (gap 10)
+  // when it gives them.
+  const picked = bulk?.link === 'ok' ? bulk.batches.find((b) => b.batchNo === values.bulk) : undefined;
+  const fields = [...atIssue.filter((f) => (f.name !== 'mfgDate' || (bulk && bulk.link !== 'ok')) && (f.name !== 'units' || !picked?.goodQuantity)), ...asked];
   const set = (name: string) => (raw: unknown) => setValues((x) => ({ ...x, [name]: raw }));
   const issue = async ({ proof }: { proof: string }) => {
     try {
-      const b = await api<{ id: number }>('POST', '/api/batches', { masterVersionId: row.id, proof, ...(fields.length ? { values } : {}) });
+      const b = await api<{ id: number }>('POST', '/api/batches', { masterVersionId: row.id, proof, ...(fields.length ? { values: Object.fromEntries(Object.entries(values).filter(([k]) => fields.some((f) => f.name === k))) } : {}) });
       go(batchLink(b.id));
     } catch (e) {
       if (!(e instanceof ApiError && e.problems.length)) throw e;
@@ -62,6 +64,7 @@ export function IssueDialog({ row, onCancel }: { row: MasterRow; onCancel: () =>
           <FieldInput key={f.name} f={f} unit={f.unit ?? ''} picks={f.kind === 'machine' ? offer.offered : []} note={[f.kind === 'machine' && machines.length && !lines.length ? emptyNote(doc.stages[0]!, f, machines, rooms) : null, f.kind === 'machine' ? offer.note : null]} onChange={set(f.name)}
             options={f.kind === 'bulk' ? (bulk?.batches ?? []).map((x) => x.batchNo) : []} />
         ))}
+        {picked?.goodQuantity && <p className="muted">Filled units issued: {Number(picked.goodQuantity).toLocaleString('en-IN')} units, the good units of batch {picked.batchNo} (from TrueBatch Injectables).</p>}
         {doc.pack && bulk && bulk.link !== 'ok' && <p className="notice warn">TrueBatch Injectables is not linked or not answering: type the batch from the labels of its trays or cases; a second person checks it.</p>}
         {problems.length > 0 && <div className="notice bad" role="alert">{problems.map((p, i) => <p key={i}>{p}</p>)}</div>}
         <div className="actions">

@@ -105,7 +105,36 @@ export async function pullBulk(app: FastifyInstance, doc: MasterDoc, block: Bloc
   const source: Source = { from: 'truebatch_injectables', asOf: b.dataAsOf, shown: `TrueBatch Injectables batch ${batchNo}: ${b.status}, ${b.productCode ?? '—'}, manufactured ${b.mfgDate ?? '—'}` };
   const out: Pulled = { source, values: {}, sources: {}, problems };
   if (b.mfgDate && block.fields.some((x) => x.name === 'mfgDate')) { out.values.mfgDate = b.mfgDate; out.sources.mfgDate = source; }
+  // Gap 10 (owner, 17 Nov 2026): the filled units received are the batch's good units (batch_fact_v1.good_quantity);
+  // typed, as before, from a TrueBatch Injectables that does not give them yet.
+  if (b.goodQuantity !== null && block.fields.some((x) => x.name === 'units')) { out.values.units = { value: b.goodQuantity, unit: 'units' }; out.sources.units = source; }
   return out;
+}
+
+/**
+ * The aseptic set-up (owner, 17 Nov 2026): the line's media fill, pulled from Qualification with the isolator, RABS or
+ * blow-fill-seal machine: the newest approved media fill of that machine or of the room it stands in, its report number
+ * and its next date. Refused when it failed or its next date has passed (as the typed date is); no media fill, refused.
+ * Qualification absent or down: both are typed, as before (mediaFillTyped).
+ */
+export const MEDIA_FILL = ['apsReport', 'apsDue'];
+export async function pullMediaFill(app: FastifyInstance, block: Block, item: MasterEquipment | MasterRoom, rooms: readonly MasterRoom[], now: Date, tz: string): Promise<Pulled> {
+  const names = MEDIA_FILL.filter((n) => block.fields.some((f) => f.name === n));
+  const out: Pulled = { source: { from: 'hand', link: 'qual', state: 'absent' }, values: {}, sources: {}, problems: [] };
+  if (!names.length) return out;
+  const room = 'room' in item ? rooms.find((r) => r.code === item.room) : undefined;
+  const r = await app.links.qual.mediaFill([item.itemId, ...(room ? [room.itemId] : [])]);
+  if (r.state !== 'ok') return out;
+  const line = [item.code, room?.code].filter(Boolean).join(' or ');
+  const m = r.value;
+  if (!m) return refused(`Qualification has no approved media fill of ${line}: no aseptic work on this line until one has passed.`);
+  if (m.outcome === 'fail') return refused(`The last media fill of ${line} failed (Qualification ${m.number}): no aseptic work on this line until one has passed.`);
+  if (!m.nextDue) return refused(`The media fill ${m.number} of ${line} has no next date in Qualification.`);
+  if (m.nextDue < plantDay(now, tz)) return refused(`The media fill of ${line} was due on ${plantDate(m.nextDue)} (Qualification ${m.number}): no aseptic work on this line until it is repeated.`);
+  const source: Source = { from: 'qual', asOf: m.dataAsOf, shown: `Qualification media fill ${m.number} of ${m.itemCode}: ${m.outcome === 'pass_conditions' ? 'pass with conditions' : m.outcome ?? '—'}, next ${m.nextDue}` };
+  const values: Record<string, Value> = { apsReport: m.number, apsDue: m.nextDue };
+  for (const n of names) { out.values[n] = values[n]!; out.sources[n] = source; }
+  return { ...out, source };
 }
 
 /** Packing: a date of manufacture typed from the tray or case labels (no TrueBatch Injectables link): a real date, never in the future. */
@@ -128,3 +157,15 @@ export function handProblem(f: BlockField, v: string, now: Date, tz: string): st
 }
 
 export const pulledWords = (s: Source) => (s.from === 'hand' ? '' : `comes from ${PROVIDER_NAME[s.from]} and cannot be typed over`);
+
+/**
+ * A media fill typed in the aseptic set-up: only while Qualification is absent or down, then marked typed by hand (a
+ * second person checks the step); while it answers, it is refused: the media fill comes with the machine.
+ */
+export async function mediaFillTyped(app: FastifyInstance, block: Block, f: BlockField): Promise<{ source: Source } | { problem: string }> {
+  const r = await app.links.qual.mediaFill([]);
+  if (r.state !== 'ok') return { source: { from: 'hand', link: 'qual', state: r.state } };
+  const machine = block.fields.find((x) => x.kind === 'machine');
+  const what = machine ? machine.label.charAt(0).toLowerCase() + machine.label.slice(1) : 'machine';
+  return { problem: `${f.label} comes from Qualification: record the ${what}, and the line's media fill comes with it` };
+}

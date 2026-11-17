@@ -25,7 +25,7 @@ adding anything, look how TrueBatch Tablets does it and copy that.
 - **Rules**: only the 29 rules of the minimum register (`docs/rules.md`); nothing the platform or another product
   already does.
 - **Pull, don't type**: values come from master data or other products (room grade from master data, sterile status
-  from the Logbook, the line's media fill from Qualification through the Logbook's links); typed by hand only while a
+  from the Logbook, the line's media fill from Qualification); typed by hand only while a
   link is absent or down, with a second-person check.
 - Assumed until the owner confirms: one tank of solution = one filling = one batch; aseptic operators by a QA-given
   "aseptic operator" permission (no training dates here); a media fill as a TrueBatch batch comes later.
@@ -195,7 +195,8 @@ adding anything, look how TrueBatch Tablets does it and copy that.
 - Runs on the Medhanta platform. Core provides people, sign-in, permissions, e-signature re-authentication and master
   data. Normal platform sign-in (OIDC through core, one person per browser).
 - Optional links: MMS (lots, status, assay, LOD), Logbook (equipment and room status), Deviations, QMS (change
-  control numbers). Every link has a hand-entry fallback with a second-person check.
+  control numbers), Qualification (the line's media fill; TrueBatch Injectables only). Every link has a hand-entry
+  fallback with a second-person check.
 - Sessions as the Logbook's: 15 minutes idle (background polls never count); a tap or a key on the screen counts as
   use (at most one renewal a minute); the session ends with core's sign-on (8 hours).
 
@@ -211,6 +212,14 @@ answering) or **ok**.
 - **Deviations** (`deviation_v1`): a note's reference must exist; while the link answers its status is Deviations'
   (closed or rejected there counts as closed) and QA cannot close it by hand. By hand: a QA person other than the one
   who typed the number closes it.
+  **The number Deviations gives a note** (gap 6, owner 17 Nov 2026): a note written without a number is filed by
+  Deviations' automatic filing as a deviation whose `source_ref` is `<product>:note:<note id>`
+  (`truebatch_injectables:note:…`, `truebatch_injectables_packing:note:…`). While the link answers, the batch reads
+  `deviation_v1` by that source_ref (`server/links.ts` bySourceRefs; no new view, no new read) and the note becomes a
+  linked deviation with that number: the step's history says "Deviation note DEV-2026-0040 (waiting for
+  classification)", the release screen and the PDF list it with its status, it is no longer "a deviation naming this
+  batch that no note links", and release waits until Deviations has it closed, as for a number picked on the note.
+  Down or absent: the note stays a note, and a number is typed on a note as before (QA closes it by hand).
 - **QMS** (`change_v1`, planned): the change control at approval must exist and be QA-approved, in a step of
   `CHANGE_STEPS`, and its products must name the master's product (code or name, without case); one that names no
   product is taken with a warning to QA. By hand: another person makes the version effective.
@@ -229,6 +238,15 @@ answering) or **ok**.
   its `material_use_v1` gives it (`shared/engine/stock.ts`), checked when it is recorded or corrected and when the
   step is signed done. An MMS whose `lot_v1` has no stock yet, or a lot typed by hand, is not compared. What the other
   TrueBatch product used from the same lot is not read (each product uses its own kind of material).
+- **Qualification** (`protocol_v1`, Qualification D-24; owner, 17 Nov 2026): the aseptic set-up (`aseptic-ready`,
+  versions 2 to 4, no new version: its fields are kept and filled) takes the line's media fill with its isolator, RABS
+  or blow-fill-seal machine: the newest media fill (stage `media_fill`) whose report QA approved, of that machine or of
+  the room it stands in (master-data ids). Its protocol number goes into "Line media fill report" and the next media
+  fill date QA gave into "Line media fill next due", pulled (not typed over). Refused when there is none, when it
+  failed, or when its next date has passed (the rule of the typed date; a pass with conditions counts as passed); the
+  next date stays a use-by date (engine change 6). While Qualification answers, the two are not typed. Absent or
+  down: typed as before, marked typed by hand (QA's review lists them; a second person checks the step). The link is
+  read through `QUAL_DATABASE_URL`; the platform manifest reads `qual: ["protocol_v1"]` (`ops/manifest.draft.json`).
 - **Published** (`db/migrations/0006_report_views.sql`): `batch_fact_v1` and `equipment_use_v1` with Batchwright's
   names and columns, so the Logbook and Deviations read TrueBatch as they read Batchwright, and `deviation_note_v1`
   for Deviations to file notes later. `batch_fact_v1` has one more column at its end (`0007`): `manufactured_on`, the
@@ -252,6 +270,17 @@ answering) or **ok**.
   filling line) was used by the stage, so its `step_name` is the stage's name ("Compounding"); a machine operated in
   a process step keeps that step. `material_use_v1` gives the quantity in the
   material's unit in master data, read when the step is signed done (g and mg exactly in kg for a kg material).
+  **Yield columns** (owner, 17 Nov 2026; names set by the server lead for every TrueBatch product, for Packing and
+  OEE), appended at the end of `batch_fact_v1` (`0017`): `good_quantity`, the good units of the master's last
+  reconciliation of units (`unit-reconcile`, the inspection's) once it is signed done (its current value; summed over
+  sub-batches); `good_unit`, what they are by the product name (vials, ampoules, nebules, syringes, cartridges, bags,
+  bottles) or `units`; `yield_percent`, that step's unit yield (good ÷ theoretical units, the header's expected units
+  unless the master says otherwise; over sub-batches the yield of their total). Null until the step is signed, and
+  for a master without a reconciliation of units. TrueBatch Injectables Packing publishes the same three at the end
+  of `packing_batch_v1` (`packing/migrations/0109`): the finished goods step's good packs, `packs`, and its yield in
+  packs, once it is signed. Packing's issue pulls the filled units issued from `good_quantity` with the batch (gap
+  10; read through to_jsonb, so a TrueBatch Injectables from before reads as none and the units are typed as before);
+  without the link they are typed from the labels, with the batch, as before.
 - **QA terminates a batch** (owner, 16 Nov 2026): a batch still in production (before production approval) that
   cannot be finished is terminated by QA (`qa.release`) from the batch screen or the "To review" list, with a reason
   and an e-signature meaning "rejected". It is a rejection (batch event `rejected` with `terminated`), so the status is

@@ -15,6 +15,8 @@ const schema = z.object({
   QMS_DATABASE_URL: optionalUrl,
   LOGBOOK_DATABASE_URL: optionalUrl,
   MMS_DATABASE_URL: optionalUrl,
+  // TrueBatch Injectables only: Qualification's media fills (protocol_v1).
+  QUAL_DATABASE_URL: optionalUrl,
   // Packing only: TrueBatch Injectables' published views (its released batches), TRUEBATCH_INJECTABLES_DATABASE_URL on
   // the platform (the packing product's own database is TRUEBATCH_INJECTABLES_PACKING_DATABASE_URL).
   INJECTABLES_LINK_URL: optionalUrl,

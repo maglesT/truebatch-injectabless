@@ -48,6 +48,11 @@ export const deviationsClient = (l: Link) => ({
   byNumbers: (numbers: string[]) => l.read(async (q, v) => new Map((await q<DevRow[]>`
     select distinct on (number) number, status, title, closed_at::text from ${v('deviation_v1')} where number = any(${numbers}) order by number`)
     .map((r) => [r.number, dev(r)]))),
+  // Gap 6 (owner, 17 Nov 2026): the deviations Deviations filed from this product's notes, by their source_ref
+  // ("<product>:note:<note id>", as Deviations' automatic filing names them), keyed by source_ref.
+  bySourceRefs: (refs: string[]) => l.read(async (q, v) => new Map((await q<(DevRow & { source_ref: string })[]>`
+    select distinct on (source_ref) source_ref, number, status, title, closed_at::text from ${v('deviation_v1')} where source_ref = any(${refs}) order by source_ref, number`)
+    .map((r) => [r.source_ref, dev(r)]))),
   // The deviations that name the batch, matched as Deviations matches batches (its batch_norm).
   byBatch: (batchNo: string) => l.read(async (q, v) => (await q<DevRow[]>`
     select distinct on (number) number, status, title, closed_at::text from ${v('deviation_v1')}
@@ -141,19 +146,36 @@ export const mmsClient = (l: Link) => ({
 
 // ---- TrueBatch Injectables: report.batch_fact_v1 (published), read by TrueBatch Injectables Packing for the batch
 // whose filled units it packs. The date of manufacture is its manufactured_on: the plant-time date the batch's first
-// processing step started (db/migrations/0007_batch_fact_manufactured_on.sql); null until a step has started.
-export interface BulkRead { batchNo: string; productCode: string | null; status: string; released: boolean; mfgDate: string | null; dataAsOf: string | null }
-type BulkRow = { batch_number: string; product_code: string | null; status: string; released: boolean; mfg_date: string | null; data_as_of: string | null };
-const bulkOf = (r: BulkRow): BulkRead => ({ batchNo: r.batch_number, productCode: r.product_code, status: r.status, released: r.released, mfgDate: r.mfg_date, dataAsOf: r.data_as_of });
-const BULK_COLS = 'batch_number, product_code, status, released, manufactured_on::text as mfg_date, data_as_of::text';
+// processing step started (db/migrations/0007_batch_fact_manufactured_on.sql); null until a step has started. Its good
+// units are good_quantity (0017), read through to_jsonb: a view from before the column reads as null (typed, as before).
+export interface BulkRead { batchNo: string; productCode: string | null; status: string; released: boolean; mfgDate: string | null; dataAsOf: string | null; goodQuantity: string | null }
+type BulkRow = { batch_number: string; product_code: string | null; status: string; released: boolean; mfg_date: string | null; data_as_of: string | null; good_quantity: string | null };
+const bulkOf = (r: BulkRow): BulkRead => ({ batchNo: r.batch_number, productCode: r.product_code, status: r.status, released: r.released, mfgDate: r.mfg_date,
+  dataAsOf: r.data_as_of, goodQuantity: r.good_quantity });
+const BULK_COLS = `batch_number, product_code, status, released, manufactured_on::text as mfg_date, data_as_of::text, to_jsonb(f) ->> 'good_quantity' as good_quantity`;
 export const injectablesClient = (l: Link) => ({
   batch: (batchNo: string) => l.read(async (q, v) => {
-    const [r] = await q<BulkRow[]>`select ${q.unsafe(BULK_COLS)} from ${v('batch_fact_v1')} where batch_number = ${batchNo} limit 1`;
+    const [r] = await q<BulkRow[]>`select ${q.unsafe(BULK_COLS)} from ${v('batch_fact_v1')} f where batch_number = ${batchNo} limit 1`;
     return r ? bulkOf(r) : null;
   }),
   // The released batches of a product, for a pick list.
   released: (productCode: string) => l.read(async (q, v) => (await q<BulkRow[]>`
-    select ${q.unsafe(BULK_COLS)} from ${v('batch_fact_v1')} where product_code = ${productCode} and released order by issued_at desc limit 100`).map(bulkOf)),
+    select ${q.unsafe(BULK_COLS)} from ${v('batch_fact_v1')} f where product_code = ${productCode} and released order by issued_at desc limit 100`).map(bulkOf)),
+});
+
+// ---- Qualification: report.protocol_v1 (published, Qualification D-24). A media fill (aseptic process simulation) is a
+// protocol of stage media_fill on the item of master data it was run on (a filling machine or room); once QA approved
+// its report, the report's outcome (pass, pass_conditions, fail) and the next media fill date QA gave.
+export interface MediaFillRead { number: string; itemCode: string; outcome: string | null; nextDue: string | null; approvedAt: string; dataAsOf: string | null }
+export const qualClient = (l: Link) => ({
+  // The newest approved media fill of any of these master-data items.
+  mediaFill: (masterIds: string[]) => l.read(async (q, v) => {
+    const [r] = await q<{ number: string; item_code: string; report_outcome: string | null; due: string | null; approved: string; data_as_of: string | null }[]>`
+      select number, item_code, report_outcome, next_review_due_decided::text as due, report_approved_at::text as approved, data_as_of::text
+      from ${v('protocol_v1')} where stage = 'media_fill' and report_approved_at is not null and master_id::text = any(${masterIds})
+      order by report_approved_at desc limit 1`;
+    return r ? { number: r.number, itemCode: r.item_code, outcome: r.report_outcome, nextDue: r.due, approvedAt: r.approved, dataAsOf: r.data_as_of } satisfies MediaFillRead : null;
+  }),
 });
 
 export interface Links {
@@ -162,6 +184,7 @@ export interface Links {
   logbook: ReturnType<typeof logbookClient>;
   mms: ReturnType<typeof mmsClient>;
   truebatch_injectables: ReturnType<typeof injectablesClient>;
+  qual: ReturnType<typeof qualClient>;
 }
 /** The links, from their connections (null: absent). `schema` lets tests point a provider at its own schema. */
 export function links(c: Partial<Record<Provider, Sql | null>> = {}, schema: Partial<Record<Provider, string>> = {}): Links {
@@ -171,5 +194,6 @@ export function links(c: Partial<Record<Provider, Sql | null>> = {}, schema: Par
     logbook: logbookClient(link('logbook', c.logbook ?? null, schema.logbook)),
     mms: mmsClient(link('mms', c.mms ?? null, schema.mms)),
     truebatch_injectables: injectablesClient(link('truebatch_injectables', c.truebatch_injectables ?? null, schema.truebatch_injectables)),
+    qual: qualClient(link('qual', c.qual ?? null, schema.qual)),
   };
 }

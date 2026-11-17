@@ -47,7 +47,12 @@ the leaflet, to QA release of the packed batch. Built the Logbook way, as TrueBa
   batch's FIRST processing step started, in plant time (`batch_fact_v1.manufactured_on`,
   `db/migrations/0007_batch_fact_manufactured_on.sql`), not its issue date; a batch without one is refused. Without the
   link the batch and its date of manufacture are typed from the tray or case labels ("RELEASED", the product) with a
-  second-person check, and QA's review lists them; a typed date in the future is refused.
+  second-person check, and QA's review lists them; a typed date in the future is refused. The filled units issued are
+  the batch's good units (`batch_fact_v1.good_quantity`, owner 17 Nov 2026, gap 10), pulled with it and not typed
+  over; typed, as before, without the link or from a TrueBatch Injectables that does not publish them yet.
+- **Published for OEE**: `packing_batch_v1` ends with `good_quantity` (the good packs), `good_unit` ('packs') and
+  `yield_percent` (the yield in packs), from the finished goods step once it is signed; null until then
+  (`packing/migrations/0109`).
 - **One active packing order per line** (TI-P7): a line with a batch still being packed takes no other.
 - **Batch facts and pack facts**: block calculations read the issue values (`$batch.bulk`, `$batch.mfgDate`,
   `$batch.units`, `$batch.packs`) and the master's pack (`$pack.shelfLifeMonths`, `$pack.mrp` …), so the coding
