@@ -56,7 +56,9 @@ the leaflet, to QA release of the packed batch. Built the Logbook way, as TrueBa
   Tablets); typed, as before, without the link or from a TrueBatch Injectables that does not publish them yet.
 - **Published for OEE**: `packing_batch_v1` ends with `good_quantity` (the good packs), `good_unit` ('packs') and
   `yield_percent` (the yield in packs), from the finished goods step once it is signed; null until then and while it is
-  sent back (`packing/migrations/0109`, `0110`).
+  sent back (`packing/migrations/0109`, `0110`). Then `released_at` and `released_by`, the time of QA's release event
+  and the name printed on its e-signature, null until released (`0111`, as TrueBatch Tablets), so MMS shows who
+  released the FG lot and when.
 - **One active packing order per line** (TI-P7): a line with a batch still being packed takes no other.
 - **Batch facts and pack facts**: block calculations read the issue values (`$batch.bulk`, `$batch.mfgDate`,
   `$batch.units`, `$batch.packs`) and the master's pack (`$pack.shelfLifeMonths`, `$pack.mrp` …), so the coding

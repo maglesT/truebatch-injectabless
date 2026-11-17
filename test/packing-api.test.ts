@@ -332,6 +332,10 @@ describe('a packing batch from the filled units of a released batch', () => {
       from ${t.schema}_report.packing_batch_v1 where coded_batch_number = 'TI260001'`);
     expect(row).toMatchObject({ coded_batch_number: 'TI260001', product_code: 'PK-001', bulk_product_code: 'PRD-001', pack_type: 'carton', units_per_pack: 10, mfg_date: '2026-11-03',
       expiry_month: '2028-10', packs: '980', cartons: '98', status: 'RELEASED', released: true, shippers: '2' });
+    // For MMS (GMP traceability of the FG lot it receives): who released the batch, as signed, and when.
+    const [relAt] = await t.owner<{ at: Date }[]>`select at from batch_events where batch_id = ${id} and kind = 'released'`;
+    expect(await t.owner.unsafe(`select released_at, released_by from ${t.schema}_report.packing_batch_v1 where coded_batch_number = 'TI260001'`))
+      .toEqual([{ released_at: relAt!.at, released_by: 'QA1' }]);
     // For the Logbook: the line used, as TrueBatch Injectables publishes its machines. For MMS: the packing materials issued,
     // per lot, in the material's unit, as TrueBatch Injectables publishes what it dispensed.
     const batchNo = (await loadBatch(t.sql, id))!.batch.batchNo;
@@ -365,7 +369,12 @@ describe('a packing batch from the filled units of a released batch', () => {
     // Its shippers are not counted yet: null, so MMS asks for them (the last column, for MMS finished goods).
     expect(await t.owner.unsafe(`select distinct shippers from ${t.schema}_report.packing_batch_v1 where coded_batch_number = 'TI260004'`)).toEqual([{ shippers: null }]);
     // The yield columns (owner, 17 Nov 2026) are appended after it, never reordered.
-    expect((await cols('packing_batch_v1')).split(', ').slice(-4)).toEqual(['shippers numeric', 'good_quantity numeric', 'good_unit text', 'yield_percent numeric']);
+    // Nor who released it: null until QA releases.
+    expect(await t.owner.unsafe(`select distinct released_at, released_by from ${t.schema}_report.packing_batch_v1 where coded_batch_number = 'TI260004'`))
+      .toEqual([{ released_at: null, released_by: null }]);
+    // The release columns (17 Nov 2026) are appended after them, never reordered.
+    expect((await cols('packing_batch_v1')).split(', ').slice(-6)).toEqual(['shippers numeric', 'good_quantity numeric', 'good_unit text', 'yield_percent numeric',
+      'released_at timestamp with time zone', 'released_by text']);
     expect(await t.owner.unsafe(`select distinct good_quantity, good_unit, yield_percent from ${t.schema}_report.packing_batch_v1 where coded_batch_number = 'TI260004'`))
       .toEqual([{ good_quantity: null, good_unit: 'packs', yield_percent: null }]);
   });
