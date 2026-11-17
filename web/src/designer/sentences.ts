@@ -4,6 +4,7 @@ import type { Block } from '../../../shared/blocks/index.js';
 import { findBlock } from '../../../shared/blocks/index.js';
 import { refsIn } from '../../../shared/blocks/format.js';
 import { materialLines, type Limit, type MasterDoc, type SettingValue } from '../../../shared/master/schema.js';
+import { stepTitle } from '../../../shared/engine/batch.js';
 import { HEADER_LABEL, unitLabel } from './model.js';
 
 export type Part = string | { setting: string } | { field: string } | { calc: string } | { prev: string };
@@ -125,7 +126,8 @@ export function settingText(doc: MasterDoc, v: SettingValue | undefined): string
   const t = s?.steps.find((x) => x.key === tk);
   const b = t && findBlock(t.block);
   const what = b ? [...b.fields, ...b.calcs].find((x) => x.name === name)?.label : undefined;
-  return `the ${lower(what ?? name ?? '')} of step ${b?.name ?? tk} in ${s?.name ?? sk}`;
+  // The step by its title as on the floor ("Issue Vial label (PM-LBL-EXF)"), not its block's name.
+  return `the ${lower(what ?? name ?? '')} of step ${t ? stepTitle(doc, t) : tk} in ${s?.name ?? sk}`;
 }
 
 /**

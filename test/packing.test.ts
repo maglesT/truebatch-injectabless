@@ -7,6 +7,7 @@ import { c8PrintedData, c9SerialCodes, expiryMonth, gs1, printedMonth, t27Expiry
 import { at, ev, small } from './engine-fixture.js';
 import { code, GTIN, packing } from './packing-fixture.js';
 import { headline } from '../web/src/api-floor.js';
+import { describeMaster } from '../web/src/designer/describe.js';
 import { machineRefusal, untypedNote } from '../shared/engine/picks.js';
 import { asPermissions } from '../server/auth.js';
 import { ownCodes } from '../server/product.js';
@@ -86,6 +87,10 @@ describe('the packing master (TI-P1 to TI-P9)', () => {
     const d = packing();
     expect(d.stages[0]!.steps.slice(1).map((t) => stepTitle(d, t))).toEqual(['Issue Vial label (PM-101)', 'Issue Vial tray (PM-102)', 'Issue Carton (PM-103)', 'Issue Leaflet (PM-104)']);
     expect(stepLabel(d, { stage: 2, sub: 1, step: 1, round: 1 })).toBe('Reconciliation and line clearance › Reconcile Vial label (PM-101)');
+    // The plain view names the issue step a reconciliation refers to by the same title (17 Nov 2026 run, F17).
+    const plain = describeMaster(d).flatMap((s) => s.lines.map((l) => l.text)).join(' ');
+    expect(plain).toContain('of step Issue Vial label (PM-101) in ');
+    expect(plain).not.toContain('of step Issue a packing material');
   });
 
   it('TI-P5 the coding is checked at the start and every N minutes at most, packs are inspected on line, and the camera is challenged with serialisation', () => {
