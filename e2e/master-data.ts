@@ -4,7 +4,9 @@ import type { FakeMaster } from '../test/helpers.js';
 const item = (itemId: string, code: string, name: string) => ({ itemId, code, name, version: 1, active: true });
 export function seedMasterData(m: FakeMaster) {
   m.products_.push(
-    { ...item('prd-1', 'PRD-001', 'Examplol 50 mg/mL injection'), strength: '100 mg', dosageForm: 'injection' },
+    { ...item('prd-1', 'PRD-001', 'Examplol 50 mg/mL injection'), strength: '100 mg', dosageForm: 'injection', kind: 'bulk' },
+    // A pack (TrueBatch Injectables Packing's): never offered for a manufacturing master.
+    { ...item('pk-1', 'PK-001', 'Examplol 50 mg/mL injection, 10 vials per carton'), strength: '100 mg', dosageForm: 'injection', kind: 'pack' },
     { ...item('prd-2', 'PRD-002', 'Samplomide 50 mg film-coated tablets'), strength: '50 mg', dosageForm: 'film-coated tablet' },
   );
   m.materials_.push(

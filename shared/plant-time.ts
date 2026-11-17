@@ -7,10 +7,16 @@ const STAMP = /\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\
 // The browser's and Node's date words write September "Sept" (en-GB, en-IN); every date here says "Sep".
 export const sep = (s: string) => s.replace(/\bSept\b/g, 'Sep');
 
-/** One instant in plant time: "15 Nov 2026, 23:43 IST", or "15 Nov 2026, 23:43:19 IST" with seconds. */
-export function plantClock(t: string | Date, seconds = false): string {
-  const s = new Date(t).toLocaleString('en-GB', { timeZone: PLANT_TZ, day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-    ...(seconds ? { second: '2-digit' } : {}), hourCycle: 'h23' });
+/**
+ * One instant in plant time, the one format of every screen (owner, 17 Nov 2026): "17 Nov, 16:32 IST", with the year
+ * only when it is not this year ("17 Nov 2025, 16:32 IST"); to the minute, never seconds. `full`: always with the year,
+ * for the printed record ("17 Nov 2026, 16:32 IST").
+ */
+export function plantClock(t: string | Date, full = false, now: Date = new Date()): string {
+  const d = new Date(t);
+  const year = (x: Date) => x.toLocaleString('en-GB', { timeZone: PLANT_TZ, year: 'numeric' });
+  const s = d.toLocaleString('en-GB', { timeZone: PLANT_TZ, day: 'numeric', month: 'short', ...(full || year(d) !== year(now) ? { year: 'numeric' } : {}),
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
   return `${sep(s)} IST`;
 }
 
@@ -26,10 +32,10 @@ export function plantDate(date: string): string {
 }
 
 /**
- * Every time stamp in a text in plant time, to the minute like every other time on the screens and in the PDF (owner,
- * 17 Nov 2026: no seconds; the record keeps the exact instant), and every date as "31 Oct 2029".
+ * Every time stamp in a text in plant time, as plantClock writes it (`full`: with the year, for the printed record), and
+ * every date as "31 Oct 2029". The record keeps the exact instant.
  */
-export const plantText = (text: string) => text.replace(STAMP, (m) => {
+export const plantText = (text: string, full = false) => text.replace(STAMP, (m) => {
   const d = new Date(m.replace(' ', 'T').replace(/([+-]\d{2})$/, '$1:00'));
-  return Number.isNaN(d.getTime()) ? m : plantClock(d);
+  return Number.isNaN(d.getTime()) ? m : plantClock(d, full);
 }).replace(DATE, (m) => plantDate(m));

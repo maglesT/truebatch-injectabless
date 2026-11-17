@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { MasterData, Product } from '../api-designer.js';
 import { DESTINATIONS, PACK_MATERIAL_KINDS, PACK_TYPES, type MasterDoc, type Pack, type PackMaterial } from '../../../shared/master/schema.js';
-import { newKey } from './model.js';
+import { newKey, ownProducts } from './model.js';
 import { withMaterialSteps } from './skeletons.js';
 import { unitName } from '../../../shared/engine/stock.js';
 import { Decimal, Order, Picker } from './ui.js';
@@ -20,7 +20,8 @@ function ProductPick({ label, itemId, code, name, products, onPick }: { label: s
 }
 const whole = (v: string) => (/^\d{1,5}$/.test(v) ? Number(v) : 0);
 
-/** The header of a packing master: the pack product and the filled units it is packed from, the pack and what is printed on it. */
+/** The header of a packing master: the pack product and the filled units it is packed from, the pack and what is printed on it.
+ *  products: all of master data's; the pack is picked from the packs, the product packed from the bulk products. */
 export function PackFields({ header, pack, products, onChange }: { header: Header; pack: Pack; products: Product[]; onChange: (h: Header, p: Pack) => void }) {
   const set = (x: Partial<Pack>) => onChange(header, { ...pack, ...x });
   const setH = (x: Partial<Header>) => onChange({ ...header, ...x }, pack);
@@ -28,10 +29,10 @@ export function PackFields({ header, pack, products, onChange }: { header: Heade
   return (
     <div className="header-fields">
       <span className="field-label">Pack product</span>
-      <ProductPick label="Pack product" itemId={header.productItemId} code={header.productCode} name={header.productName} products={products}
+      <ProductPick label="Pack product" itemId={header.productItemId} code={header.productCode} name={header.productName} products={ownProducts(products, 'pack')}
         onPick={(p) => setH({ productItemId: p.itemId, productCode: p.code, productName: p.name })} />
       <span className="field-label">Filled units packed (TrueBatch Injectables product)</span>
-      <ProductPick label="Product packed" itemId={pack.bulkItemId} code={pack.bulkCode} name={pack.bulkName} products={products}
+      <ProductPick label="Product packed" itemId={pack.bulkItemId} code={pack.bulkCode} name={pack.bulkName} products={ownProducts(products, 'bulk')}
         onPick={(p) => set({ bulkItemId: p.itemId, bulkCode: p.code, bulkName: p.name })} />
       <div className="form-grid">
         <label>Pack type<select aria-label="Pack type" value={pack.type} onChange={(e) => set({ type: e.target.value as Pack['type'] })}>{PACK_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>

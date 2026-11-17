@@ -112,7 +112,10 @@ export function checkLimit(value: Dec, valueUnit: Unit | string, limit: Limit): 
   const r = roundHalfUp(v, action.decimals);
   const rText = r.toFixed(action.decimals);
   const where = inside(r, action, ls, hs);
-  const head = `${shownNumber(v, lu.symbol, { decimals: action.decimals + 2 })}${u} rounded to ${action.decimals} decimal${action.decimals === 1 ? '' : 's'} (as the limit is written) = ${rText}${u}; limit ${describe(action, lu.symbol, ls, hs)}`;
+  // The rounding is written out only when it changed the value ("0.03333… min rounded to 0 decimals … = 0 min");
+  // otherwise the value as checked, plainly ("0 nos; limit not more than 0 nos").
+  const rounding = v.eq(r) ? '' : `${shownNumber(v, lu.symbol, { decimals: action.decimals + 2 })}${u} rounded to ${action.decimals} decimal${action.decimals === 1 ? '' : 's'} (as the limit is written) = `;
+  const head = `${rounding}${rText}${u}; limit ${describe(action, lu.symbol, ls, hs)}`;
   if (where !== 'ok') {
     return { pass: false, level: 'fail', rounded: `${rText}${u}`, shown: `${head}: OUT OF LIMITS (${where === 'low' ? 'below the lower' : 'above the upper'} limit)` };
   }

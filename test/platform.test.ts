@@ -146,8 +146,24 @@ describe('master data through the platform views', () => {
       ['BAL-01', 'instrument', 'DSP-01', false], ['RMG-01', 'equipment', 'GRN-01', true]]);
     expect(await m.rooms()).toMatchObject([{ code: 'GRN-01', area: 'granulation', grade: 'D' }]);
     expect(await m.materials()).toMatchObject([{ code: 'MAT-001', category: 'API', unit: 'kg' }]);
-    expect(await m.products()).toMatchObject([{ code: 'PRD-001', strength: '500 mg', dosageForm: 'tablet' }]);
+    expect(await m.products()).toMatchObject([{ code: 'PRD-001', strength: '500 mg', dosageForm: 'tablet', kind: null }]);
     await expect(md`select * from item`).rejects.toMatchObject({ code: '42501' });
+  });
+
+  it('products: the kind (bulk or pack) is read when the view has the column; an older view without it gives none, no error', async () => {
+    await mdAdmin.unsafe(`
+      create or replace view report.product_v1 as select id, code, name, version, active, f->>'strength' as strength, f->>'dosageForm' as dosage_form, f->>'kind' as kind from item where kind = 'product';
+      update item set f = f || '{"kind": "pack"}' where code = 'PRD-001';`);
+    try {
+      expect(await sqlMaster(md).products()).toMatchObject([{ code: 'PRD-001', kind: 'pack' }]);
+    } finally {
+      await mdAdmin.unsafe(`
+        drop view report.product_v1;
+        create view report.product_v1 as select id, code, name, version, active, f->>'strength' as strength, f->>'dosageForm' as dosage_form from item where kind = 'product';
+        grant select on report.product_v1 to truebatch_injectables_app;
+        update item set f = f - 'kind' where code = 'PRD-001';`);
+    }
+    expect(await sqlMaster(md).products()).toMatchObject([{ code: 'PRD-001', kind: null }]);
   });
 
   it('PL-08: after the link is cut the next read says "connection off", even on an open connection', async () => {

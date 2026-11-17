@@ -1,4 +1,4 @@
-import { sep } from '../../shared/plant-time.js';
+import { plantClock } from '../../shared/plant-time.js';
 
 export class ApiError extends Error {
   constructor(
@@ -49,11 +49,10 @@ export interface Me {
 }
 export const can = (me: Me, code: string) => me.permissions.includes(`truebatch_injectables.${code}`);
 
-// Times are shown in plant time with the zone label.
+// Times are shown in plant time with the zone label, as on every screen: "15 Nov, 10:21 IST".
 export function plantTime(iso: string | null): string {
   if (!iso) return '—';
-  const s = new Date(iso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' });
-  return `${sep(s)} IST`;
+  return plantClock(iso);
 }
 
 // The meanings of server/signatures.ts, as the sign dialog shows them.

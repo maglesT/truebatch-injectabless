@@ -8,7 +8,7 @@ import type { Stored, Value } from '../../shared/engine/values.js';
 import { unitName, type Returned } from '../../shared/engine/stock.js';
 import { PROVIDER_NAME, type Source } from '../../shared/engine/links.js';
 import { stepTitle as sharedStepTitle, TERMINATED_STATE } from '../../shared/engine/batch.js';
-import { plantText, sep } from '../../shared/plant-time.js';
+import { plantClock, plantText } from '../../shared/plant-time.js';
 import { statusWords } from '../../shared/engine/release.js';
 import { product } from './product.js';
 
@@ -158,9 +158,8 @@ export function rawOf(v: Value | undefined): string | string[] {
   return typeof v === 'object' ? v.value : v;
 }
 
-// Plant time, short: "15 Nov, 10:21 IST".
-export const plainClock = (iso: string) =>
-  `${sep(new Date(iso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }))} IST`;
+// Plant time as every screen shows it: "15 Nov, 10:21 IST" (the year only when not this year).
+export const plainClock = (iso: string) => plantClock(iso);
 
 /** Time left (or past) in words: "12 min", "1 h 05 min"; under 10 minutes with seconds. */
 export function timeLeft(ms: number): string {

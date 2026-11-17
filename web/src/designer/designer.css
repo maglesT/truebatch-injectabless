@@ -86,6 +86,12 @@ input.dec { text-align: right; font-variant-numeric: tabular-nums; padding: 7px 
 .d-section h3 { margin: 0; font-size: 0.95rem; color: var(--brand-grey); }
 .d-section-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; justify-content: space-between; }
 .checklist .form-grid { margin-top: 4px; }
+/* The new-master dialog keeps to its width: a long room or master name in a list never pushes it wider (and so it never
+   shifts sideways when a field takes the focus). */
+.header-fields { grid-template-columns: minmax(0, 1fr); }
+.header-fields > *, .picker, .chipset, .chipset-row, .checklist { min-width: 0; }
+.chipset select, .checklist select { max-width: 100%; }
+.pick > * { overflow-wrap: anywhere; }
 
 /* Formula */
 .formula-table td { vertical-align: middle; padding: 8px 10px; }

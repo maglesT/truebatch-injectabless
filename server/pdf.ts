@@ -7,9 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import PdfPrinter from 'pdfmake';
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces.js';
-import { sep } from '../shared/plant-time.js';
-
-export const PLANT_TZ = process.env.DISPLAY_TZ ?? 'Asia/Kolkata';
+import { plantClock } from '../shared/plant-time.js';
 
 // Embedded Unicode fonts, so names and symbols print exactly as entered. Characters neither font has are printed as a
 // visible code point, never silently changed. From the source (server/) or the build (dist/server/).
@@ -39,8 +37,7 @@ export function runs(text: string): { text: string; font?: string }[] {
 }
 
 /** Plant time with the zone label: "15 Nov 2026, 10:21 IST". */
-export const plant = (d: Date | string | null | undefined) =>
-  d ? `${sep(new Date(d).toLocaleString('en-GB', { timeZone: PLANT_TZ, dateStyle: 'medium', timeStyle: 'short' }))} IST` : '';
+export const plant = (d: Date | string | null | undefined) => (d ? plantClock(d, true) : '');
 
 const DEMO = { text: 'DEMO · ', bold: true, color: '#b3261e' };
 /**

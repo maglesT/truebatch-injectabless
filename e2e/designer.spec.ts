@@ -26,6 +26,9 @@ async function sign(page: Page) {
 test('TI-02 build a master from a skeleton, fix a master-check problem, then check, approve and (another QA person) make it effective', async ({ browser }) => {
   const author = await as(browser, 'author1');
   await author.getByRole('button', { name: 'New master' }).click();
+  // Master data's bulk products (and those without a kind yet), never a pack.
+  await expect(author.locator('.picker .pick-list')).toContainText('PRD-002');
+  await expect(author.locator('.picker .pick-list')).not.toContainText('PK-001');
   await author.getByLabel('Product').fill('PRD-001');
   await author.getByRole('button', { name: /PRD-001/ }).click();
   // The liquid header (engine change 1): 100 L at 1.02 g/mL, filled at 10.0 mL.

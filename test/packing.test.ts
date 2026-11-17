@@ -280,6 +280,10 @@ describe('the packing blocks', () => {
     expect(view(qcApproved).status).toBe('QC approved');
     expect(batchRefusal('release', view(qcApproved), qa)).toBeNull();
     expect(batchRefusal('qc-approve', view(qcApproved), qc)?.problems).toEqual(['Not possible while the batch is QC approved.']);
+    // Every step done, not yet approved: the refusal says "packing complete", never "manufacturing complete".
+    expect(view([]).status).toBe('manufacturing complete');
+    expect(batchRefusal('release', view([]), qa)?.problems).toEqual(['Not possible while the batch is packing complete.']);
+    expect(batchRefusal('release', batchView({ ...p, pack: undefined }, events, [], at(60)), qa)?.problems).toEqual(['Not possible while the batch is manufacturing complete.']);
   });
 });
 
@@ -324,6 +328,15 @@ describe('the serialisation check (the customer system numbers, checked never ge
     const r = (unused: string) => results(d, events, rec.key, { printedOk: { value: '9800', unit: 'units' }, rejected: { value: '120', unit: 'units' }, destroyed: { value: '80', unit: 'units' }, unused: { value: unused, unit: 'units' } }).reconciliation;
     expect(r('500')).toMatchObject({ unaccountedCheck: { pass: true } });
     expect(r('499')).toMatchObject({ unaccountedCheck: { pass: false } });
+    // Above, a batch recorded before serial numbers were counted in nos (units): it still works out. A new batch counts
+    // them in nos, as the other counts of the floor.
+    const nos = { value: '10500', unit: 'nos' };
+    const now = results(d, [issued(d), ev('value', got.key, { min: 3, payload: { values: { received: nos, reference: 'SER-ORD-77', forBatch: 'yes' } } })], rec.key,
+      { printedOk: { value: '9800', unit: 'nos' }, rejected: { value: '120', unit: 'nos' }, destroyed: { value: '80', unit: 'nos' }, unused: { value: '500', unit: 'nos' } }).reconciliation;
+    expect(now).toMatchObject({ unaccountedCheck: { pass: true } });
+    expect(JSON.stringify(now)).toContain('9800 nos printed OK');
+    expect(JSON.stringify(now)).not.toContain('units');
+    for (const f of [...findBlock({ id: 'serial-received', version: 1 })!.fields, ...findBlock({ id: 'serial-reconciliation', version: 1 })!.fields]) expect(f.unit ?? 'nos').toBe('nos');
     const all = [...events, ev('started', rec.key, { min: 4 }), ev('value', rec.key, { min: 5, payload: { values: { printedOk: { value: '9800', unit: 'units' }, rejected: { value: '120', unit: 'units' }, destroyed: { value: '80', unit: 'units' }, unused: { value: '499', unit: 'units' } }, results: { reconciliation: r('499') } as never } })];
     const v = openSteps(d, all, at(10)).steps.find((x) => x.id === rec.key)!;
     expect(doneProblems(d, v, at(10))).toEqual(['Out of limits: Serial numbers accounted for. Add a deviation note first.']);
