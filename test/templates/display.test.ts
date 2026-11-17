@@ -47,6 +47,14 @@ describe('worked-line numbers (shownNumber)', () => {
       .toBe('99.009… % rounded to 1 decimal (as the limit is written) = 99.0 %; limit 97.0 to 100.5 %: within limits');
   });
 
+  it('C1: when rounding changes nothing the line is plain: the value and its limit', () => {
+    expect(checkLimit(new Dec('0'), 'nos', { high: '0', unit: 'nos' }).shown).toBe('0 nos; limit not more than 0 nos: within limits');
+    expect(checkLimit(new Dec('6.50'), '', { low: '6.0', high: '7.0', unit: '' }).shown).toBe('6.5; limit 6.0 to 7.0: within limits');
+    expect(checkLimit(new Dec('2'), 'nos', { high: '0', unit: 'nos' })).toMatchObject({ pass: false, shown: '2 nos; limit not more than 0 nos: OUT OF LIMITS (above the upper limit)' });
+    // A unit changed (g to kg) but nothing rounded: plain too, in the limit's unit.
+    expect(checkLimit(new Dec('500'), 'g', { low: '0.4', high: '0.6', unit: 'kg' }).shown).toBe('0.5 kg; limit 0.4 to 0.6 kg: within limits');
+  });
+
   it('no worked line of the fixture master shows a number with more than 4 decimals (all blocks, example values)', () => {
     const d = tablet();
     const long: string[] = [];

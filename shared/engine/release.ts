@@ -71,7 +71,8 @@ const STATE_WORDS: Record<State, string> = { waiting: 'is not started', open: 'i
 const isYield = (doc: MasterDoc, v: StepView) => findBlock(doc.stages[v.key.stage]!.steps[v.key.step]!.block)?.gmp === 'yield';
 
 // QC approves before QA releases, for a packing record too (owner, 15 Nov 2026: "QC signs first").
-export interface BatchView { status: BatchStatus; open: string[]; late: string[]; deviations: Deviation[]; yieldOut: string[] }
+// packing: a packing batch (its status reads in words as one: "packing complete", statusWords).
+export interface BatchView { status: BatchStatus; open: string[]; late: string[]; deviations: Deviation[]; yieldOut: string[]; packing: boolean }
 
 /** The batch status, and what stands in the way of the next signature; `read`: the deviations as Deviations has them now. */
 export function batchView(doc: MasterDoc, events: readonly StepEvent[], batchEvents: readonly BatchEvent[], now: Date, read?: ReadonlyMap<string, DeviationStatus> | null): BatchView {
@@ -87,7 +88,7 @@ export function batchView(doc: MasterDoc, events: readonly StepEvent[], batchEve
   const has = (k: BatchEventKind) => batchEvents.some((e) => e.kind === k);
   const status: BatchStatus = has('released') ? 'released' : has('rejected') ? 'rejected' : has('qc_approved') ? 'QC approved'
     : has('production_approved') ? 'production approved' : open.length ? 'in production' : 'manufacturing complete';
-  return { status, open, late, deviations: devs, yieldOut };
+  return { status, open, late, deviations: devs, yieldOut, packing: !!doc.pack };
 }
 
 /**
@@ -104,10 +105,11 @@ export function batchRefusal(action: BatchAction, v: BatchView, user: { id?: num
   const rule = BATCH_ACTIONS[action];
   if (!user.permissions.includes(rule.permission)) return { status: 403, error: 'forbidden', problems: ['You do not have the permission for this action.'] };
   const no = (...problems: string[]) => (problems.length ? { status: 409 as const, error: 'not_ready', problems } : null);
+  const words = statusWords(v.status, v.packing);
   if (action === 'close-deviation' || action === 'terminate') {
-    if (v.status === 'released' || v.status === 'rejected') return no(`The batch is ${v.status}.`);
+    if (v.status === 'released' || v.status === 'rejected') return no(`The batch is ${words}.`);
     // Still in production: production has not signed the record. After that, QC and QA decide at release.
-    if (action === 'terminate') return ['in production', 'manufacturing complete'].includes(v.status) ? null : no(`Not possible while the batch is ${v.status}: QA decides at release.`);
+    if (action === 'terminate') return ['in production', 'manufacturing complete'].includes(v.status) ? null : no(`Not possible while the batch is ${words}: QA decides at release.`);
     const d = v.deviations.find((x) => x.note === note && x.open);
     if (!d) return no('There is no open deviation note with this number.');
     if (d.status !== undefined) return no(`The status of ${d.reference} comes from the Deviations system (now ${deviationStatusWords(d.status)}): it is closed there.`);
@@ -117,7 +119,7 @@ export function batchRefusal(action: BatchAction, v: BatchView, user: { id?: num
   }
   // TI-20: the record is complete before production signs.
   if (action === 'production-approve' && v.status === 'in production') return no(...v.open);
-  if (v.status !== rule.from) return no(`Not possible while the batch is ${v.status}.`);
+  if (v.status !== rule.from) return no(`Not possible while the batch is ${words}.`);
   if (action === 'production-approve') return no(...v.late);
   if (action === 'qc-approve') return null;
   // TI-21: release or rejection only with every linked deviation closed; TI-18: a yield out of limits blocks release.

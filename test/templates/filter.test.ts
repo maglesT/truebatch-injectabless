@@ -29,7 +29,7 @@ describe('I19 Filter integrity test', () => {
   it('I19: shows the worked line with the product factor', () => {
     const r = ok(i19FilterIntegrity({ mode: 'bubble point', result: '3.2 bar g', makerLimit: '3.45 bar g', wettedWith: 'product', productFactor: '0.92' }));
     expect(r.shown).toBe(
-      'bubble point 3.2 bar g, not less than the limit 3.45 bar g × product factor 0.92 = 3.174 bar g: PASS (3.20000 bar g rounded to 3 decimals (as the limit is written) = 3.200 bar g; limit not less than 3.174 bar g: within limits)',
+      'bubble point 3.2 bar g, not less than the limit 3.45 bar g × product factor 0.92 = 3.174 bar g: PASS (3.200 bar g; limit not less than 3.174 bar g: within limits)',
     );
   });
 
