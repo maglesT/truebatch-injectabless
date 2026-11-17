@@ -100,15 +100,15 @@ describe('master designer', () => {
     // The bulk yield on the batch mass by the density (engine change 1); the units from the header.
     expect(lyo[0]!.steps.at(-1)!.settings.theoretical).toEqual({ header: 'batchMass' });
     expect(lyo.at(-1)!.steps.at(-1)!.settings.theoretical).toEqual({ header: 'units' });
-    // TI-11: a master that weighs names its dispensing rooms; a new one starts with the rooms of the Dispensing area
-    // exactly (not the liquids block's "Liquid dispensing" booth, nor an inactive room).
+    // TI-11: a master that weighs names its dispensing rooms; a new one starts with the rooms of the Sterile dispensing area
+    // exactly (not the tablet "Dispensing" booth, nor the liquids block's "Liquid dispensing" booth, nor an inactive room).
     const h = header('aseptic');
     const bare = masterSchema.parse({ header: { ...h, dispensingRooms: undefined }, formula: [], stages: skeletonStages('liquid-aseptic', h) });
     expect(masterChecks(bare).filter((p) => p.path === 'header.dispensingRooms')).toEqual([{ level: 'error', path: 'header.dispensingRooms', rule: 'TI-11',
       message: 'The master weighs but names no dispensing rooms: choose them in the header (rooms of master data)' }]);
     expect(defaultDispensingRooms([{ code: 'RM-101', area: 'Dispensing', active: true }, { code: 'RM-102', area: 'Dispensing', active: false },
       { code: 'RM-301', area: 'Liquid dispensing', active: true }, { code: 'RM-103', area: 'Granulation', active: true },
-      { code: 'RM-201', area: 'Sterile dispensing', active: true }])).toEqual(['RM-101', 'RM-201']);
+      { code: 'RM-201', area: 'Sterile dispensing', active: true }, { code: 'RM-202', area: 'Sterile dispensing', active: false }])).toEqual(['RM-201']);
   });
 
   it('the plain view titles each step as the floor does and never shows a step\'s internal key', () => {
