@@ -105,7 +105,7 @@ function AdjustPanel({ doc, line, onChange, problems, onAnswer }: { doc: MasterD
       {line.role === 'api' || a.potency || a.content || a.salt ? (
         <>
           <fieldset className="checklist">
-            <legend>Salt form (T11)</legend>
+            <legend>Salt form</legend>
             <label className="check"><input type="checkbox" checked={!!a.salt} onChange={(e) => put({ ...a, salt: e.target.checked ? { from: { name: 'base', mw: '' }, to: { name: '', mw: '' } } : undefined })} />
               The formula gives the quantity of another form (base, salt, element)</label>
             {a.salt && <>{form('from', 'Form in the formula')}{form('to', 'Form dispensed')}
@@ -118,7 +118,7 @@ function AdjustPanel({ doc, line, onChange, problems, onAnswer }: { doc: MasterD
               {(['none', 'potency', 'content'] as const).map((m) => (
                 <button type="button" key={m} role="radio" aria-checked={mode === m} className={mode === m ? 'on' : ''}
                   onClick={() => put({ ...a, potency: m === 'potency' ? a.potency ?? { basis: 'as is', standardIs: 'anhydrous' } : undefined, content: m === 'content' ? a.content ?? { formulaQuantityIs: 'dry' } : undefined })}>
-                  {m === 'none' ? 'No' : m === 'potency' ? 'Assay (T9)' : 'Content (T18)'}</button>
+                  {m === 'none' ? 'No' : m === 'potency' ? 'Assay' : 'Content'}</button>
               ))}
             </div>
             {a.potency && (
@@ -151,7 +151,7 @@ function AdjustPanel({ doc, line, onChange, problems, onAnswer }: { doc: MasterD
       ) : null}
       {/* An overage on any line, for losses in processing (T16); never the fill excess, which is the header's. */}
       <fieldset className="checklist">
-        <legend>Overage (T16)</legend>
+        <legend>Overage</legend>
         <div className="form-grid">
           <label>Overage (%)<Decimal label="Overage percent" placeholder="none" value={a.overage?.percent} onChange={(v) => put({ ...a, overage: v ? { ...a.overage, percent: v } : undefined })} /></label>
           {a.overage && <label>Highest overage allowed (%)<Decimal label="Highest overage allowed" value={a.overage.maxPercent} onChange={(v) => put({ ...a, overage: { ...a.overage!, maxPercent: v || undefined } })} /></label>}
@@ -159,7 +159,7 @@ function AdjustPanel({ doc, line, onChange, problems, onAnswer }: { doc: MasterD
       </fieldset>
       {line.role !== 'api' && (
         <fieldset className="checklist">
-          <legend>Compensating filler (T10)</legend>
+          <legend>Compensating filler</legend>
           {others.length ? others.map((o) => (
             <label key={o.key} className="check"><input type="checkbox" checked={a.compensates?.includes(o.key) ?? false}
               onChange={(e) => put({ ...a, compensates: e.target.checked ? [...(a.compensates ?? []), o.key] : a.compensates?.filter((k) => k !== o.key) })} />

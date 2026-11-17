@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, can, type Me } from '../api.js';
 import { getVersion, listMasters, loadMasterData, saveVersion, STATE_CHIP, STATE_LABEL, type MasterData, type MasterRow, type Version } from '../api-designer.js';
 import { blocking, masterChecks } from '../../../shared/master/checks.js';
+import { placeChecks } from '../../../shared/master/places.js';
 import { masterSchema, type MasterDoc } from '../../../shared/master/schema.js';
 import { CheckPanel, type OnAnswer } from './CheckPanel.js';
 import { FormulaTable } from './Formula.js';
@@ -71,7 +72,8 @@ export function Designer({ me, versionId, onBack, onOpen }: { me: Me; versionId:
   const flush = async () => { if (timer.current && save.kind === 'pending' && latest.current) { window.clearTimeout(timer.current); await persist(latest.current); } };
 
   const parsed = useMemo(() => (doc ? masterSchema.safeParse(doc) : null), [doc]);
-  const problems = useMemo(() => (parsed?.success ? masterChecks(parsed.data) : null), [parsed]);
+  // The master's own checks, and (once master data is read) whether the floor finds a machine for each step (TI-11).
+  const problems = useMemo(() => (parsed?.success ? [...masterChecks(parsed.data), ...(md ? placeChecks(parsed.data, md) : [])] : null), [parsed, md]);
   const go = (path: string) => { const p = placeOf(path); setPlace(p); setTab(p.tab); };
 
   if (error) return <><button className="link dark" onClick={onBack}>← {product.masters}</button><p className="notice">{error}</p></>;
@@ -87,13 +89,14 @@ export function Designer({ me, versionId, onBack, onOpen }: { me: Me; versionId:
           <h1>{doc.header.productCode} · {doc.header.productName}</h1>
           <span className="muted">Version {v.versionNo} · {Number(doc.header.batchSize || 0).toLocaleString('en-IN')} {doc.header.batchUnit}</span>
           <span className={STATE_CHIP[v.state]}>{STATE_LABEL[v.state]}</span>
-          {editable && <span className={`save save-${save.kind}`} role="status">
-            {save.kind === 'saved' ? 'All changes saved' : save.kind === 'saving' ? 'Saving…' : save.kind === 'pending' ? 'Changes not saved yet' : `Not saved: ${'message' in save ? save.message : ''}`}
-          </span>}
           {!editable && <span className="muted small">Read only{v.state === 'draft' ? '' : `: this version is ${STATE_LABEL[v.state].toLowerCase()}`}</span>}
         </div>
         <nav className="subtabs" aria-label="Designer">
           {TABS.map(([k, label]) => <button key={k} className={tab === k ? 'on' : ''} aria-pressed={tab === k} onClick={async () => { if (k === 'review') await flush(); setTab(k); }}>{label}</button>)}
+          {/* Beside the tabs, not under a long product name. */}
+          {editable && <span className={`save save-${save.kind}`} role="status">
+            {save.kind === 'saved' ? 'All changes saved' : save.kind === 'saving' ? 'Saving…' : save.kind === 'pending' ? 'Changes not saved yet' : `Not saved: ${'message' in save ? save.message : ''}`}
+          </span>}
         </nav>
       </div>
       <div className="designer">

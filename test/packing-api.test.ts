@@ -120,7 +120,7 @@ describe('a packing batch from the filled units of a released batch', () => {
     const s = (await get(first)).steps[0]!;
     expect(s).toMatchObject({ state: 'in_progress', values: { bulk: 'TI260001', mfgDate: '2026-11-03', line: { code: 'LL-01' } }, source: { bulk: { from: 'truebatch_injectables' }, mfgDate: { from: 'truebatch_injectables' } } });
     expect(s.results.expiry).toMatchObject({ ok: true, shown: expect.stringContaining('expiry 10/2028') });
-    expect(s.results.packs).toMatchObject({ ok: true, shown: '10000 units ÷ 10 units = 1000 units' });
+    expect(s.results.packs).toMatchObject({ ok: true, shown: '10000 units ÷ 10 units = 1000 packs' });
     // The pulled date cannot be typed over.
     const r = await as('op1', 'POST', `/api/batches/${first}/steps/0.1.0.1/record`, { values: { mfgDate: '2026-11-01' } });
     expect(r.json()).toMatchObject({ problems: ['Date of manufacture of the filled units comes from TrueBatch Injectables and cannot be typed over'] });

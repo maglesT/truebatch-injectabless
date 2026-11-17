@@ -2,7 +2,8 @@
    sub-tabs, segmented choice, skeleton placeholders, counts) are marked "Logbook". */
 
 /* Logbook: pick lists, sub-tabs, segmented choice, placeholders, counts, header row */
-.pick-list { display: grid; gap: 4px; max-height: 260px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 6px; background: #fff; }
+/* Rows keep their own height in a list that scrolls (a grid with a max height would squeeze them onto each other). */
+.pick-list { display: grid; grid-auto-rows: max-content; align-content: start; gap: 4px; max-height: 260px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 6px; background: #fff; }
 .pick { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 8px; cursor: pointer; font: inherit; color: inherit; min-height: 0; justify-content: flex-start; }
 .pick:hover:not(:disabled) { background: var(--brand-soft); }
 .pick.off { color: var(--muted); cursor: not-allowed; }
@@ -35,6 +36,7 @@ label.check.route small { display: block; color: var(--muted); font-size: 0.85re
 .d-title { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; }
 .d-title h1 { margin: 0; font-size: 1.5rem; }
 .save { font-size: 0.82rem; font-weight: 600; color: var(--ok); }
+.subtabs .save { margin-left: 4px; }
 .save-pending, .save-saving { color: var(--muted); }
 .save-invalid, .save-error { color: var(--bad); }
 .designer { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
@@ -52,7 +54,6 @@ fieldset.plain { border: 0; padding: 0; margin: 0; min-width: 0; }
 .cp-list li.info { background: #f3f7fd; border-color: #cfdcf0; }
 .cp-list li > button { background: transparent; border: 0; }
 .cp-where { display: flex; gap: 6px; align-items: center; font-weight: 650; font-size: 0.8rem; color: var(--brand-grey); margin-bottom: 2px; }
-.cp-rule { font-size: 0.7rem; font-weight: 700; padding: 0 6px; border-radius: 99px; background: #fff; border: 1px solid var(--line-strong); }
 .cp-invalid { margin: 0; font-size: 0.88rem; color: var(--bad); }
 .cp-answer { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 0 28px; }
 .cp-answer select, .cp-answer input { min-width: 0; flex: 1 1 120px; font-size: 0.84rem; }

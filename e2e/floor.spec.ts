@@ -61,7 +61,7 @@ test('TI-14 floor journey: start, a value out of limits needs a deviation note, 
   await op.getByLabel('Reading').press('Enter');
   const results = op.getByRole('region', { name: 'Results' });
   await expect(results).toContainText('Out of limits');
-  await expect(results).toContainText('limit 5.0 to 7.0: OUT OF LIMITS');
+  await expect(results).toContainText('Limit 5.0 to 7.0');
   await expect(op.getByRole('button', { name: 'Done', exact: true })).toBeDisabled();
   await expect(op.locator('.action-bar')).toContainText('Add a deviation note first');
   await op.getByRole('button', { name: 'Add deviation note' }).click();

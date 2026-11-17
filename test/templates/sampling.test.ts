@@ -43,7 +43,7 @@ describe('C7 Sampling plan: Table II-A with arrows', () => {
     ]);
     expect(r.value.toString()).toBe('800');
     expect(r.check).toBeUndefined(); // no defects recorded yet: a plan only
-    expect(r.shown).toContain('(zero accepted, plant rule)');
+    expect(r.shown).toContain('zero accepted, plant rule');
   });
 
   it.each([

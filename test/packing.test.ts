@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { findBlock } from '../shared/blocks/index.js';
 import { blocking, masterChecks } from '../shared/master/checks.js';
 import { masterSchema, type MasterDoc } from '../shared/master/schema.js';
-import { batchRefusal, batchView, doneProblems, evaluate, openSteps, stepLabel, stepTitle, type BatchEvent, type StepEvent } from '../shared/engine/index.js';
+import { askedFields, batchRefusal, batchView, doneProblems, evaluate, openSteps, stepLabel, stepTitle, type BatchEvent, type StepEvent } from '../shared/engine/index.js';
 import { c8PrintedData, c9SerialCodes, expiryMonth, gs1, printedMonth, t27Expiry } from '../shared/templates/index.js';
 import { at, ev, small } from './engine-fixture.js';
 import { code, GTIN, packing } from './packing-fixture.js';
@@ -136,7 +136,7 @@ describe('the packing blocks', () => {
     const d = packing();
     const r = results(d, [], '0.1.0.1', { mfgDate: '2026-11-03', units: { value: '10000', unit: 'units' } });
     expect(r.expiry).toMatchObject({ ok: true, expiry: '2028-10', shown: 'Manufactured 11/2026, shelf life 24 months (to the end of the month before): expiry 10/2028' });
-    expect(r.packs).toMatchObject({ ok: true, value: '1000', unit: 'units' });
+    expect(r.packs).toMatchObject({ ok: true, value: '1000', unit: 'packs' });
     // The issue step's figure is the expiry date, not the shelf life it is worked out from.
     expect(headline(r.expiry!)).toBe('10/2028');
     // No packing block has an expiry to type: the coding check works it out from the shelf life.
@@ -208,13 +208,26 @@ describe('the packing blocks', () => {
     expect(openSteps(d, round1, at(100)).stages[1]!.closed).toBe(false);
   });
 
+  it('TI-P5 a pack without a leaflet has a "Carton check" and is not asked about a leaflet (Tablets 17 Nov 2026 run, F37)', () => {
+    const d = packing();
+    const c = where(d, 'carton-check');
+    const block = findBlock(c.st.block)!;
+    expect(stepTitle(d, c.st)).toBe('Carton and leaflet check');
+    expect(askedFields(d, block).map((f) => f.name)).toContain('leaflet');
+    const noLeaflet = { ...d, pack: { ...d.pack!, materials: d.pack!.materials.filter((m) => m.kind !== 'leaflet') } };
+    expect(stepTitle(noLeaflet, c.st)).toBe('Carton check');
+    expect(askedFields(noLeaflet, block).map((f) => f.name)).not.toContain('leaflet');
+    const r = results(noLeaflet, [issued(noLeaflet)], c.key, { cartons: { value: '10', unit: 'nos' }, count: 'yes', coded: 'yes', packingDone: 'no' });
+    expect(r.cartonCheck).toMatchObject({ ok: true, check: { pass: true } });
+  });
+
   it('TI-P3 a blister pack (prefilled syringes): a sealing temperature out of limits and a leaking pack fail; the leak test sample comes from the AQL plan for the theoretical packs', () => {
     const d = packing({ type: 'blister', unitsPerPack: 1 });
     const f = where(d, 'forming-check');
     expect(results(d, [issued(d)], f.key, { sealTemp: { value: '195', unit: '°C' }, pockets: 'yes', seal: 'yes', packingDone: 'no' }).sealCheck).toMatchObject({ check: { pass: false } });
     const l = where(d, 'leak-test');
     const leak = (leaking: string) => results(d, [issued(d)], l.key, { vacuum: { value: '500', unit: 'mbar' }, tested: { value: '20', unit: 'units' }, leaking: { value: leaking, unit: 'units' }, packingDone: 'no' }).plan;
-    expect(leak('0')).toMatchObject({ ok: true, value: '20', check: { pass: true, shown: expect.stringContaining('Lot 10000, level S-2') } });
+    expect(leak('0')).toMatchObject({ ok: true, value: '20', check: { pass: true, shown: expect.stringContaining('Sample 20 of 10000 (level S-2)') } });
     expect(leak('1')).toMatchObject({ check: { pass: false } });
   });
 
@@ -236,17 +249,17 @@ describe('the packing blocks', () => {
   it('TI-P6 finished goods: the filled units in packs and samples, returned and rejected (counted), the yield in packs and the accountability of the units issued', () => {
     const d = packing();
     const f = where(d, 'finished-goods');
-    const r = (rejects: string, returned = '120') => results(d, [issued(d)], f.key, { packs: { value: '980', unit: 'units' }, cartons: { value: '98', unit: 'units' }, samples: { value: '4', unit: 'units' },
+    const r = (rejects: string, returned = '120') => results(d, [issued(d)], f.key, { packs: { value: '980', unit: 'packs' }, cartons: { value: '98', unit: 'nos' }, samples: { value: '4', unit: 'packs' },
       returned: { value: returned, unit: 'units' }, rejects: { value: rejects, unit: 'units' } });
     expect(r('40').packed).toMatchObject({ ok: true, value: '9800', unit: 'units' });
     expect(r('40').sampled).toMatchObject({ ok: true, value: '40', unit: 'units' });
     expect(r('40').yield).toMatchObject({ value: '98', check: { pass: true } });
     expect(r('40').accountability).toMatchObject({ value: '100', check: { pass: true } });
-    // Whole counts read whole in the worked lines (17 Nov 2026 run, F25): "÷ 1000 units", not "÷ 1000.000 units".
-    expect(r('40').yield).toMatchObject({ shown: expect.stringMatching(/^980 units ÷ 1000 units × 100/) });
+    // Whole counts read whole in the worked lines (17 Nov 2026 run, F25): "÷ 1000 packs", not "÷ 1000.000 packs".
+    expect(r('40').yield).toMatchObject({ shown: expect.stringMatching(/^980 packs ÷ 1000 packs × 100/) });
     expect(r('40').accountability).toMatchObject({ shown: expect.stringMatching(/^\(9800 units in packs \+ 40 units samples/) });
-    // Filled containers are counted, never weighed: no weights, no mean weight.
-    expect(findBlock({ id: 'finished-goods', version: 1 })!.fields.filter((x) => x.kind === 'number').every((x) => x.unit === 'units')).toBe(true);
+    // Filled containers are counted, never weighed: no weights, no mean weight; packs in packs, cartons and shippers in nos.
+    expect(findBlock({ id: 'finished-goods', version: 1 })!.fields.filter((x) => x.kind === 'number').map((x) => x.unit)).toEqual(['packs', 'nos', 'nos', 'packs', 'units', 'units']);
     // 160 units not accounted for: out of limits.
     expect(r('0', '0').accountability).toMatchObject({ value: '98.4', check: { pass: false } });
   });
@@ -337,7 +350,7 @@ describe('the packing line and the packing product', () => {
       { code: 'LL-02', type: 'Vial labeller', room: null }, { code: 'LL-03', type: null, room: 'PK-01' }];
     expect(lines.map((m) => machineRefusal(stage, line, m, ROOMS))).toEqual([null, 'EQ-X stands in RM-107, not in a room this stage allows (Packing)',
       'LL-02 stands in no room in master data, so it is not in a room this stage allows (Packing)', 'LL-03 has no type in master data, so it is not offered as a packing line']);
-    expect(untypedNote(line, lines)).toBe('Not offered, because master data gives no type: LL-03. Engineering sets the type (and the room) in master data.');
+    expect(untypedNote(line, lines)).toBe('1 machine has no type in master data, so it is not offered.');
     // The issue stage names no rooms: its line (recorded at issue) is not a reason to ask for them.
     expect(masterChecks(packing()).filter((p) => p.rule === 'TI-11')).toEqual([]);
   });

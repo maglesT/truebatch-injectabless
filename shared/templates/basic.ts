@@ -298,6 +298,13 @@ export function t6Ratio(i: T6Input): Outcome<{ readonly excess?: Dec }> {
       unit = u.symbol;
     }
     const dp = i.decimals ?? defaultDecimals(unit);
+    // A count to the whole item (owner, 17 Nov 2026: no fractional tablets or packs): tablets counted by weight are
+    // rounded half up; whole packs (a count ÷ a count) are rounded down, as a part pack is no pack.
+    if (unit !== '' && unitOf(unit).kind === 'count' && dp === 0 && !value.isInteger()) {
+      const whole = value.toDecimalPlaces(0, a.unit.kind === 'count' ? Dec.ROUND_DOWN : Dec.ROUND_HALF_UP);
+      const how = a.unit.kind === 'count' ? 'whole' : 'rounded to whole';
+      return { ok: true, value: whole, unit, shown: `${a.text} ÷ ${b.text} = ${shownNumber(value, unit)}, ${how} ${unit} = ${show(whole, unit, 0)}`, ...checkOf(whole, unit, i.limit) };
+    }
     return { ok: true, value, unit, shown: `${a.text} ÷ ${b.text}${unit === '%' ? ' × 100' : ''} = ${show(value, unit, dp)}`, ...checkOf(value, unit, i.limit) };
   });
 }

@@ -137,6 +137,8 @@ export function defaultDecimals(unit: string): number {
     case 'min':
     case 'units':
     case 'tablets':
+    case 'packs':
+    case 'nos':
     case 's':
       return 0;
     default:

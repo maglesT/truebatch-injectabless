@@ -23,6 +23,10 @@ export function qtyText(r: Stored | undefined): string {
   return r.unit === 'kg' && !v.isZero() && v.abs().lt('0.01') ? `${v.times(1000).toFixed(3)} g` : `${v.toFixed(3)} ${r.unit}`;
 }
 
+/** Whole numbers of five digits or more with Indian thousands separators, as the lists show them ("50,000 units");
+ *  a number with decimals, or part of a code or date, stays as written. */
+export const grouped = (text: string) => text.replace(/(?<![\w.,/-])\d{5,}(?![\w.,/-]|\.\d)/g, (n) => Number(n).toLocaleString('en-IN'));
+
 /** A new key, unique among the given ones: "weigh", "weigh-2" … */
 export function newKey(base: string, taken: string[]): string {
   const b = base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) || 'item';

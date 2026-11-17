@@ -76,7 +76,7 @@ export function small(stages: object[]): MasterDoc {
   return masterSchema.parse({
     header: { productItemId: 'p', productCode: 'P', productName: 'P', batchSize: '1', batchUnit: 'L', fillVolumeMl: '1.0', fillExcessMl: '0.05', route: 'aseptic', dispensingRooms: ['DSP-01'] },
     formula: [{ key: 'x', materialItemId: 'm', code: 'M', name: 'M', mg: '100.0', role: 'excipient' }],
-    stages: stages.map((s, i) => ({ key: `s${i}`, name: `Stage ${i}`, kind: 'normal', ...s,
+    stages: stages.map((s, i) => ({ key: `s${i}`, name: `Stage ${i}`, kind: 'normal', role: 'Compounding operator', ...s,
       steps: ((s as { steps?: object[] }).steps ?? [{}]).map((t, j) => ({ key: `t${j}`, block: { id: 'check', version: 1 }, checker: false,
         settings: { what: 'pH', unit: '', limit: { low: '5.0', high: '7.0', unit: '' } }, ...t })) })),
   });

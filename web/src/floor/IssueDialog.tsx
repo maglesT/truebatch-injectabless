@@ -7,7 +7,7 @@ import { batchLink, go, plainError, useLogbookItems, type PickItem } from '../ap
 import { FieldInput } from './Fields.js';
 import { findBlock } from '../../../shared/blocks/index.js';
 import { handFields, type Source } from '../../../shared/engine/links.js';
-import { inLogbook, machineRefusal, untypedNote } from '../../../shared/engine/picks.js';
+import { emptyNote, inLogbook, machineRefusal } from '../../../shared/engine/picks.js';
 
 // TI-03: issue a batch from the effective master version, signed "issued". A packing master's first step is recorded
 // at issue: the line, the released batch of filled units (picked from TrueBatch Injectables; typed from its labels
@@ -20,6 +20,7 @@ export function IssueDialog({ row, onCancel }: { row: MasterRow; onCancel: () =>
   const [signing, setSigning] = useState(false);
   const [lines, setLines] = useState<PickItem[]>([]);
   const [machines, setMachines] = useState<PickItem[]>([]);
+  const [rooms, setRooms] = useState<PickItem[]>([]);
   const [bulk, setBulk] = useState<{ link: string; batches: { batchNo: string; mfgDate: string | null }[] } | null>(null);
   useEffect(() => { getVersion(row.id).then(setV, (e) => setProblems([plainError(e)])); }, [row.id]);
   const doc = v?.doc;
@@ -29,7 +30,7 @@ export function IssueDialog({ row, onCancel }: { row: MasterRow; onCancel: () =>
     if (!doc || !atIssue.length) return;
     if (doc.pack) void api<typeof bulk>('GET', `/api/bulk-batches?product=${encodeURIComponent(doc.pack.bulkCode)}`).then(setBulk, () => setBulk({ link: 'down', batches: [] }));
     void Promise.all([api<PickItem[]>('GET', '/api/master/equipment'), api<PickItem[]>('GET', '/api/master/rooms')])
-      .then(([all, rooms]) => { setMachines(all); setLines(all.filter((m) => m.active && atIssue.some((f) => f.kind === 'machine' && !machineRefusal(doc.stages[0]!, f, m, rooms)))); }, () => {});
+      .then(([all, rooms]) => { setMachines(all); setRooms(rooms); setLines(all.filter((m) => m.active && atIssue.some((f) => f.kind === 'machine' && !machineRefusal(doc.stages[0]!, f, m, rooms)))); }, () => {});
   }, [doc]);
 
   // While the Logbook is linked, only the lines it has (shared/engine/picks.ts).
@@ -58,7 +59,7 @@ export function IssueDialog({ row, onCancel }: { row: MasterRow; onCancel: () =>
         <h2>Issue a batch</h2>
         <p>{doc.header.productCode} · {doc.header.productName}, version {row.versionNo}: {doc.pack ? `${Number(doc.header.batchSize).toLocaleString('en-IN')} filled units, packed from ${doc.pack.bulkCode}` : batchText(doc)}. The batch number is given by the server.</p>
         {fields.map((f) => (
-          <FieldInput key={f.name} f={f} unit={f.unit ?? ''} picks={f.kind === 'machine' ? offer.offered : []} note={[untypedNote(f, machines), f.kind === 'machine' ? offer.note : null]} onChange={set(f.name)}
+          <FieldInput key={f.name} f={f} unit={f.unit ?? ''} picks={f.kind === 'machine' ? offer.offered : []} note={[f.kind === 'machine' && machines.length && !lines.length ? emptyNote(doc.stages[0]!, f, machines, rooms) : null, f.kind === 'machine' ? offer.note : null]} onChange={set(f.name)}
             options={f.kind === 'bulk' ? (bulk?.batches ?? []).map((x) => x.batchNo) : []} />
         ))}
         {doc.pack && bulk && bulk.link !== 'ok' && <p className="notice warn">TrueBatch Injectables is not linked or not answering: type the batch from the labels of its trays or cases; a second person checks it.</p>}

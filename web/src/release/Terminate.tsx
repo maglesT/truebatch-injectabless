@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../api.js';
 import { SignDialog } from '../components/SignDialog.js';
-import { plainError, type BatchDetail } from '../api-floor.js';
+import { plainError, statusText, type BatchDetail } from '../api-floor.js';
 import { ReasonDialog } from '../floor/ReasonDialog.js';
 import { terminatedText } from '../../../shared/engine/release.js';
 
@@ -56,7 +56,7 @@ export function Terminate({ id, batchNo, onDone }: { id: number; batchNo: string
       </ReasonDialog>
     )}
     {step === 'sign' && (
-      <SignDialog meaning="rejected" what={`Terminate batch ${batchNo} · ${d.master.doc.header.productName} (status now: ${d.batch.status})`} onCancel={close}
+      <SignDialog meaning="rejected" what={`Terminate batch ${batchNo} · ${d.master.doc.header.productName} (status now: ${statusText(d.batch.status)})`} onCancel={close}
         onSign={async ({ proof }) => { await api('POST', `/api/batches/${id}/terminate`, { proof, contentHash: d.batch.contentHash, reason, ...(lots.length ? { returns } : {}) }); close(); await onDone(); }}>
         <div className="summary-box">
           <p>Reason: <b>{reason}</b></p>

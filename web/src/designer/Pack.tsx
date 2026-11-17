@@ -5,6 +5,7 @@ import type { MasterData, Product } from '../api-designer.js';
 import { DESTINATIONS, PACK_MATERIAL_KINDS, PACK_TYPES, type MasterDoc, type Pack, type PackMaterial } from '../../../shared/master/schema.js';
 import { newKey } from './model.js';
 import { withMaterialSteps } from './skeletons.js';
+import { unitName } from '../../../shared/engine/stock.js';
 import { Decimal, Order, Picker } from './ui.js';
 
 type Header = MasterDoc['header'];
@@ -55,10 +56,13 @@ export function PackMaterials({ doc, md, onChange }: { doc: MasterDoc; md: Maste
   const [adding, setAdding] = useState(false);
   const put = (materials: PackMaterial[]) => onChange({ ...doc, pack: { ...pack, materials } });
   const set = (i: number, x: Partial<PackMaterial>) => put(pack.materials.map((m, j) => (j === i ? { ...m, ...x } : m)));
+  const steps = (d: MasterDoc) => d.stages.reduce((n, st) => n + st.steps.length, 0);
+  const stepsToAdd = steps(withMaterialSteps(doc)) > steps(doc);
   return (
     <div className="card">
       <div className="d-section-head"><h2>Packing materials</h2>
-        <button type="button" onClick={() => onChange(withMaterialSteps(doc))}>Add their issue and reconciliation steps</button></div>
+        {/* Only while a material has no issue or reconciliation step yet. */}
+        {stepsToAdd && <button type="button" onClick={() => onChange(withMaterialSteps(doc))}>Add their issue and reconciliation steps</button>}</div>
       <table className="plain-table">
         <thead><tr><th>Material</th><th>Kind</th><th>Printed</th><th>Coded</th><th>Per pack</th><th /></tr></thead>
         <tbody>{pack.materials.map((m, i) => (
@@ -68,15 +72,16 @@ export function PackMaterials({ doc, md, onChange }: { doc: MasterDoc; md: Maste
             <td><input type="checkbox" aria-label={`${m.name} is printed`} checked={m.printed} onChange={(e) => set(i, { printed: e.target.checked })} /></td>
             <td><input type="checkbox" aria-label={`${m.name} carries the batch coding`} checked={m.coded} onChange={(e) => set(i, { coded: e.target.checked })} /></td>
             <td><Decimal label={`${m.name} per pack`} value={m.perPack} onChange={(v) => set(i, { perPack: v })} width={5} />
-              <select aria-label={`Unit of ${m.name}`} value={m.unit} onChange={(e) => set(i, { unit: e.target.value as PackMaterial['unit'] })}>{['units', 'm', 'g'].map((u) => <option key={u}>{u}</option>)}</select></td>
+              <select aria-label={`Unit of ${m.name}`} value={m.unit} onChange={(e) => set(i, { unit: e.target.value as PackMaterial['unit'] })}>{['units', 'm', 'g'].map((u) => <option key={u} value={u}>{unitName(u, md.materials.find((x) => x.itemId === m.materialItemId)?.unit)}</option>)}</select></td>
             <td><Order index={i} count={pack.materials.length} what={m.name} onMove={(by) => { const l = [...pack.materials]; [l[i], l[i + by]] = [l[i + by]!, l[i]!]; put(l); }}
               onRemove={() => put(pack.materials.filter((_, j) => j !== i))} /></td>
           </tr>))}
         </tbody>
       </table>
       {!pack.materials.length && <p className="muted small">No packing materials yet.</p>}
+      {/* A new material's key is made from its code, short and stable (17 Nov 2026 run, F34); keys already in a master stay. */}
       {adding ? <Picker label="Packing material" items={md.materials.map((m) => ({ id: m.itemId, code: m.code, name: m.name, note: m.category ?? undefined, off: m.active ? undefined : 'inactive' }))}
-        onPick={(i) => { put([...pack.materials, { key: newKey(i.name, pack.materials.map((m) => m.key)), materialItemId: i.id, code: i.code, name: i.name, kind: 'other', printed: false, coded: false, perPack: '1', unit: 'units' }]); setAdding(false); }} />
+        onPick={(i) => { put([...pack.materials, { key: newKey(i.code, pack.materials.map((m) => m.key)), materialItemId: i.id, code: i.code, name: i.name, kind: 'other', printed: false, coded: false, perPack: '1', unit: 'units' }]); setAdding(false); }} />
         : <button type="button" onClick={() => setAdding(true)}>+ Add a packing material</button>}
     </div>
   );

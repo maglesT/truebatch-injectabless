@@ -41,7 +41,7 @@ describe('master designer', () => {
     const rec = block('unit-reconcile');
     const said = (limit: unknown) => sentenceText(d, rec, {}, sentence(rec, { name: 'x', label: 'x', template: 'C1', args: { value: '$samples', limit } }));
     expect(said({ max: 0 })).toBe('The samples must be at most 0.');
-    expect(said({ high: '0', unit: 'units' })).toBe('The samples must be at most 0 units.');
+    expect(said({ high: '0', unit: 'units' })).toBe('The samples must be 0: none allowed.');
     expect(said({ low: '2', high: '5', unit: 'kg' })).toBe('The samples must be within 2 to 5 kg.');
   });
 

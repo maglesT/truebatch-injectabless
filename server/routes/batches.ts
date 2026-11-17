@@ -383,6 +383,23 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
     return out;
   });
 
+  // Done on the floor: the latest batches the person recorded or signed a step of whose steps are all done (waiting for
+  // production approval, or approved, released or rejected) and that are not in their work list, so the finished
+  // record stays one tap away from My work (owner, 17 Nov 2026).
+  app.get('/api/batches/finished', anyUser, async (req) => {
+    const ids = await sql<{ id: number }[]>`
+      select b.id::int from batches b
+      where exists (select 1 from step_events e where e.batch_id = b.id and e.person_id = ${req.user!.id})
+      order by b.issued_at desc limit 20`;
+    const out = [];
+    for (const { id } of ids) {
+      const l = (await loadBatch(sql, id))!;
+      if (view(l).status === 'in production' || myWork(l, req.user!)) continue;
+      if (out.length < 10) out.push({ id, batchNo: l.batch.batchNo, productCode: l.doc.header.productCode, productName: l.doc.header.productName, status: view(l).status });
+    }
+    return out;
+  });
+
   // To review: for QC the production-approved batches, for QA the QC-approved ones (TI-21), oldest decision first; for
   // QA also the batches still in production, which QA may terminate.
   app.get('/api/batches/to-review', { preHandler: requirePermission('truebatch_injectables.qc.approve', 'truebatch_injectables.qa.release') }, async (req) => {
@@ -471,6 +488,21 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
     if (!b) return reply.code(404).send({ error: 'not_found' });
     const r = await app.links.deviations.byBatch(b.batchNo);
     return { link: r.state, deviations: r.state === 'ok' ? r.value : [] };
+  });
+
+  // TI-10, pull don't type (owner, 17 Nov 2026): the batch that last used a room or line before this one, from this
+  // product's own records, for the line clearance's "previous product and batch" (one tap; typed only when unknown).
+  app.get<{ Params: { id: string }; Querystring: { item?: string } }>('/api/batches/:id/previous-use', anyUser, async (req, reply) => {
+    const id = parseId(req.params.id);
+    const item = String(req.query.item ?? '');
+    if (id === null || !item) return reply.code(404).send({ error: 'not_found' });
+    const [u] = await sql<{ batchNo: string; productCode: string | null; productName: string | null }[]>`
+      select b.batch_no as "batchNo", v.doc->'header'->>'productCode' as "productCode", v.doc->'header'->>'productName' as "productName"
+      from step_events e join batches b on b.id = e.batch_id join master_versions v on v.id = b.master_version_id
+      where e.batch_id <> ${id} and e.kind in ('value', 'corrected') and b.issued_at < (select issued_at from batches where id = ${id})
+        and exists (select 1 from jsonb_each(e.payload->'values') f where jsonb_typeof(f.value) = 'object' and f.value->>'itemId' = ${item})
+      order by e.at desc limit 1`;
+    return { previous: u ? { ...u, text: `${[u.productCode, u.productName].filter(Boolean).join(' · ')}, batch ${u.batchNo}` } : null };
   });
 
   // The lots of a material MMS has released and in date today, for the lot's pick list.

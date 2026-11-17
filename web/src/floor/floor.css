@@ -142,6 +142,9 @@
 .result .rv { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .result.ok .rv { color: var(--ok); } .result.bad .rv { color: var(--bad); }
 .result .shown { font-size: .84rem; color: var(--muted); line-height: 1.4; }
+.result .plain { font-size: .9rem; color: var(--text, inherit); margin-bottom: .25rem; }
+.result details.shown summary { cursor: pointer; color: var(--muted); font-size: .8rem; }
+.result details.shown[open] summary { margin-bottom: .2rem; }
 .result.big .rv { font-size: 2.2rem; }
 
 /* Action bar: stays at the bottom of the screen on a tablet */

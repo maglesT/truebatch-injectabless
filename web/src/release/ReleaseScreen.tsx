@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api, can, MEANING_LABEL, type Me } from '../api.js';
 import { SignDialog } from '../components/SignDialog.js';
 import {
-  blockOf, changed, go, headline, pdfLink, plainClock, plainError, stepOf, tone, useBlocks, valueText, words,
+  blockOf, changed, go, headline, pdfLink, plainClock, plainError, statusText, stepOf, tone, useBlocks, valueText, words,
   type BatchDetail, type Block, type FloorEvent, type Source, type TimerRow, type Value,
 } from '../api-floor.js';
 import { fieldLabel as labelOf, PROVIDER_NAME } from '../../../shared/engine/links.js';
@@ -105,8 +105,8 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
         <Kpi n={r.sentBack.length} label="Sent back by the checker" tone="warn" />
         <Kpi n={r.late.length} label="Late (timers ran over)" tone="bad" />
         <Kpi n={r.outOfLimits.length} label="Out of limits" tone="bad" />
-        <Kpi n={openDevs.length} label={`Open deviations (of ${r.deviations.length})`} tone="bad" />
-        <Kpi n={r.hand.length} label="Typed by hand (link off or down)" tone="warn" />
+        <Kpi n={openDevs.length} label={r.deviations.length ? `Open deviations (${r.deviations.length} in all)` : 'Open deviations'} tone="bad" />
+        <Kpi n={r.hand.length} label="Typed by hand, not pulled through a link" tone="warn" />
       </div>
       {r.deviationsLink === 'down' && <p className="notice warn">The Deviations link is down: the deviation statuses shown are TrueBatch's own (closed by hand).</p>}
 
@@ -176,7 +176,7 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
             <button className="big soft-bad" disabled={!rejectWhy.trim() || openDevs.length > 0} onClick={() => setSigning({ meaning: 'rejected', action: 'reject' })}>Sign: rejected</button>
           </div>
         </>) : <p className="notice">The batch waits for QA release: it needs the QA release permission.</p>)}
-        {!qcTurn && !qaTurn && !decided && <p className="notice">The batch is {d.batch.status}: production approves it before QC and QA.</p>}
+        {!qcTurn && !qaTurn && !decided && <p className="notice">The batch is {statusText(d.batch.status)}: production approves it before QC and QA.</p>}
       </section>
 
       {signing && (

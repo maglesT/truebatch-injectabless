@@ -181,7 +181,7 @@ function perBatch(mg: string | undefined, doc: MasterDoc): Outcome<object> {
 
 /** The pack facts a packing block's calculations read as "$pack.name" (shared/blocks/format.ts PACK_FACTS). */
 export function packFacts(p: Pack): Record<string, string> {
-  return Object.fromEntries(Object.entries({ unitsPerPack: `${p.unitsPerPack} units`, packsPerCarton: `${p.packsPerCarton} units`, shelfLifeMonths: String(p.shelfLifeMonths),
+  return Object.fromEntries(Object.entries({ unitsPerPack: `${p.unitsPerPack} units`, packsPerCarton: `${p.packsPerCarton} packs`, shelfLifeMonths: String(p.shelfLifeMonths),
     expiryRule: p.expiryRule, type: p.type, destination: p.destination, gtin: p.gtin, mrp: p.mrp }).filter(([, v]) => v !== undefined).map(([k, v]) => [`pack.${k}`, v!]));
 }
 
