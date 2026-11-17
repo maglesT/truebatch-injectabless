@@ -134,6 +134,19 @@ adding anything, look how TrueBatch Tablets does it and copy that.
   plungers in the aseptic stage) and seals before the seal check. `material_use_v1` (`db/migrations/0013`) lists each
   signed issue beside the weighings: issued less returned, in units (MMS counts them as nos), material code empty, so
   MMS matches it to its lot by lot number; the app counts the same against MMS's stock (`shared/engine/stock.ts`).
+- **Run 2 findings** (owner, 17 November 2026, G1 to G14; no new mechanism): `aseptic-ready` version 3 drops the typed
+  "glove integrity test passed" (the Logbook decides the glove test through the isolator or RABS field; the media fill
+  stays typed). `container-issue` version 2 names its container or closure (a material setting, as Packing's issue):
+  the master lists its containers and closures from master data (`containers`, on the Formula screen, as a packing
+  master's packing materials), so the floor offers MMS lots of that material and refuses another material's lot. What
+  is left is counted back in its own step (`container-return`, as Packing's printed reconciliation), never by
+  re-opening the signed issue; `material_use_v1` (`db/migrations/0015`) gives MMS issued less that count once it is
+  signed, with the material code. A machine stands in the room the stage's line clearance named when it stands in that
+  room's area (two lines share the area "Aseptic filling"). The release summary names the machines a step used with
+  their Logbook status at use. The designer offers "update to version N" for a step of an older block (settings of
+  the same names kept), asks before removing a step, moves steps by their key, and the changes view ignores a step's
+  new number and names the fields a newer block version records. The change control list offers those naming the
+  product (QMS's products or the code in the title; a pack's code no longer names its bulk).
 
 ## Platform
 - Runs on the Medhanta platform. Core provides people, sign-in, permissions, e-signature re-authentication and master

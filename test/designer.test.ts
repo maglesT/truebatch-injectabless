@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BLOCKS, findBlock } from '../shared/blocks/index.js';
+import { BLOCKS, findBlock, latestBlock } from '../shared/blocks/index.js';
 import { blocking, masterChecks } from '../shared/master/checks.js';
 import { masterSchema } from '../shared/master/schema.js';
 import { describeMaster, diffMasters, stepText } from '../web/src/designer/describe.js';
 import { dispensing, workedExample } from '../web/src/designer/example.js';
-import { answerDoc, earlierRefs, neededKind, qtyText, scaleDoc, stepFrom, unitsOf } from '../web/src/designer/model.js';
+import { answerDoc, earlierRefs, fieldChanges, neededKind, qtyText, scaleDoc, stepFrom, toVersion, unitsOf } from '../web/src/designer/model.js';
 import { sentence, sentenceText } from '../web/src/designer/sentences.js';
 import { stepTitle } from '../shared/engine/batch.js';
 import { defaultDispensingRooms, skeletonList, skeletonStages } from '../web/src/designer/skeletons.js';
@@ -95,17 +95,26 @@ describe('master designer', () => {
     // An aseptic starting master marks its filling stage aseptic and reads the EM plates in a stage of results that come later.
     const lyo = skeletonStages('lyo-aseptic', header('aseptic'));
     expect(lyo.filter((s) => s.aseptic).map((s) => s.steps.map((t) => t.block.id).join(' '))).toEqual([
-      'line-clearance aseptic-ready interventions em-filling transfer-in fill lyo-load lyo-cycle lyo-unload container-issue seal-check qa-sample unit-reconcile']);
+      'line-clearance aseptic-ready interventions em-filling transfer-in fill lyo-load lyo-cycle lyo-unload container-issue seal-check qa-sample container-return container-return container-return unit-reconcile']);
     // F19, F20 (owner, 17 Nov 2026): the latest set-up and seal check (the isolator or RABS, the capping machine, from the
     // Logbook); containers and closures issued by count from MMS lots: vials and stoppers with the containers, seals
     // before the seal check; a syringe's syringes and plungers in the aseptic stage.
-    const issues = (id: string) => skeletonStages(id, header('aseptic')).map((st) => st.steps.filter((t) => t.block.id === 'container-issue').map((t) => t.settings.what).join(' '));
-    expect(issues('lyo-aseptic')).toEqual(['', 'vials stoppers', 'seals', '', '']);
-    expect(issues('liquid-terminal')).toEqual(['', 'vials stoppers', 'seals', '', '']);
-    expect(issues('syringe-aseptic')).toEqual(['', 'syringes plungers', '', '']);
-    expect(lyo.flatMap((s) => s.steps).filter((t) => ['aseptic-ready', 'seal-check'].includes(t.block.id)).map((t) => t.block.version)).toEqual([2, 2]);
+    // Run 2 (G7, G9, G10): the set-up without the typed glove question (version 3); each issue names its material from
+    // master data, left for the author (the master check asks for it); what is left is counted back at the end of filling.
+    const named = (id: string, block: string) => skeletonStages(id, header('aseptic')).map((st) => st.steps.filter((t) => t.block.id === block).map((t) => t.name).join(', '));
+    expect(named('lyo-aseptic', 'container-issue')).toEqual(['', 'Issue the vials, Issue the stoppers', 'Issue the seals', '', '']);
+    expect(named('lyo-aseptic', 'container-return')).toEqual(['', '', 'Count back the vials, Count back the stoppers, Count back the seals', '', '']);
+    expect(named('liquid-terminal', 'container-issue')).toEqual(['', 'Issue the vials, Issue the stoppers', 'Issue the seals', '', '']);
+    expect(named('liquid-terminal', 'container-return')).toEqual(['', '', 'Count back the vials, Count back the stoppers, Count back the seals', '', '']);
+    expect(named('syringe-aseptic', 'container-issue')).toEqual(['', 'Issue the syringes, Issue the plungers', '', '']);
+    expect(named('syringe-aseptic', 'container-return')).toEqual(['', 'Count back the syringes, Count back the plungers', '', '']);
+    expect(lyo.flatMap((s) => s.steps).filter((t) => ['aseptic-ready', 'seal-check', 'container-issue'].includes(t.block.id)).map((t) => `${t.block.id} ${t.block.version}`))
+      .toEqual(['container-issue 2', 'container-issue 2', 'aseptic-ready 3', 'container-issue 2', 'seal-check 2']);
     expect(lyo[1]!.steps.find((t) => t.key === 'issue-vials')).toMatchObject({ name: 'Issue the vials', checker: true,
-      settings: { what: 'vials', expected: { header: 'units' }, enoughLimit: { low: '102.0', unit: '%' } } });
+      settings: { expected: { header: 'units' }, enoughLimit: { low: '102.0', unit: '%' } } });
+    expect(lyo[1]!.steps.find((t) => t.key === 'issue-vials')!.settings.material).toBeUndefined();
+    const doc = masterSchema.parse({ header: header('aseptic'), formula: [], stages: lyo });
+    expect(masterChecks(doc).filter((p) => p.message === 'Container or closure is not set').map((p) => p.path)).toHaveLength(6);
     expect(lyo.find((s) => s.startsAfter)).toMatchObject({ kind: 'preparation', startsAfter: 'filling/fill', roomTypes: [] });
     // The bulk yield on the batch mass by the density (engine change 1); the units from the header.
     expect(lyo[0]!.steps.at(-1)!.settings.theoretical).toEqual({ header: 'batchMass' });
@@ -192,6 +201,25 @@ describe('master designer', () => {
     const lines = diff.flatMap((s) => s.lines.filter((l) => l.change !== 'same').map((l) => `${s.title} ${l.key} ${l.change}`));
     expect(lines).toEqual(['Formula mcc changed', 'Stage 2: Granulation about changed', 'Stage 3: Compression yield removed']);
     expect(describeMaster(prev).map((s) => s.title)).toEqual(['Header', 'Formula', 'Stage 1: Binder solution', 'Stage 2: Granulation', 'Stage 3: Compression', 'Stage 4: Coating']);
+  });
+
+  it('run 2 G3: a step that only moved is not changed; a step moved to a newer block version says what it now records', () => {
+    const h = { productItemId: 'p', productCode: 'P', productName: 'Examplol injection', batchSize: '100', batchUnit: 'L' as const, densityGPerMl: '1.0',
+      fillVolumeMl: '2.0', fillExcessMl: '0.1', route: 'aseptic' as const };
+    const prev = skeletonStages('lyo-aseptic', h);
+    const doc = (stages: typeof prev) => masterSchema.parse({ header: h, formula: [], stages });
+    const before = doc(prev.map((s) => (s.key === 'filling' ? { ...s, steps: s.steps.map((t) => (t.block.id === 'aseptic-ready' ? { ...t, block: { id: 'aseptic-ready', version: 1 } } : t)) } : s)));
+    const after = doc(prev.map((s) => (s.key === 'components' ? { ...s, steps: [s.steps[0]!, s.steps[2]!, s.steps[1]!, ...s.steps.slice(3)] } : s)));
+    const changed = diffMasters(before, after).flatMap((s) => s.lines.filter((l) => l.change !== 'same').map((l) => [l.key, l.text.replace(/^.*Block version/, 'Block version')]));
+    expect(changed).toEqual([['aseptic-ready', 'Block version 1 → 3: now also records Isolator or RABS; no longer records Glove integrity test passed.']]);
+  });
+
+  it('run 2 G1: a step moved to the newer version of its block keeps the settings of the same names, its name and its flow', () => {
+    const v1 = { ...stepFrom(findBlock({ id: 'container-issue', version: 1 })!, []), name: 'Issue the seals', settings: { what: 'seals', expected: { header: 'units' as const }, enoughLimit: { low: '102.0', unit: '%' } } };
+    const v2 = toVersion(v1, latestBlock('container-issue')!);
+    expect(v2).toMatchObject({ name: 'Issue the seals', block: { id: 'container-issue', version: 2 }, settings: { expected: { header: 'units' }, enoughLimit: { low: '102.0', unit: '%' } } });
+    expect(v2.settings.what).toBeUndefined();
+    expect(fieldChanges(findBlock({ id: 'container-issue', version: 1 })!, latestBlock('container-issue')!)).toEqual({ added: [], removed: ['Count returned to stores at the end'] });
   });
 
   it('calculation checks: the author answers a warning; the answer is kept in the master and shown in the review and changes views', () => {

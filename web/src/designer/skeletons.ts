@@ -15,9 +15,13 @@ interface StagePlan { key: string; name: string; kind?: Stage['kind']; role: str
   aseptic?: boolean; startsAfter?: string; steps: StepPlan[] }
 
 const s = (block: string, key?: string, name?: string): StepPlan => ({ block, ...(key ? { key } : {}), ...(name ? { name } : {}) });
-// Containers and closures issued by count from an MMS lot (owner, 17 Nov 2026): at least the units expected and 2 % more.
+// Containers and closures issued by count from an MMS lot (owner, 17 Nov 2026): at least the units expected and 2 % more;
+// what is left is counted back at the end of the filling stage (run 2, G10). The author picks each one's material from
+// master data (the Formula screen's containers and closures): the master check asks for it until then.
 const issue = (what: string): StepPlan => ({ block: 'container-issue', key: `issue-${what}`, name: `Issue the ${what}`,
-  settings: () => ({ what, expected: { header: 'units' }, enoughLimit: { low: '102.0', unit: '%' } }) });
+  settings: () => ({ expected: { header: 'units' }, enoughLimit: { low: '102.0', unit: '%' } }) });
+const back = (what: string): StepPlan => ({ block: 'container-return', key: `back-${what}`, name: `Count back the ${what}` });
+const VIAL_PARTS = ['vials', 'stoppers', 'seals'];
 const yieldStep: StepPlan = { block: 'stage-yield', key: 'yield', settings: () => ({ theoretical: { header: 'batchMass' }, yieldLimit: { low: '97.0', high: '100.5', unit: '%' },
   accountabilityLimit: { low: '99.0', high: '100.5', unit: '%' } }) };
 
@@ -29,17 +33,17 @@ const compounding = (end: StepPlan[] = []): StagePlan => ({ key: 'compounding', 
 const components: StagePlan = { key: 'components', name: 'Containers and closures', kind: 'preparation', role: 'Washing operator', rooms: ['Vial washing', 'Depyrogenation', 'Component preparation', 'Sterilisation'],
   produces: ['clean, depyrogenated containers and sterile closures', 72],
   steps: [issue('vials'), issue('stoppers'), s('component-wash', 'wash-vials', 'Wash the vials'), s('depyrogenate'), s('sterilise', 'stoppers', 'Sterilise the stoppers')] };
-const asepticFill = (between: StepPlan[], o: { fill?: StepPlan[]; close?: StepPlan[]; uses?: string[] } = {}): StagePlan => ({
+const asepticFill = (between: StepPlan[], o: { fill?: StepPlan[]; close?: StepPlan[]; uses?: string[]; back?: string[] } = {}): StagePlan => ({
   key: 'filling', name: 'Aseptic filling', role: 'Aseptic operator', rooms: ['Aseptic filling', 'Lyophilisation', 'Capping'], aseptic: true, uses: o.uses ?? ['compounding', 'components'],
   // The interventions log and the clean-air checks open with the set-up and run beside the filling (what follows a fill
   // waits for the filling to finish).
   steps: [s('aseptic-ready'), s('interventions'), s('em-filling'), s('transfer-in'), ...(o.fill ?? [s('fill')]), ...between,
     // The samples are a QA hold: taken once the units are closed, so capping never waits for QA.
-    ...(o.close ?? [issue('seals'), s('seal-check')]), s('qa-sample', 'sterility', 'Sterility and endotoxin samples'), s('unit-reconcile')] });
+    ...(o.close ?? [issue('seals'), s('seal-check')]), s('qa-sample', 'sterility', 'Sterility and endotoxin samples'), ...(o.back ?? VIAL_PARTS).map(back), s('unit-reconcile')] });
 const resultsLater = (after: string): StagePlan => ({ key: 'results', name: 'Results later (EM plates, bioburden)', kind: 'preparation', role: 'QC microbiologist', rooms: [],
   startsAfter: after, steps: [s('incubated-results', 'plates', 'EM plates read')] });
-const terminal = (fillName: string, fill: StepPlan[], uses: string[]): StagePlan[] => [
-  { key: 'filling', name: fillName, role: 'Filling operator', rooms: ['Aseptic filling', 'Capping'], uses, steps: [s('filtration-clarifying'), ...fill, s('unit-reconcile')] },
+const terminal = (fillName: string, fill: StepPlan[], uses: string[], parts: string[] = []): StagePlan[] => [
+  { key: 'filling', name: fillName, role: 'Filling operator', rooms: ['Aseptic filling', 'Capping'], uses, steps: [s('filtration-clarifying'), ...fill, ...parts.map(back), s('unit-reconcile')] },
   { key: 'sterilisation', name: 'Terminal sterilisation', role: 'Sterilisation operator', rooms: ['Sterilisation'],
     steps: [s('terminal-sterilise'), s('qa-sample', 'sterility', 'Sterility and endotoxin samples (each load)'), s('unit-reconcile')] },
 ];
@@ -57,7 +61,7 @@ const SKELETONS: { id: string; route?: Route; name: string; text: string; stages
   {
     id: 'liquid-terminal', route: 'terminal', name: 'Liquid in vials or ampoules, terminally sterilised',
     text: 'Compounding, clarifying filtration, filling and closing, autoclave loads with the sterility samples, leak test and inspection.',
-    stages: [compounding(), components, ...terminal('Filling', [s('fill'), issue('seals'), s('seal-check')], ['compounding', 'components']), inspection([s('leak-test-100')])],
+    stages: [compounding(), components, ...terminal('Filling', [s('fill'), issue('seals'), s('seal-check')], ['compounding', 'components'], VIAL_PARTS), inspection([s('leak-test-100')])],
   },
   {
     id: 'bag-terminal', route: 'terminal', name: 'Bags or bottles (large volume), form-fill-seal, terminally sterilised',
@@ -77,7 +81,7 @@ const SKELETONS: { id: string; route?: Route; name: string; text: string; stages
   {
     id: 'syringe-aseptic', route: 'aseptic', name: 'Prefilled syringes or cartridges, aseptic',
     text: 'Compounding and sterile filtration, ready-to-use tubs into grade A, filling and plunger placement, the plunger check, inspection.',
-    stages: [compounding(filtrationSteps), asepticFill([s('plunger-check')], { fill: [issue('syringes'), issue('plungers'), s('rtu-tubs'), s('fill')], close: [], uses: ['compounding'] }),
+    stages: [compounding(filtrationSteps), asepticFill([s('plunger-check')], { fill: [issue('syringes'), issue('plungers'), s('rtu-tubs'), s('fill')], close: [], uses: ['compounding'], back: ['syringes', 'plungers'] }),
       resultsLater('filling/fill'), inspection([s('leak-test-100')])],
   },
   {

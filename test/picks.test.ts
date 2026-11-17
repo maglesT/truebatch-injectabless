@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { findBlock } from '../shared/blocks/index.js';
-import { dispensingRooms, emptyNote, machineRefusal, untypedNote } from '../shared/engine/picks.js';
+import { clearedRooms, dispensingRooms, emptyNote, machineRefusal, untypedNote } from '../shared/engine/picks.js';
+import { latestBlock } from '../shared/blocks/index.js';
 import { skeletonList, skeletonStages } from '../web/src/designer/skeletons.js';
 
 // The equipment and instrument types of the demo master data (owner's list, 15 Nov 2026) and of an injectables plant,
@@ -86,5 +87,30 @@ describe('machine pickers on the demo master-data types', () => {
     expect(emptyNote(stage, vessel, all, ROOMS)).toBe('No vessel or mixer can be used here: EQ-V-01 stands in RM-107, not in a room this stage allows (RM-103). '
       + '1 machine has no type in master data, so it is not offered. Engineering moves one into a room this stage allows, or adds one, in master data (the Logbook shows where each stands).');
     expect(emptyNote(stage, vessel, all.slice(1), ROOMS)).toBe('Master data has no active vessel or mixer. 1 machine has no type in master data, so it is not offered. Engineering adds it in master data.');
+  });
+
+  it('TI-11 run 2 G6: once the stage\'s line clearance names its room, a machine of that room\'s area stands in it (not the other line\'s room); other areas as before', () => {
+    // The demo: RM-207 (vials) and RM-208 (prefilled syringes) are both "Aseptic filling"; RM-210 is "Capping".
+    const rooms = [{ code: 'RM-207', area: 'Aseptic filling' }, { code: 'RM-208', area: 'Aseptic filling' }, { code: 'RM-210', area: 'Capping' }];
+    const stage = { ...stages[0]!, roomTypes: ['Aseptic filling', 'Lyophilisation', 'Capping'], machineTypes: [] };
+    const iso = { code: 'EQS-ISO-01', type: 'Isolator', room: 'RM-207' }, rabs = { code: 'EQS-RAB-01', type: 'RABS', room: 'RM-208' };
+    const vfm = { code: 'EQS-VFM-01', type: 'Vial filling machine', room: 'RM-207' }, sfm = { code: 'EQS-SFM-01', type: 'Syringe filling machine', room: 'RM-208' };
+    const cap = { code: 'EQS-CAP-01', type: 'Capping machine', room: 'RM-210' };
+    const isolator = latestBlock('aseptic-ready')!.fields.find((f) => f.name === 'isolator')!;
+    const filler = field('fill', 'machine'), capper = latestBlock('seal-check')!.fields.find((f) => f.name === 'capper')!;
+    // Before the line clearance: by the stage's areas only (both rooms of the area).
+    expect([iso, rabs].filter((m) => !machineRefusal(stage, isolator, m, rooms)).map((m) => m.code)).toEqual(['EQS-ISO-01', 'EQS-RAB-01']);
+    // The batch's line clearance of this stage recorded RM-207 (a room value is its own room); another stage's room counts not.
+    const room = { itemId: 'rm-207', code: 'RM-207', name: 'Aseptic filling room (vials)', version: 1, type: 'Aseptic filling', room: 'RM-207', area: 'Aseptic filling' };
+    const steps = [{ key: { stage: 2 }, values: { room, clean: 'yes' } }, { key: { stage: 2 }, values: { isolator: { itemId: 'x', code: 'EQS-ISO-01', type: 'Isolator', room: 'RM-207', area: 'Aseptic filling' } } },
+      { key: { stage: 1 }, values: { room: { ...room, itemId: 'rm-208', code: 'RM-208', room: 'RM-208' } } }];
+    const cleared = clearedRooms(steps, 2);
+    expect(cleared).toEqual([{ code: 'RM-207', area: 'Aseptic filling' }]);
+    expect([iso, rabs].filter((m) => !machineRefusal(stage, isolator, m, rooms, [], cleared)).map((m) => m.code)).toEqual(['EQS-ISO-01']);
+    expect(machineRefusal(stage, isolator, rabs, rooms, [], cleared)).toBe('EQS-RAB-01 stands in RM-208, not in RM-207, where this stage\'s line clearance was done');
+    // The same for every machine field: the syringe filler is not offered on the vial line; the capper in the Capping area still is.
+    expect([vfm, sfm].filter((m) => !machineRefusal(stage, filler, m, rooms, [], cleared)).map((m) => m.code)).toEqual(['EQS-VFM-01']);
+    expect(machineRefusal(stage, capper, cap, rooms, [], cleared)).toBeNull();
+    expect(emptyNote(stage, isolator, [rabs], rooms, [], cleared)).toMatch(/^No isolator or rabs can be used here: EQS-RAB-01 stands in RM-208, not in RM-207/);
   });
 });

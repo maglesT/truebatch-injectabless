@@ -25,8 +25,24 @@ export function roomRefusal(stage: Stage, r: PickRoom): string | null {
     : `${r.code} is not one of the rooms this stage allows (${stage.roomTypes.join(', ')})`;
 }
 
-/** Why a machine does not fit the field in this stage; null when it does. `dispensing`: the master's dispensing rooms. */
-export function machineRefusal(stage: Stage, f: BlockField, m: PickMachine, rooms: readonly PickRoom[], dispensing: readonly string[] = []): string | null {
+/**
+ * The rooms this batch recorded in a stage (its line clearance names the room it works in; run 2, G6): an area the
+ * stage allows may hold the rooms of two lines (the vial and the syringe filling rooms are both "Aseptic filling").
+ * `steps`: the batch's steps with their values.
+ */
+export function clearedRooms(steps: readonly { key: { stage: number }; values: Record<string, unknown> }[], stage: number): PickRoom[] {
+  // A recorded room is { itemId, code, room: its own code, area } (a machine's room is the room it stands in).
+  type Item = { itemId?: unknown; code?: unknown; room?: unknown; area?: unknown };
+  return steps.filter((v) => v.key.stage === stage).flatMap((v) => Object.values(v.values) as Item[])
+    .flatMap((x) => (x && typeof x === 'object' && x.itemId && typeof x.code === 'string' && x.room === x.code ? [{ code: x.code, area: typeof x.area === 'string' ? x.area : null }] : []));
+}
+
+/**
+ * Why a machine does not fit the field in this stage; null when it does. `dispensing`: the master's dispensing rooms.
+ * `cleared`: the rooms the batch recorded in this stage (clearedRooms): a machine standing in the area of one of them
+ * stands in one of them, not in another room of that area (another line's).
+ */
+export function machineRefusal(stage: Stage, f: BlockField, m: PickMachine, rooms: readonly PickRoom[], dispensing: readonly string[] = [], cleared: readonly PickRoom[] = []): string | null {
   const balance = isBalance(f);
   if (!balance && stage.machineTypes.length && !among(stage.machineTypes, m.type)) return `${m.code} is not one of the machine types this stage allows (${stage.machineTypes.join(', ')})`;
   const type = (m.type ?? '').toLowerCase();
@@ -37,6 +53,8 @@ export function machineRefusal(stage: Stage, f: BlockField, m: PickMachine, room
   if (!stage.roomTypes.length || (balance && among(dispensing, m.room))) return null;
   if (!room) return `${m.code} stands in no room in master data, so it is not in a room this stage allows (${stage.roomTypes.join(', ')})`;
   if (roomRefusal(stage, room)) return `${m.code} stands in ${room.code}, ${balance ? 'neither in a dispensing room of the master nor' : 'not'} in a room this stage allows (${stage.roomTypes.join(', ')})`;
+  const here = cleared.filter((r) => r.area && r.area === room.area);
+  if (here.length && !here.some((r) => r.code === room.code)) return `${m.code} stands in ${room.code}, not in ${here.map((r) => r.code).join(' or ')}, where this stage's line clearance was done`;
   return null;
 }
 
@@ -61,12 +79,12 @@ export function untypedNote(f: BlockField, machines: readonly (PickMachine & { a
  * field's type and where they stand (or that master data has none of that type), and the untyped ones in a few words.
  */
 export function emptyNote(stage: Stage, f: BlockField, machines: readonly (PickMachine & { active?: boolean })[], rooms: readonly (PickRoom & { active?: boolean })[],
-  dispensing: readonly string[] = []): string {
+  dispensing: readonly string[] = [], cleared: readonly PickRoom[] = []): string {
   const allowed = stage.roomTypes.length ? ` (${stage.roomTypes.join(', ')})` : '';
   if (f.kind === 'room') return `No room this stage allows${allowed} is active in master data. Engineering adds or activates it in master data.`;
   const what = f.label.toLowerCase();
   const ofType = machines.filter((m) => m.active !== false && (!f.types?.length || m.type?.trim()) && fitsType(f, m));
-  const why = ofType.map((m) => machineRefusal(stage, f, m, rooms, dispensing)).filter((x): x is string => !!x);
+  const why = ofType.map((m) => machineRefusal(stage, f, m, rooms, dispensing, cleared)).filter((x): x is string => !!x);
   const untyped = untypedNote(f, machines);
   const shown = why.length > 3 ? `${why.slice(0, 3).join('; ')}; and ${why.length - 3} more` : why.join('; ');
   return [

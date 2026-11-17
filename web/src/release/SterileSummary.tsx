@@ -7,6 +7,7 @@ import { blockOf, stepOf, tone, valueText, words, type BatchDetail, type Block, 
 const GROUPS: { title: string; ids: string[] }[] = [
   { title: 'Sterilisation and depyrogenation cycles', ids: ['terminal-sterilise', 'heat-treatment', 'irradiation', 'sterilise', 'depyrogenate', 'isolator-decon', 'lyo-cycle'] },
   { title: 'Sterile filtration and filter tests', ids: ['filter-test', 'filtration'] },
+  { title: 'Aseptic set-up (isolator or RABS)', ids: ['aseptic-ready'] },
   { title: 'Clean air and microbiology', ids: ['em-filling', 'incubated-results', 'room-status'] },
   { title: 'Interventions and stoppages', ids: ['interventions'] },
   { title: 'Container closure', ids: ['seal-check', 'leak-test-100', 'headspace-gas', 'plunger-check', 'chamber-seal'] },
@@ -27,9 +28,17 @@ export const shortTime = (t: string) => t.replace(/(\d+\.\d+)… (h|min)\b( roun
 export function summaryOf(s: StepRow, block: Block | undefined): { bad: boolean; said: string[] } {
   const checks = Object.entries(s.results).filter(([, r]) => r.ok && r.check);
   const bad = checks.some(([k, r]) => tone(r) === 'bad' && k !== s.notYet);
-  const said = checks.length ? checks.map(([k, r]) => `${block?.calcs.find((c) => c.name === k)?.label ?? k}: ${shortTime(words(r.ok ? (k === s.notYet ? notYetText(r.check!.shown) : r.check!.shown) : ''))}`)
-    : (block?.fields ?? []).filter((f) => s.values[f.name] !== undefined).slice(0, 4).map((f) => `${f.label}: ${valueText(s.values[f.name])}`);
-  return { bad, said };
+  // The machines the step used (the isolator or RABS, the capping machine …) with their Logbook status as the step
+  // recorded it at use (run 2, G8); nothing new is kept.
+  const machines = (block?.fields ?? []).filter((f) => f.kind === 'machine' && s.values[f.name] !== undefined).map((f) => {
+    const src = s.source?.[f.name];
+    return `${f.label}: ${valueText(s.values[f.name])}${!src ? '' : src.from === 'hand' ? ` (Logbook ${src.state === 'down' ? 'down' : 'not linked'} at use: its status answered by hand)` : ` (Logbook at use: ${src.shown})`}`;
+  });
+  return { bad, said: [...machines, ...said(s, block, checks)] };
+}
+function said(s: StepRow, block: Block | undefined, checks: [string, StepRow['results'][string]][]): string[] {
+  return checks.length ? checks.map(([k, r]) => `${block?.calcs.find((c) => c.name === k)?.label ?? k}: ${shortTime(words(r.ok ? (k === s.notYet ? notYetText(r.check!.shown) : r.check!.shown) : ''))}`)
+    : (block?.fields ?? []).filter((f) => f.kind !== 'machine' && s.values[f.name] !== undefined).slice(0, 4).map((f) => `${f.label}: ${valueText(s.values[f.name])}`);
 }
 
 export function SterileSummary({ d, blocks }: { d: BatchDetail; blocks: Block[] }) {
@@ -40,7 +49,7 @@ export function SterileSummary({ d, blocks }: { d: BatchDetail; blocks: Block[] 
   if (!groups.length) return null;
   return (
     <section className="dash-panel" aria-label="Sterility assurance">
-      <div className="panel-head"><h2>Sterility assurance</h2><span className="muted">every cycle, filter test, clean-air result, intervention, closure check, inspection and reconciliation of the batch</span></div>
+      <div className="panel-head"><h2>Sterility assurance</h2><span className="muted">every cycle, the isolator or RABS, filter test, clean-air result, intervention, closure check and capping machine, inspection and reconciliation of the batch</span></div>
       {groups.map((g) => {
         const rows = d.steps.filter((s) => g.ids.includes(idOf(s)) && s.events.length > 0);
         return (

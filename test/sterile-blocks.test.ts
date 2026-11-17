@@ -95,12 +95,17 @@ describe('the sterile blocks of the injectables library', () => {
 
   it('F19 the set-up and the seal check record their machine from the Logbook in a new version; the library offers only the latest', () => {
     expect(latestBlock('aseptic-ready')!.fields[0]).toEqual({ name: 'isolator', label: 'Isolator or RABS', kind: 'machine', types: ['isolator', 'rabs'] });
+    // Run 2, G7: version 3 has no typed glove question (the Logbook decides the glove test through the isolator field).
+    expect(latestBlock('aseptic-ready')!.version).toBe(3);
+    expect(latestBlock('aseptic-ready')!.fields.map((f) => f.name)).toEqual(['isolator', 'people', 'apsReport', 'apsDue', 'itemsUseBy', 'airflow', 'assembly']);
+    expect(findBlock({ id: 'aseptic-ready', version: 2 })!.fields.some((f) => f.name === 'gloves')).toBe(true);
     expect(latestBlock('seal-check')!.fields[0]).toEqual({ name: 'capper', label: 'Capping machine', kind: 'machine', types: ['capping', 'crimper'] });
     // Version 1 stays as it was, for the batches recorded with it.
     expect(findBlock({ id: 'aseptic-ready', version: 1 })!.fields.some((f) => f.kind === 'machine')).toBe(false);
     expect(findBlock({ id: 'seal-check', version: 1 })!.fields.some((f) => f.kind === 'machine')).toBe(false);
     expect(LIBRARY.filter((b) => ['aseptic-ready', 'seal-check', 'container-issue'].includes(b.id)).map((b) => `${b.id} ${b.version}`))
-      .toEqual(['seal-check 2', 'aseptic-ready 2', 'container-issue 1']);
+      .toEqual(['seal-check 2', 'aseptic-ready 3', 'container-issue 2']);
+    expect(LIBRARY.some((b) => b.id === 'container-return')).toBe(true);
   });
 
   it('TI-08 a sterilised load past its use-by date during the step needs a deviation note (engine change 6)', () => {

@@ -3,7 +3,7 @@
 import { findBlock } from '../../../shared/blocks/index.js';
 import { masterChecks } from '../../../shared/master/checks.js';
 import { batchText, HEADER_WORDS } from '../../../shared/engine/values.js';
-import { grouped, placeLabel } from './model.js';
+import { fieldChanges, grouped, placeLabel } from './model.js';
 import { materialLines, type FormulaLine, type MasterDoc, type Stage, type Step } from '../../../shared/master/schema.js';
 import { unitName } from '../../../shared/engine/stock.js';
 import { stepTitle } from '../../../shared/engine/batch.js';
@@ -97,6 +97,9 @@ export function describeMaster(doc: MasterDoc, units?: Units): Section[] {
   ];
   return [
     ...top,
+    // The containers and closures the issue steps name (run 2, G9), only when there are some.
+    ...(doc.containers?.length ? [{ key: 'containers', title: 'Containers and closures', lines: doc.containers.map((c) => ({ key: c.key,
+      text: `${c.name} (${c.code}), issued by count from its MMS lots.` })) }] : []),
     // Engine change 5: the time limits (TI-17), only when there are some.
     ...(doc.timeLimits?.length ? [{ key: 'time-limits', title: 'Time limits', lines: doc.timeLimits.map((l) => ({ key: l.key,
       text: `${l.name}: at most ${l.hours} h from the ${l.from.at} of ${l.from.step.replace('/', ' › ')} to the ${l.to.at} of ${l.to.step.replace('/', ' › ')}; an overrun needs a deviation note.` })) }] : []),
@@ -115,15 +118,28 @@ export type Change = 'same' | 'added' | 'changed' | 'removed';
 export interface DiffLine extends Line { change: Change; was?: string }
 export interface DiffSection { key: string; title: string; change: Change; lines: DiffLine[] }
 
-/** The changes from the previous version, line by line (by key; a step that moved shows its new number). */
+/**
+ * The changes from the previous version, line by line (by key; a step that moved shows its new number). A step whose
+ * only change is its number is not changed (run 2, G3); a step moved to a newer version of its block says what it now
+ * records and no longer records, which its sentence does not show.
+ */
 export function diffMasters(prev: MasterDoc, next: MasterDoc, units?: Units): DiffSection[] {
   const before = new Map(describeMaster(prev, units).map((s) => [s.key, s]));
   const after = describeMaster(next, units);
+  const unnumbered = (t: string) => t.replace(/^\d+\. /, '');
+  const stepOf = (d: MasterDoc, section: string, key: string) => d.stages.find((s) => `stage:${s.key}` === section)?.steps.find((t) => t.key === key);
   const out: DiffSection[] = after.map((s) => {
     const old = before.get(s.key);
     const lines: DiffLine[] = s.lines.map((l) => {
       const was = old?.lines.find((x) => x.key === l.key)?.text;
-      return { ...l, change: was === undefined ? 'added' : was === l.text ? 'same' : 'changed', ...(was !== undefined && was !== l.text ? { was } : {}) };
+      const a = stepOf(prev, s.key, l.key);
+      const b = stepOf(next, s.key, l.key);
+      const fa = a && findBlock(a.block);
+      const fb = b && findBlock(b.block);
+      const version = fa && fb && fa.id === fb.id && fa.version !== fb.version ? fieldChanges(fa, fb) : undefined;
+      const text = version ? `${l.text} Block version ${fa!.version} → ${fb!.version}${version.added.length ? `: now also records ${version.added.join(', ')}` : ''}${version.removed.length ? `${version.added.length ? ';' : ':'} no longer records ${version.removed.join(', ')}` : ''}.` : l.text;
+      const same = was !== undefined && !version && unnumbered(was) === unnumbered(l.text);
+      return { ...l, text, change: was === undefined ? 'added' : same ? 'same' : 'changed', ...(was !== undefined && !same ? { was } : {}) };
     });
     for (const l of old?.lines ?? []) if (!s.lines.some((x) => x.key === l.key)) lines.push({ ...l, change: 'removed' });
     return { key: s.key, title: s.title, change: !old ? 'added' : lines.some((l) => l.change !== 'same') ? 'changed' : 'same', lines };

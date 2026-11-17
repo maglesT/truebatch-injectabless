@@ -20,3 +20,25 @@ export const containerIssue: Block = {
     { name: 'enough', label: 'Count issued against the units expected', template: 'T3', args: { actual: '$issued', theoretical: '$expected', limit: '$enoughLimit?' } },
   ],
 };
+
+// Version 2 (owner, 17 Nov 2026, run 2 findings G9 and G10), as Packing's issue of a packing material: the step names
+// its container or closure from the master's materials (master data), so the lot is picked from MMS lots of that
+// material and another material's lot is refused; what is left at the end is counted back in its own step
+// (container-return), as Packing's reconciliation does, so the signed issue is never re-opened. Version 1 stays for
+// the recorded batches.
+export const containerIssue2: Block = {
+  ...containerIssue, version: 2, title: 'Issue {material}',
+  instruction: 'Issue the container or closure shown from a released lot of it and count them. What is left at the end is counted back in its own step.',
+  fields: containerIssue.fields.filter((f) => f.name !== 'returned'),
+  settings: [{ name: 'material', label: 'Container or closure', kind: 'material' }, ...containerIssue.settings.filter((s) => s.name !== 'what')],
+};
+
+// The count of a container or closure returned to stores unused at the end (G10), as Packing's reconciliation records
+// what goes back: material_use_v1 gives MMS the count issued less this count, once this step is signed done.
+export const containerReturn: Block = {
+  id: 'container-return', version: 1, name: 'Count back containers or closures', checker: true, title: 'Count back {material}',
+  instruction: 'At the end, count the containers or closures of this material left unused and send them back to stores. Give 0 if none are left.',
+  fields: [{ name: 'returned', label: 'Count returned to stores', kind: 'number', unit: 'units' }],
+  settings: [{ name: 'material', label: 'Container or closure', kind: 'material' }],
+  calcs: [],
+};

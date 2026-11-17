@@ -2,13 +2,13 @@
 // sentences whose inputs are picked from lists (only compatible kinds offered), a live worked example, signatures,
 // critical, the flow, and "More options" for the rare settings.
 import { useEffect, useState } from 'react';
-import { findBlock, type Block } from '../../../shared/blocks/index.js';
+import { findBlock, latestBlock, type Block } from '../../../shared/blocks/index.js';
 import { stepTitle } from '../../../shared/engine/batch.js';
 import type { Stored, Value } from '../../../shared/engine/index.js';
 import type { Kind } from '../../../shared/templates/index.js';
 import { HEADER_VALUES, materialLines, type Limit, type MasterDoc, type SettingValue, type Step } from '../../../shared/master/schema.js';
 import { usedFields, verdictless, workedExample } from './example.js';
-import { earlierRefs, HEADER_LABEL, kindOfUnit, neededKind, unitLabel, unitsOf } from './model.js';
+import { earlierRefs, fieldChanges, HEADER_LABEL, kindOfUnit, neededKind, toVersion, unitLabel, unitsOf } from './model.js';
 import { lower, sentence, slotsOf, type Part } from './sentences.js';
 import { Decimal } from './ui.js';
 
@@ -19,6 +19,7 @@ export function StepSettings({ doc, si, ti, onChange }: { doc: MasterDoc; si: nu
   const step = doc.stages[si]!.steps[ti]!;
   const block = findBlock(step.block);
   if (!block) return <p className="error">No block {step.block.id} version {step.block.version} in the library.</p>;
+  const newer = latestBlock(step.block.id);
   // An optional step field: set, or left out when undefined.
   const opt = <K extends 'everyMinutesLater' | 'onlyIf' | 'orderAfter'>(k: K, v: Step[K] | undefined) => {
     const next: Step = { ...step, [k]: v };
@@ -38,6 +39,12 @@ export function StepSettings({ doc, si, ti, onChange }: { doc: MasterDoc; si: nu
   return (
     <div className="step-settings">
       <h2>{block.name}</h2>
+      {newer && newer.version > block.version && (() => {
+        const c = fieldChanges(block, newer);
+        return <p className="notice small" role="status">A newer version of this block is available (version {newer.version}
+          {c.added.length ? `: it also records ${c.added.join(', ')}` : ''}{c.removed.length ? `${c.added.length ? ';' : ':'} it no longer records ${c.removed.join(', ')}` : ''}).{' '}
+          <button type="button" className="link dark" onClick={() => onChange(toVersion(step, newer))}>Update to version {newer.version}</button> (the settings of the same names are kept)</p>;
+      })()}
       <label>Name of the step (as people read it)<input value={step.name ?? ''} placeholder={stepTitle(doc, { ...step, name: undefined })}
         onChange={(e) => { const { name: _, ...rest } = step; onChange(e.target.value ? { ...rest, name: e.target.value } : rest); }} /></label>
       <label>Instruction to the operator
@@ -147,8 +154,12 @@ function Slot({ doc, si, ti, block, settings, name, onChange }: {
     return <input className={cls} aria-label={s.label} value={typeof v === 'string' ? v : ''} onChange={(e) => onChange(e.target.value || undefined)} />;
   }
   if (s.kind === 'material') {
-    return <select className={cls} aria-label={s.label} value={typeof v === 'object' && 'formula' in v ? v.formula : ''} onChange={(e) => onChange(e.target.value ? { formula: e.target.value } : undefined)}>
-      <option value="">(choose a material)</option>{materialLines(doc).map((l) => <option key={l.key} value={l.key}>{l.code} {l.name}</option>)}</select>;
+    // A container issue (or count back) names one of the master's containers and closures; other steps a formula line.
+    const container = block.id.startsWith('container-');
+    const lines = container ? doc.containers ?? [] : materialLines(doc).filter((l) => !doc.containers?.some((c) => c.key === l.key));
+    return <span className="loose-material"><select className={cls} aria-label={s.label} value={typeof v === 'object' && 'formula' in v ? v.formula : ''} onChange={(e) => onChange(e.target.value ? { formula: e.target.value } : undefined)}>
+      <option value="">(choose a material)</option>{lines.map((l) => <option key={l.key} value={l.key}>{l.code} {l.name}</option>)}</select>
+      {container && !lines.length && <span className="muted small"> Add the containers and closures from master data on the Formula screen first.</span>}</span>;
   }
   if (s.kind === 'limit') {
     const field = block.fields.find((f) => f.kind === 'number' && f.unit && !f.unit.startsWith('$') && kindOfUnit(f.unit) === kind);

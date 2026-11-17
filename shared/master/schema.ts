@@ -202,6 +202,11 @@ export const packSchema = z.object({
   materials: z.array(packMaterialSchema).max(50),
 }).strict();
 
+// The containers and closures an injectables master issues by count (vials, stoppers, seals, syringes ...; owner,
+// 17 Nov 2026, run 2 finding G9), picked from master data as a packing master picks its packing materials. A
+// container issue step names one ({ formula: key }), so its lot is picked from MMS lots of that material.
+export const containerSchema = z.object({ key: keySchema, materialItemId: z.string().min(1).max(100), code: text(), name: text() }).strict();
+
 export const masterSchema = z.object({
   header: headerSchema,
   formula: z.array(lineSchema).max(100),
@@ -209,6 +214,7 @@ export const masterSchema = z.object({
   answers: z.record(z.string().max(120), answerSchema).optional(),
   timeLimits: z.array(timeLimitSchema).max(50).optional(),
   pack: packSchema.optional(),
+  containers: z.array(containerSchema).max(30).optional(),
 }).strict();
 
 export type MasterDoc = z.infer<typeof masterSchema>;
@@ -221,9 +227,10 @@ export type Answer = z.infer<typeof answerSchema>;
 export type TimeLimit = z.infer<typeof timeLimitSchema>;
 export type Pack = z.infer<typeof packSchema>;
 export type PackMaterial = z.infer<typeof packMaterialSchema>;
+export type Container = z.infer<typeof containerSchema>;
 
-/** Every material a step may name: the formula lines, or a packing master's packing materials. */
-export const materialLines = (doc: MasterDoc): (FormulaLine | PackMaterial)[] => [...doc.formula, ...(doc.pack?.materials ?? [])];
+/** Every material a step may name: the formula lines and the containers and closures, or a packing master's packing materials. */
+export const materialLines = (doc: MasterDoc): (FormulaLine | PackMaterial | Container)[] => [...doc.formula, ...(doc.pack?.materials ?? []), ...(doc.containers ?? [])];
 
 export const MASTER_STATES = ['draft', 'in_review', 'approved', 'effective', 'retired'] as const;
 export type MasterState = (typeof MASTER_STATES)[number];

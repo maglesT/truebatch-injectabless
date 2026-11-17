@@ -47,7 +47,7 @@ const KIND_LABEL: Record<Stage['kind'], string> = { normal: 'Stage', preparation
 const pickable = (onPick: () => void) => ({ role: 'button', tabIndex: 0, onClick: onPick, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(); } } });
 
 export function Process({ doc, onChange, md, place, onPlace, editable }: {
-  doc: MasterDoc; onChange: (d: MasterDoc) => void; md: MasterData; place: Place; onPlace: (p: Place) => void; editable: boolean;
+  doc: MasterDoc; onChange: (d: MasterDoc | ((d: MasterDoc) => MasterDoc)) => void; md: MasterData; place: Place; onPlace: (p: Place) => void; editable: boolean;
 }) {
   const [library, setLibrary] = useState(false);
   const [q, setQ] = useState('');
@@ -76,6 +76,22 @@ export function Process({ doc, onChange, md, place, onPlace, editable }: {
   // A stage with steps is removed after the app's own question (never the browser's confirm box).
   const [removing, setRemoving] = useState<number | null>(null);
   const removeStage = (i: number) => { setStages(doc.stages.filter((_, j) => j !== i)); select(Math.max(0, i - 1)); setRemoving(null); };
+  // A step is moved by its key in the latest document, never by a row number read before the list was drawn again (run 2, G2).
+  const moveStep = (key: string, by: -1 | 1) => {
+    let to: number | undefined;
+    onChange((d) => {
+      const steps = d.stages[si]?.steps ?? [];
+      const j = steps.findIndex((x) => x.key === key);
+      if (j < 0 || j + by < 0 || j + by >= steps.length) return d;
+      to = j + by;
+      return { ...d, stages: d.stages.map((x, i) => (i === si ? { ...x, steps: move(steps, j, by) } : x)) };
+    });
+    if (to !== undefined) select(si, to);
+  };
+  // A step is removed after the same question as a stage (run 2, G1).
+  const [removingStep, setRemovingStep] = useState<string | null>(null);
+  const stepToRemove = stage?.steps.find((t) => t.key === removingStep);
+  const removeStep = (key: string) => { onChange((d) => ({ ...d, stages: d.stages.map((x, i) => (i === si ? { ...x, steps: x.steps.filter((t) => t.key !== key) } : x)) })); select(si); setRemovingStep(null); };
 
   return (<>
     <div className="process">
@@ -105,8 +121,8 @@ export function Process({ doc, onChange, md, place, onPlace, editable }: {
                 return (
                   <li key={t.key} className={j === ti ? 'on' : ''}>
                     <span className="ol-main" {...pickable(() => select(si, j))} aria-current={j === ti}><b>{j + 1}. {b ? stepTitle(doc, t) : t.block.id}</b><small>{[t.checker && 'checked', t.critical && 'critical', FLOW_NOTE[t.flow.kind]].filter(Boolean).join(' · ')}</small></span>
-                    {editable && <Order index={j} count={stage.steps.length} what={stepTitle(doc, t)} onMove={(by) => { setSteps(move(stage.steps, j, by)); select(si, j + by); }}
-                      onRemove={() => { setSteps(stage.steps.filter((_, k) => k !== j)); select(si); }} />}
+                    {editable && <Order index={j} count={stage.steps.length} what={stepTitle(doc, t)} onMove={(by) => moveStep(t.key, by)}
+                      onRemove={() => setRemovingStep(t.key)} />}
                   </li>
                 );
               })}
@@ -135,6 +151,15 @@ export function Process({ doc, onChange, md, place, onPlace, editable }: {
             <h2>Remove {doc.stages[removing]!.name}?</h2>
             <p>The stage and its {doc.stages[removing]!.steps.length} steps are removed from this draft.</p>
             <div className="actions"><button type="button" onClick={() => setRemoving(null)}>Cancel</button><button className="primary" type="submit">Remove the stage</button></div>
+          </form>
+        </div>
+      )}
+      {stepToRemove && (
+        <div className="overlay" role="dialog" aria-modal="true" aria-label="Remove a step">
+          <form className="card dialog" onSubmit={(e: FormEvent) => { e.preventDefault(); removeStep(stepToRemove.key); }}>
+            <h2>Remove {stepTitle(doc, stepToRemove)}?</h2>
+            <p>The step and its settings are removed from this draft.</p>
+            <div className="actions"><button type="button" onClick={() => setRemovingStep(null)}>Cancel</button><button className="primary" type="submit">Remove the step</button></div>
           </form>
         </div>
       )}

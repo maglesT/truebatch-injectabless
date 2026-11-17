@@ -5,7 +5,7 @@ import { useState } from 'react';
 import type { MasterData, MasterRow } from '../api-designer.js';
 import type { Problem } from '../../../shared/master/checks.js';
 import { lineQuantity } from '../../../shared/engine/index.js';
-import type { FormulaLine, MasterDoc } from '../../../shared/master/schema.js';
+import { materialLines, type Container, type FormulaLine, type MasterDoc } from '../../../shared/master/schema.js';
 import { AnswerBox, type OnAnswer } from './CheckPanel.js';
 import { move, newKey, qtyText } from './model.js';
 import { Decimal, Order, Picker } from './ui.js';
@@ -175,6 +175,37 @@ function AdjustPanel({ doc, line, onChange, problems, onAnswer }: { doc: MasterD
         </div>
       </fieldset>
       {problems.map((p, i) => <div key={i} className={p.level === 'error' ? 'error' : 'notice'}>{p.level === 'error' ? '⛔' : '⚠️'} {p.message}{p.question && <AnswerBox key={p.question.key} p={p} onAnswer={onAnswer} />}</div>)}
+    </div>
+  );
+}
+
+/**
+ * The containers and closures the master issues by count (run 2, G9), picked from master data as a packing master picks
+ * its packing materials: a container issue step (and its count back) names one, so the floor offers MMS lots of it.
+ */
+export function Containers({ doc, md, onChange }: { doc: MasterDoc; md: MasterData; onChange: (d: MasterDoc) => void }) {
+  const [adding, setAdding] = useState(false);
+  const list = doc.containers ?? [];
+  const put = (containers: Container[]) => onChange(containers.length ? { ...doc, containers } : (({ containers: _, ...d }) => d)(doc));
+  const used = (key: string) => doc.stages.some((s) => s.steps.some((t) => Object.values(t.settings).some((v) => typeof v === 'object' && 'formula' in v && v.formula === key)));
+  return (
+    <div className="card">
+      <div className="d-section-head"><h2>Containers and closures</h2><span className="muted small">Vials, stoppers, seals, syringes …: each issue step names one, and its lot is picked from MMS lots of it.</span></div>
+      <table className="plain-table">
+        <tbody>{list.map((c, i) => (
+          <tr key={c.key}><td><b>{c.code}</b> {c.name}</td><td className="muted small">{used(c.key) ? 'named by a step' : 'not named by a step yet'}</td>
+            <td><Order index={i} count={list.length} what={c.name} onMove={(by) => put(move(list, i, by))} onRemove={() => put(list.filter((_, j) => j !== i))} /></td></tr>))}
+        </tbody>
+      </table>
+      {!list.length && <p className="muted small">None yet. Add each container and closure the issue steps name.</p>}
+      {adding ? (
+        <div className="add-box">
+          <Picker label="Container or closure" items={md.materials.map((m) => ({ id: m.itemId, code: m.code, name: m.name, note: m.category ?? undefined,
+            off: !m.active ? 'inactive' : list.some((c) => c.materialItemId === m.itemId) ? 'already added' : undefined }))}
+            onPick={(m) => { put([...list, { key: newKey(m.code, materialLines(doc).map((l) => l.key)), materialItemId: m.id, code: m.code, name: m.name }]); setAdding(false); }} />
+          <div className="actions"><button type="button" onClick={() => setAdding(false)}>Close</button></div>
+        </div>
+      ) : <div className="row"><button type="button" onClick={() => setAdding(true)}>+ Add a container or closure</button></div>}
     </div>
   );
 }

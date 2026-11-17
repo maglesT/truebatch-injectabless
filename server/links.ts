@@ -61,13 +61,16 @@ export interface ChangeRead { number: string; status: string; title: string | nu
 type CcRow = { number: string; status: string; title: string | null; products: string | null; qa_approved_at: string | null };
 const cc = (r: CcRow): ChangeRead => ({ number: r.number, status: r.status, title: r.title, products: r.products, qaApprovedAt: r.qa_approved_at });
 export const approvedChange = (c: ChangeRead) => c.qaApprovedAt !== null && CHANGE_STEPS.includes(c.status);
-const word = (x: string) => new RegExp(`(^|[^a-z0-9])${x.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^a-z0-9])`);
+// A code or name as a whole word: "FG-INJ-EXF25" is not named by "FG-INJ-EXF25-C5", another product's code (run 2, G14).
+const word = (x: string) => new RegExp(`(^|[^a-z0-9-])${x.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^a-z0-9-])`);
 /** Whether a change control's products name this product, by its code or its name (case-insensitive); 'none' when it names no product. */
 export function namesProduct(c: ChangeRead, product: { productCode: string; productName: string }): 'yes' | 'no' | 'none' {
   const p = c.products?.trim().toLowerCase();
   if (!p) return 'none';
   return [product.productCode, product.productName].some((x) => x.trim() && word(x.trim()).test(p)) ? 'yes' : 'no';
 }
+/** Whether a change control's title names this product's code (a whole word). */
+export const titleNames = (c: ChangeRead, productCode: string) => !!productCode.trim() && word(productCode.trim()).test(c.title?.toLowerCase() ?? '');
 export const qmsClient = (l: Link) => ({
   change: (number: string) => l.read(async (q, v) => {
     const [r] = await q<CcRow[]>`select number, status, title, products, qa_approved_at::text from ${v('change_v1')} where number = ${number} limit 1`;

@@ -1,6 +1,6 @@
 /**
  * What a step takes from a material lot, as the product publishes it to MMS in material_use_v1 (db/migrations/0011 to
- * 0013, packing/migrations/0104 and 0105: less what a terminated batch gave back), and that quantity in the lot's unit
+ * 0015, packing/migrations/0104 and 0105: less what a terminated batch gave back), and that quantity in the lot's unit
  * as MMS counts it. MMS shows a lot's available stock as its own balance less what the TrueBatch products used (MMS
  * D-57 to D-59); a lot is not used beyond it while MMS answers.
  */
@@ -18,33 +18,31 @@ const material = (st: Step) => { const m = st.settings.material; return typeof m
 const done = (v: StepView) => v.events.some((e) => e.kind === 'done');
 
 /**
- * The quantity a step takes from its lot: the net weight of a weighing (when worked out), the count of containers or
- * closures issued less the count returned, or the quantity of a packing
- * material issued less what its reconciliation returned to stores uncoded, once that reconciliation is signed done
- * (destroyed and batch-coded material is used, not returned). `steps`: the batch's steps, for the reconciliation.
+ * The quantity a step takes from its lot: the net weight of a weighing (when worked out); or the count or quantity
+ * issued less what went back to stores unused: of containers or closures, their count back (container-return, of the
+ * same material, once signed done; version 1 of the issue: its own "returned at the end"), never below 0; of a packing
+ * material, what its reconciliation returned to stores uncoded, once that reconciliation is signed done (destroyed and
+ * batch-coded material is used, not returned). `steps`: the batch's steps, for the step that counts back.
  */
 export function usedQuantity(doc: MasterDoc, st: Step, values: Record<string, Value>, results: Record<string, Stored>, steps: readonly StepView[]): Q | null {
   if (st.block.id === 'weigh' || st.block.id === 'lubricate') {
     const net = results.net;
     return net?.ok ? { value: net.value, unit: net.unit } : null;
   }
-  if (st.block.id === 'container-issue') {
-    // Containers or closures: the count issued less the count returned unused at the end, never below 0.
-    const issued = values.issued;
-    const back = values.returned;
-    if (!isQ(issued)) return null;
-    return isQ(back) && back.unit === issued.unit ? { value: Dec.max(0, new Dec(issued.value).minus(back.value)).toString(), unit: issued.unit } : issued;
-  }
-  if (st.block.id !== 'pack-material-issue') return null;
+  const back = BACK[st.block.id];
   const issued = values.issued;
-  if (!isQ(issued)) return null;
-  const rec = steps.find((v) => {
+  if (!back || !isQ(issued)) return null;
+  const rec = st.block.id === 'container-issue' && st.block.version === 1 ? undefined : steps.find((v) => {
     const r = doc.stages[v.key.stage]?.steps[v.key.step];
-    return r?.block.id === 'printed-reconciliation' && material(r) === material(st) && done(v);
+    return r?.block.id === back && material(r) === material(st) && done(v);
   });
-  const returned = rec?.values.returned;
-  return isQ(returned) && returned.unit === issued.unit ? { value: new Dec(issued.value).minus(returned.value).toString(), unit: issued.unit } : issued;
+  const returned = st.block.id === 'container-issue' && st.block.version === 1 ? values.returned : rec?.values.returned;
+  if (!isQ(returned) || returned.unit !== issued.unit) return issued;
+  const left = new Dec(issued.value).minus(returned.value);
+  return { value: (st.block.id === 'container-issue' ? Dec.max(0, left) : left).toString(), unit: issued.unit };
 }
+// The step that counts back what an issue step issued (its field "returned").
+const BACK: Record<string, string> = { 'container-issue': 'container-return', 'pack-material-issue': 'printed-reconciliation' };
 
 // The count names material_use_v1 publishes a count in when master data names one (db/migrations/0011).
 const COUNT = ['nos', 'no', 'nos.', 'no.', 'units', 'unit', 'pcs', 'pc', 'pieces', 'each', 'ea', 'numbers'];

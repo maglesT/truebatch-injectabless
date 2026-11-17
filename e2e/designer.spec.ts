@@ -55,8 +55,25 @@ test('TI-02 build a master from a skeleton, fix a master-check problem, then che
   await author.getByRole('button', { name: 'Process', exact: true }).click();
   await expect(author.locator('.steps-col .olist li').first()).toContainText('Line clearance');
   // Remove and move are there without selecting the step first.
+  // A step is removed after the app's own question, as a stage (run 2, G1).
   await author.getByRole('button', { name: 'Remove Mix for a time' }).click();
+  const remove = author.getByRole('dialog', { name: 'Remove a step' });
+  await expect(remove).toContainText('Remove Mix for a time?');
+  await remove.getByRole('button', { name: 'Cancel' }).click();
+  await expect(author.locator('.steps-col .olist li')).toHaveCount(6);
+  await author.getByRole('button', { name: 'Remove Mix for a time' }).click();
+  await remove.getByRole('button', { name: 'Remove the step' }).click();
   await expect(author.locator('.steps-col .olist li')).toHaveCount(5);
+  // Two quick moves move the same step twice (by its key, not a stale row number; run 2, G2).
+  const titles = () => author.locator('.steps-col .olist li .ol-main b').allTextContents();
+  const before = await titles();
+  const last = before.at(-1)!.replace(/^\d+\. /, '');
+  await author.getByRole('button', { name: `Move ${last} up` }).click();
+  await author.getByRole('button', { name: `Move ${last} up` }).click();
+  await expect.poll(async () => (await titles())[2]).toBe(`3. ${last}`);
+  await author.getByRole('button', { name: `Move ${last} down` }).click();
+  await author.getByRole('button', { name: `Move ${last} down` }).click();
+  await expect.poll(titles).toEqual(before);
   // The stage yield: its theoretical quantity, used in two sentences, is one input; More options opens per step.
   await author.locator('.steps-col').getByRole('button', { name: /5\. Stage yield/ }).click();
   await expect(author.locator('.settings-col').getByLabel('Theoretical quantity', { exact: true })).toHaveCount(1);

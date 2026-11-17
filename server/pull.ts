@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { MasterEquipment, MasterRoom } from './master.js';
 import type { Block, BlockField } from '../shared/blocks/index.js';
-import { materialLines, type FormulaLine, type MasterDoc, type PackMaterial, type Step } from '../shared/master/schema.js';
+import { materialLines, type Container, type FormulaLine, type MasterDoc, type PackMaterial, type Step } from '../shared/master/schema.js';
 import { CERTIFICATE, PROVIDER_NAME, clauses, type Provider, type Source, type Value } from '../shared/engine/index.js';
 import { LOT_USABLE } from './links.js';
 import { plantDate } from '../shared/plant-time.js';
@@ -16,7 +16,7 @@ const hand = (link: Provider, state: 'absent' | 'down'): Pulled => ({ source: { 
 const refused = (...problems: string[]): Pulled => ({ source: { from: 'hand', link: 'mms', state: 'absent' }, values: {}, sources: {}, problems });
 
 /** The formula line (or packing material) a step works on (its setting that names one). */
-export function lineOf(doc: MasterDoc, st: Step): FormulaLine | PackMaterial | undefined {
+export function lineOf(doc: MasterDoc, st: Step): FormulaLine | PackMaterial | Container | undefined {
   const s = Object.values(st.settings).find((v): v is { formula: string } => typeof v === 'object' && 'formula' in v);
   return s && materialLines(doc).find((l) => l.key === s.formula);
 }
