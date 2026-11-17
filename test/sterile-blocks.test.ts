@@ -8,6 +8,7 @@ import { doneProblems, evaluate, openSteps, parseKey, type StepEvent } from '../
 import { masterSchema, type MasterDoc } from '../shared/master/schema.js';
 import { masterChecks } from '../shared/master/checks.js';
 import { stepFrom } from '../web/src/designer/model.js';
+import { workedExample } from '../web/src/designer/example.js';
 import { at, ev } from './engine-fixture.js';
 
 // A liquid vial batch: 100 L at 1.012 g/mL, filled at 10.0 mL + 0.5 mL excess.
@@ -51,6 +52,10 @@ describe('the sterile blocks of the injectables library', () => {
     expect(run(one('filter-test', settings), values).integrity).toMatchObject({ ok: true, check: { pass: true } });
     const { productFactor: _, ...without } = settings;
     expect(run(one('filter-test', without), values).integrity).toMatchObject({ ok: false, message: expect.stringMatching(/needs the product factor/) });
+    // The designer's worked example starts at the step's own limits, so a right master passes (17 Nov 2026 run, F7).
+    const ex = workedExample(one('filter-test', { ...without, wettedWith: 'water', makerLimit: '3.2 bar g' }), 0, 0);
+    expect(ex.values).toMatchObject({ result: { value: '3.2', unit: 'bar g' }, temperature: { value: '20', unit: '°C' } });
+    expect(ex.results.integrity).toMatchObject({ ok: true, check: { pass: true } });
   });
 
   it('TI-24 terminal sterilisation: the lowest probe lethality against the validated minimum F0', () => {

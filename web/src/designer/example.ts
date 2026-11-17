@@ -4,7 +4,7 @@ import { findBlock, type Block } from '../../../shared/blocks/index.js';
 import { refsIn } from '../../../shared/blocks/format.js';
 import { evaluate, lineQuantity, stepFields, store, type Stored, type StepEvent, type Value } from '../../../shared/engine/index.js';
 import { callTemplate } from '../../../shared/engine/templates.js';
-import { Dec } from '../../../shared/templates/index.js';
+import { Dec, findUnit } from '../../../shared/templates/index.js';
 import type { FormulaLine, Limit, MasterDoc, Step } from '../../../shared/master/schema.js';
 
 type Num = { value: string; unit: string };
@@ -41,6 +41,18 @@ function defaults(doc: MasterDoc, si: number, ti: number): Record<string, Value>
       const lim = typeof a.limit === 'string' ? step.settings[a.limit.slice(1).replace(/\?$/, '')] : undefined;
       if ((a.value === `$${f.name}` || a.readings === `$${f.name}`) && lim && typeof lim === 'object' && 'unit' in lim) v = mid(lim) ?? v;
       if (c.template === 'T4' && (a.parts as { value: string }[]).some((p) => p.value === `$${f.name}`) && !b.calcs.some((x) => x.template === 'T3' && x.args.actual === `$${f.name}`)) v = '0.000';
+    }
+    // Otherwise a limit or typed quantity of the same kind in a calculation that uses the field (the filter test: the
+    // temperature in the middle of its range, the result at the maker's limit), so a right master's example passes.
+    const kind = findUnit(unitOf(f))?.kind;
+    if (v === '1.000' && kind) for (const c of b.calcs.filter((x) => refsIn(x.args).includes(f.name))) {
+      for (const r of refsIn(c.args)) {
+        const sv = step.settings[r];
+        const typed = typeof sv === 'string' ? asNum(sv) : undefined;
+        const m = sv && typeof sv === 'object' && 'unit' in sv ? (findUnit(sv.unit)?.kind === kind ? mid(sv) : undefined)
+          : typed && findUnit(typed.unit)?.kind === kind ? typed.value : undefined;
+        if (m && v === '1.000') v = m;
+      }
     }
     out[f.name] = typeof f.count === 'number' ? vary(v, f.count).map((x) => ({ value: x, unit: unitOf(f) })) : { value: v, unit: unitOf(f) };
   }
