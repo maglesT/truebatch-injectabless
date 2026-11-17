@@ -7,3 +7,4 @@ export * from './release.js';
 export * from './links.js';
 export * from './stock.js';
 export * from './plain.js';
+export * from './training.js';

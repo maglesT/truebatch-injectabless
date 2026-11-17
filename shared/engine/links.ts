@@ -6,11 +6,12 @@
 import type { BlockField } from '../blocks/format.js';
 
 // truebatch_injectables: TrueBatch Injectables' published batches, read by TrueBatch Injectables Packing. qual:
-// Qualification's media fills, read by TrueBatch Injectables.
-export const PROVIDERS = ['deviations', 'qms', 'logbook', 'mms', 'truebatch_injectables', 'qual'] as const;
+// Qualification's media fills, read by TrueBatch Injectables. recruitment: the people's training (training.ts), read
+// when a person signs a step that names one.
+export const PROVIDERS = ['deviations', 'qms', 'logbook', 'mms', 'truebatch_injectables', 'qual', 'recruitment'] as const;
 export type Provider = (typeof PROVIDERS)[number];
 export type LinkState = 'absent' | 'down' | 'ok';
-export const PROVIDER_NAME: Record<Provider, string> = { deviations: 'Deviations', qms: 'QMS', logbook: 'Logbook', mms: 'MMS', truebatch_injectables: 'TrueBatch Injectables', qual: 'Qualification' };
+export const PROVIDER_NAME: Record<Provider, string> = { deviations: 'Deviations', qms: 'QMS', logbook: 'Logbook', mms: 'MMS', truebatch_injectables: 'TrueBatch Injectables', qual: 'Qualification', recruitment: 'Recruitment' };
 
 /** Pulled through a link (with what was read, PL-07), or typed by hand while the link was absent or down. */
 export type Source = { from: 'hand'; link: Provider; state: 'absent' | 'down' } | { from: Provider; asOf: string | null; shown: string };

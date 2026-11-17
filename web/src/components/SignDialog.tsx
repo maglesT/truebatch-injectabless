@@ -6,6 +6,7 @@ export function SignDialog({
   meaning,
   what,
   children,
+  blocked,
   onSign,
   onCancel,
 }: {
@@ -13,6 +14,8 @@ export function SignDialog({
   what: string;
   // The content being signed, shown in full so the signer sees what the signature covers.
   children?: ReactNode;
+  // Something in the dialog stands in the way (a training the signer does not hold, or has not ticked): Sign is off.
+  blocked?: boolean;
   onSign: (credentials: { proof: string }) => Promise<void>;
   onCancel: () => void;
 }) {
@@ -57,7 +60,7 @@ export function SignDialog({
         {error && <p className="error">{error}</p>}
         <div className="actions">
           <button type="button" onClick={onCancel}>Cancel</button>
-          <button className="primary" type="submit" disabled={busy}>Sign</button>
+          <button className="primary" type="submit" disabled={busy || blocked}>Sign</button>
         </div>
       </form>
     </div>

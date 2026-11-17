@@ -8,6 +8,7 @@ import {
 import { fieldLabel as labelOf, PROVIDER_NAME } from '../../../shared/engine/links.js';
 import { stepLabel } from '../../../shared/engine/batch.js';
 import { deviationNumber, deviationStatusWords } from '../../../shared/engine/release.js';
+import { skillText } from '../../../shared/engine/training.js';
 import { BatchHeader } from '../floor/BatchScreen.js';
 import { ReasonDialog } from '../floor/ReasonDialog.js';
 import { terminatedText } from './Terminate.js';
@@ -29,6 +30,8 @@ interface Review {
   // Owner 15 Nov 2026: every value typed by hand because a link was absent or down, and the Deviations link's state.
   hand: (Extract<Source, { from: 'hand' }> & { step: string; field: string; event: number; personName: string | null; at: string })[];
   unlinked: { number: string; status: string; title: string | null }[];
+  // Owner 17 Nov 2026: signatures whose training was ticked by the signer because Recruitment was not reachable.
+  trainingTyped: { step: string; event: number; kind: string; code: string; title?: string; state: 'absent' | 'down'; personName: string | null; at: string }[];
   deviationsLink: string;
   notApplicable: FloorEvent[];
   // Demo installations only: the waits ended at once (server/demo.ts).
@@ -141,6 +144,9 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
         <Group title="Typed by hand (a link was off or down)" empty="Every linked value came through its link.">{r.hand.map((h, i) => (
           <li key={i}><b>{name(h.step)} · {handLabel(h.step, h.field)}</b><span>{PROVIDER_NAME[h.link]} {h.state === 'down' ? 'link was down' : 'not linked'}</span>
             <small>{h.personName}, {plainClock(h.at)}</small></li>))}</Group>
+        {(r.trainingTyped.length > 0 || d.master.doc.stages.some((s) => s.steps.some((t) => t.training))) && <Group title="Training typed by hand (Recruitment not reachable)" empty="Every training was read from Recruitment.">{r.trainingTyped.map((x) => (
+          <li key={x.event} className="bad"><b>{name(x.step)}</b><span>{x.personName} ({x.kind === 'checked' ? 'checked' : 'performed'}) ticked “I am trained in {skillText(x)}”: Recruitment {x.state === 'down' ? 'link was down' : 'not linked'}</span>
+            <small>{plainClock(x.at)}</small></li>))}</Group>}
         <Group title="Steps not applicable" empty="Every step was done.">{r.notApplicable.map((e) => (
           <li key={e.id}><b>{name(idOf(e))}</b><span>{e.payload.reason}</span><small>{e.personName}, {plainClock(e.at)}</small></li>))}</Group>
         {r.demoSkips.length > 0 && <Group title="DEMO: waits skipped" empty="">{r.demoSkips.map((e) => (

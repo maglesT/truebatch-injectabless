@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type Me } from '../api.js';
+import { api, ApiError, type Me } from '../api.js';
 import { SignDialog } from '../components/SignDialog.js';
 import {
   blockOf, changed, go, headline, plainClock, plainLine, withoutVerdict, plainError, rawOf, sourceWords, stateLabel, stepLink, stepOf, stepTitle, timeLeft, tone, unitOf, useLinked, useLogbookItems, valueText, words,
@@ -19,6 +19,7 @@ import { needsText, stepNeeds } from '../../../shared/engine/state.js';
 import { dispensingRooms, emptyNote, inLogbook, machineRefusal, roomRefusal } from '../../../shared/engine/picks.js';
 import { materialLines, type FormulaLine, type PackMaterial } from '../../../shared/master/schema.js';
 import { perPackText, unitName } from '../../../shared/engine/stock.js';
+import { neededText, tickText, trainingOf, trainingText, type Skill, type Training } from '../../../shared/engine/training.js';
 
 type Dialog = { kind: 'done' | 'repeat' | 'check' | 'release-hold' | 'na' | 'send-back' | 'note' } | { kind: 'na-sign'; reason: string } | { kind: 'correct'; field: BlockField };
 const INVOLVING = ['started', 'value', 'done', 'corrected', 'not_applicable'];
@@ -101,6 +102,20 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   const deviationPicks = useLinked<{ number: string; title: string | null }>(`/api/batches/${d.batch.id}/deviations`, 'deviations');
   const lotField = block.fields.find((f) => f.kind === 'lot');
   const lotPulled = lotField && row.source[lotField.name] && row.source[lotField.name]!.from !== 'hand';
+  // Only trained people sign (owner, 17 Nov 2026): the signer's training in the step's skill, read when the sign dialog opens.
+  const signing = dialog?.kind === 'done' || dialog?.kind === 'repeat' || dialog?.kind === 'check';
+  const [training, setTraining] = useState<TrainingRead | null>(null);
+  const [trained, setTrained] = useState(false);
+  const [askTraining, setAskTraining] = useState(0);
+  useEffect(() => {
+    setTraining(null);
+    setTrained(false);
+    if (!signing || !st.training) return;
+    let live = true;
+    void api<TrainingRead>('GET', `${base}/training`).then((t) => live && setTraining(t), () => live && setTraining({ skill: st.training!, link: 'down', ok: false }));
+    return () => { live = false; };
+  }, [signing, st.training, base, askTraining]);
+  const trainingBlocked = !!st.training && (!training || (training.link === 'ok' ? !training.ok : !trained));
 
   useEffect(() => {
     let live = true;
@@ -134,8 +149,10 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   // A signature carries the hash of what is on the screen; if the step changed meanwhile, it reloads and says so.
   const signed = (action: string, extra: object = {}, after?: () => Promise<void>) => async ({ proof }: { proof: string }) => {
     try {
-      await post(action, { proof, contentHash: row.contentHash, ...extra });
+      await post(action, { proof, contentHash: row.contentHash, ...extra, ...(st.training && (action === 'done' || action === 'check') ? { trained } : {}) });
     } catch (e) {
+      // The training answer changed since the dialog opened (Recruitment came back or went down): read it again.
+      if (e instanceof ApiError && (e.code === 'not_trained' || e.code === 'training_tick')) setAskTraining((n) => n + 1);
       if (!changed(e)) throw e;
       setDialog(null);
       setNotice({ tone: 'bad', text: 'This step changed while you were signing (someone recorded, corrected or checked it). It has been reloaded: look at the values again, then sign again.' });
@@ -257,6 +274,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
         <div>
           <section className="dash-panel" aria-label="Instruction">
             <p className="instr">{st.instruction || block.instruction}</p>
+            {st.training && <p className="muted small">{neededText(st.training, st.checker)}</p>}
             {settingsText(doc, block, st, row, mdUnit).length > 0 && <dl className="fields">{settingsText(doc, block, st, row, mdUnit).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}
           </section>
           {checking ? (
@@ -331,8 +349,9 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
       </div>
 
       {(dialog?.kind === 'done' || dialog?.kind === 'repeat') && (
-        <SignDialog meaning="performed" what={`${title} · batch ${d.batch.batchNo}: performed as recorded.`} onCancel={() => setDialog(null)} onSign={signed('done', {}, dialog.kind === 'repeat' ? repeat : undefined)}>
+        <SignDialog meaning="performed" what={`${title} · batch ${d.batch.batchNo}: performed as recorded.`} blocked={trainingBlocked} onCancel={() => setDialog(null)} onSign={signed('done', {}, dialog.kind === 'repeat' ? repeat : undefined)}>
           <Summary row={row} block={block} mdUnit={mdUnit} />
+          {st.training && <TrainingCheck skill={st.training} read={training} ticked={trained} onTick={setTrained} />}
         </SignDialog>
       )}
       {dialog?.kind === 'release-hold' && (
@@ -341,8 +360,9 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
         </SignDialog>
       )}
       {dialog?.kind === 'check' && (
-        <SignDialog meaning="verified" what={`${title} · batch ${d.batch.batchNo}: checked by a second person.`} onCancel={() => setDialog(null)} onSign={signed('check')}>
+        <SignDialog meaning="verified" what={`${title} · batch ${d.batch.batchNo}: checked by a second person.`} blocked={trainingBlocked} onCancel={() => setDialog(null)} onSign={signed('check')}>
           <Summary row={row} block={block} mdUnit={mdUnit} />
+          {st.training && <TrainingCheck skill={st.training} read={training} ticked={trained} onTick={setTrained} />}
         </SignDialog>
       )}
       {dialog?.kind === 'send-back' && (
@@ -365,6 +385,19 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
           onCancel={() => setDialog(null)} onSave={async (raw, reason) => { await post('correct', { values: { [dialog.field.name]: raw }, reason }); setDialog(null); await reload(); }} />
       )}
     </>
+  );
+}
+
+/** The signer's training in the step's skill, as Recruitment answered when the dialog opened. */
+type TrainingRead = { skill: Skill; link: 'ok' | 'absent' | 'down'; ok: boolean; training?: Training; message?: string };
+function TrainingCheck({ skill, read, ticked, onTick }: { skill: Skill; read: TrainingRead | null; ticked: boolean; onTick: (b: boolean) => void }) {
+  if (!read) return <p className="muted">Reading your training from Recruitment…</p>;
+  if (read.link === 'ok') return read.ok ? <p className="notice info">Your training: {trainingText(read.training!)}.</p> : <p className="notice bad">{read.message}</p>;
+  return (
+    <div className="notice warn">
+      <p>Recruitment {read.link === 'absent' ? 'is not linked' : 'cannot be reached'}: this step needs a person trained in it. Your signature will be marked “training typed by hand” for QA.</p>
+      <label className="check"><input type="checkbox" checked={ticked} onChange={(e) => onTick(e.target.checked)} />{tickText(skill)}</label>
+    </div>
   );
 }
 
@@ -446,9 +479,10 @@ function StageSummary({ d, blocks, row }: { d: BatchDetail; blocks: Block[]; row
 
 function History_({ h, block, deviations }: { h: History | null; block: Block; deviations: Deviation[] }) {
   if (!h) return <section className="dash-panel"><div className="skel skel-line w30" /><div className="skel skel-line w60" /></section>;
+  const trained = (e: FloorEvent) => { const t = trainingOf(e); return t ? ` · ${trainingText(t)}` : ''; };
   const fields = (e: FloorEvent) => Object.keys(e.payload.values ?? {}).map((k) => fieldLabel(block.fields, k)).join(', ');
   const what = (e: FloorEvent) => ({
-    started: 'Started', value: `Recorded ${fields(e)}`, done: 'Signed: performed', checked: 'Signed: verified (second person)', sent_back: `Sent back: “${e.payload.reason}”`,
+    started: 'Started', value: `Recorded ${fields(e)}`, done: `Signed: performed${trained(e)}`, checked: `Signed: verified (second person)${trained(e)}`, sent_back: `Sent back: “${e.payload.reason}”`,
     corrected: `Corrected ${fields(e)}: “${e.payload.reason}”`, not_applicable: `Not applicable: “${e.payload.reason}”`, late: 'Ran over its time (recorded by the server)',
     // The deviation's number and status, read live: the one written with the note, or the one Deviations filed from it.
     note: `Deviation note${((x) => (x ? ` ${deviationText(x)}` : e.payload.reference ? ` ${e.payload.reference}` : ''))(deviations.find((x) => x.note === e.id))}: “${e.payload.text}”`, qa_released_hold: 'QA released the hold',

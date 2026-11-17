@@ -4,7 +4,7 @@
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces.js';
 import { findBlock, type Block } from '../shared/blocks/index.js';
 import { materialLines, type Step } from '../shared/master/schema.js';
-import { batchText, batchView, deviations, deviationNumber, deviationText, fieldLabel, handFields, lateItems, lineQuantity, notYetText, cutShort, terminatedText, TERMINATED_STATE, openSteps, PROVIDER_NAME, deviationStatusWords, stepTitle, unitName, headline, limitOf, withoutVerdict, statusWords, CERTIFICATE, perPackText, type DeviationStatus, type EventKind, type Source, type Stored, type StepView, type Value } from '../shared/engine/index.js';
+import { batchText, batchView, deviations, deviationNumber, deviationText, fieldLabel, handFields, lateItems, lineQuantity, notYetText, cutShort, terminatedText, TERMINATED_STATE, openSteps, PROVIDER_NAME, deviationStatusWords, stepTitle, unitName, headline, limitOf, withoutVerdict, statusWords, CERTIFICATE, perPackText, trainingOf, trainingText, trainingTyped, skillText, type DeviationStatus, type EventKind, type Source, type Stored, type StepView, type Value } from '../shared/engine/index.js';
 import type { LoadedBatch } from './routes/batches.js';
 import { pageFrame, plant, runs } from './pdf.js';
 import { plantText } from '../shared/plant-time.js';
@@ -149,8 +149,11 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
           // Packing: the batch facts are recorded when the batch is issued (the issuer starts the first step); the
           // operator then receives the filled units and signs it done.
           const kind = doc.pack && v.id === '0.1.0.1' && e.kind === 'started' ? 'Batch facts recorded at issue' : EVENT[e.kind];
-          return small(`${kind}: ${who(e.person)}, ${plant(e.at)}${sig ? ` · signed "${MEANING[sig.meaning] ?? sig.meaning}"` : ''}${extra}`,
-            e.kind === 'late' || e.kind === 'sent_back' ? { color: RED } : {});
+          // The signer's training in the step's skill (owner, 17 Nov 2026): from Recruitment, or typed by hand.
+          const trained = trainingOf(e);
+          const training = trained ? ` · ${trained.from === 'hand' ? trainingText(trained).toUpperCase() : trainingText(trained)}` : '';
+          return small(`${kind}: ${who(e.person)}, ${plant(e.at)}${sig ? ` · signed "${MEANING[sig.meaning] ?? sig.meaning}"` : ''}${training}${extra}`,
+            e.kind === 'late' || e.kind === 'sent_back' || trained?.from === 'hand' ? { color: RED } : {});
         }) },
       ];
     }), 'No steps.'));
@@ -171,6 +174,16 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
     return [small(d ? deviationNumber(d) : '—'), small(stepLabel(`${e.stage}.${e.sub}.${e.step}.${e.round}`)), small(e.payload.text ?? ''), small(`${who(e.person)}, ${plant(e.at)}`),
       small(!d ? 'note (no deviation number)' : d.status ? `${d.open ? 'OPEN: ' : ''}${deviationStatusWords(d.status)} in the Deviations system${d.closedAt ? `, ${plant(d.closedAt)}` : ''}` : d.open ? 'OPEN' : `closed by ${closed?.personName ?? ''}, ${plant(closed?.at)}: ${closed?.payload.reason ?? ''}`, d?.open ? { color: RED } : {})];
   })));
+
+  // Signatures whose training was typed by hand because Recruitment was not reachable, for QA (owner, 17 Nov 2026);
+  // only when the master names a training.
+  if (doc.stages.some((s) => s.steps.some((t) => t.training))) {
+    content.push(heading('Training typed by hand (Recruitment not reachable)'));
+    content.push(table([170, 150, 120, '*'], ['Step', 'Signed by', 'When', 'Training'], trainingTyped(events).map((x) => [
+      small(stepLabel(x.step)), small(`${who(x.person)} (${x.kind === 'checked' ? 'checked' : 'performed'})`), small(plant(x.at)),
+      small(`${skillText(x)}: ticked "I am trained", Recruitment ${x.state === 'down' ? 'link down' : 'not linked'}`, { color: RED }),
+    ]), 'None: every training was read from Recruitment.'));
+  }
 
   // Every signature of the batch with its meaning.
   content.push(heading('Signatures'));

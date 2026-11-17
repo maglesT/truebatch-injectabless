@@ -58,6 +58,9 @@ export const stepSchema = z.object({
   // Order-critical: this step must come after the step with this key in the same stage (F0318: the drug after the PVP).
   orderAfter: keySchema.optional(),
   flow: flowSchema.default({ kind: 'none' }),
+  // Only trained people sign (owner, 17 Nov 2026): the skill Recruitment publishes (training_v1) that the performer and
+  // the checker must hold, picked from Recruitment's list (typed only while the link is off). None: anyone may sign.
+  training: z.object({ code: text(60).min(1), title: text(200).optional() }).strict().optional(),
 }).strict();
 
 export const stageSchema = z.object({

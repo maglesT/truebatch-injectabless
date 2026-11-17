@@ -22,7 +22,8 @@ adding anything, look how TrueBatch Tablets does it and copy that.
   is signed (starting with an expired item is refused), the "out of limits needs a deviation note" rule.
 - **One fixed clean-air limits table** in the product (EU GMP Annex 1 grade limits for particles and microbes), shown
   in the master review and confirmed once by QA.
-- **Rules**: only the 29 rules of the minimum register (`docs/rules.md`); nothing the platform or another product
+- **Rules**: only the 29 rules of the minimum register, and TI-32 (only trained people sign, owner 17 Nov 2026, as
+  Tablets TB-23) (`docs/rules.md`); nothing the platform or another product
   already does.
 - **Pull, don't type**: values come from master data or other products (room grade from master data, sterile status
   from the Logbook, the line's media fill from Qualification); typed by hand only while a
@@ -119,6 +120,9 @@ adding anything, look how TrueBatch Tablets does it and copy that.
   applies to a master that fills product.
 - People (confirmed by the owner, 16 November 2026): QA grants "aseptic operator" and "visual inspector"; a stage marked aseptic
   is only for aseptic operators, visual inspection only for visual inspectors. No training dates are kept here.
+  A step may also name a training from Recruitment (TI-32, see Links): the permission says who may do aseptic work
+  or visual inspection at all; the training says the person is trained, and in date, in this step's skill. Both
+  apply when both are set; the dates stay in Recruitment.
 - QC's sign at release states that the release tests (sterility, endotoxin, bioburden) comply as in the QC report and
   records the EM review of the batch (report numbers, the deviation number of each action-limit excursion).
 - A field may be an item's use-by date (engine change 6): refused when past, a deviation note when it passes during
@@ -250,6 +254,23 @@ answering) or **ok**.
   next date stays a use-by date (engine change 6). While Qualification answers, the two are not typed. Absent or
   down: typed as before, marked typed by hand (QA's review lists them; a second person checks the step). The link is
   read through `QUAL_DATABASE_URL`; the platform manifest reads `qual: ["protocol_v1"]` (`ops/manifest.draft.json`).
+- **Recruitment** (`training_v1`, owner 17 Nov 2026: only trained people sign; as TrueBatch Tablets TB-23): one row
+  per person and skill (`person_login`, `skill_code`, `skill_title`, `trained_on`, `valid_until`, `qualified`, already
+  false when expired), read through `RECRUITMENT_DATABASE_URL`; both manifests read `recruitment: ["training_v1"]`. A
+  master step may name the training it needs (`step.training`: the skill's code and title, picked in the designer's
+  Signatures section from the skills `training_v1` lists; typed only while the link is off or down; none by default,
+  and the starting masters name none, so the author picks). The plain view says "Done by a person trained in SOP-…
+  (Recruitment)". When a person signs such a step as performed or checked, the server reads their row by their login
+  and the skill now (`shared/engine/training.ts`, `trainingCheck`): qualified, the signing event records `training`
+  (code, title, trained on, valid until, as read) and the signed content includes it; not qualified, expired or
+  missing, the signature is refused in plain words ("<name> has no valid training in <skill> (Recruitment): ask QA,
+  or another trained person signs."). Link off or down: the sign dialog asks the signer to tick "I am trained in
+  <skill>", and the signature records `training` from `hand` ("training typed by hand (Recruitment not reachable)"),
+  shown on the step, listed in QA's release review and in the PDF (TI-32). A step marked not applicable, a QA hold
+  release and the batch-level signatures do not read training. This keeps the owner's rule that the app keeps no
+  training dates: the dates are Recruitment's, read at the moment of signing. The aseptic operator and visual
+  inspector permissions stay as they are (who may do that work at all); the training is per step (trained and in
+  date for this step's skill). The same applies in TrueBatch Injectables Packing.
 - **Published** (`db/migrations/0006_report_views.sql`): `batch_fact_v1` and `equipment_use_v1` with Batchwright's
   names and columns, so the Logbook and Deviations read TrueBatch as they read Batchwright, and `deviation_note_v1`
   for Deviations to file notes later. `batch_fact_v1` has one more column at its end (`0007`): `manufactured_on`, the

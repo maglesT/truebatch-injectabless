@@ -3,6 +3,8 @@ import type { Permission } from '../server/auth.js';
 // Overridable so two working copies can run their browser tests side by side.
 export const E2E_PORT = Number(process.env.E2E_PORT ?? 8291);
 export const E2E_SCHEMA = process.env.E2E_SCHEMA ?? 'e2e';
+// Recruitment's stand-in training_v1 (e2e/server.ts).
+export const E2E_RECRUITMENT = `${E2E_SCHEMA}_rc`;
 // TrueBatch Injectables Packing's browser journey: its own server, schema and people (packing codes from core).
 export const E2E_PACKING_PORT = Number(process.env.E2E_PACKING_PORT ?? E2E_PORT + 1);
 export const E2E_PACKING_SCHEMA = `${E2E_SCHEMA}_packing`;

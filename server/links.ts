@@ -1,6 +1,7 @@
 import type postgres from 'postgres';
 import type { Sql } from './db.js';
 import type { LinkState, Provider } from '../shared/engine/links.js';
+import type { TrainingRead } from '../shared/engine/training.js';
 
 // Links to the other Medhanta products, the Logbook way (platform PL-08, D-02). Each provider is read live through
 // its report views with TrueBatch's own login, from the URL the platform writes only while the link is on
@@ -182,6 +183,22 @@ export const qualClient = (l: Link) => ({
   }),
 });
 
+// ---- Recruitment: report.training_v1 (published, owner 17 Nov 2026), one row per person and skill; qualified is already
+// false when the training expired. Read by the signer's login (core's preferred_username, as Recruitment names people).
+type TrainingRow = { skill_code: string; skill_title: string | null; qualified: boolean; trained_on: string | null; valid_until: string | null; data_as_of: string | null };
+export const recruitmentClient = (l: Link) => ({
+  training: (login: string, code: string) => l.read(async (q, v) => {
+    const [r] = await q<TrainingRow[]>`
+      select skill_code, skill_title, qualified, trained_on::text, valid_until::text, data_as_of::text from ${v('training_v1')}
+      where lower(person_login) = lower(${login}) and skill_code = ${code} order by qualified desc, valid_until desc nulls last limit 1`;
+    return r ? { code: r.skill_code, title: r.skill_title, qualified: r.qualified === true, trainedOn: r.trained_on, validUntil: r.valid_until, dataAsOf: r.data_as_of } satisfies TrainingRead : null;
+  }),
+  // The skills Recruitment trains people in, for the designer's pick list.
+  skills: () => l.read(async (q, v) => (await q<{ code: string; title: string | null }[]>`
+    select distinct on (skill_code) skill_code as code, skill_title as title from ${v('training_v1')} where skill_code is not null
+    order by skill_code, skill_title nulls last limit 500`).map((r) => ({ code: r.code, ...(r.title ? { title: r.title } : {}) }))),
+});
+
 export interface Links {
   deviations: ReturnType<typeof deviationsClient>;
   qms: ReturnType<typeof qmsClient>;
@@ -189,6 +206,7 @@ export interface Links {
   mms: ReturnType<typeof mmsClient>;
   truebatch_injectables: ReturnType<typeof injectablesClient>;
   qual: ReturnType<typeof qualClient>;
+  recruitment: ReturnType<typeof recruitmentClient>;
 }
 /** The links, from their connections (null: absent). `schema` lets tests point a provider at its own schema. */
 export function links(c: Partial<Record<Provider, Sql | null>> = {}, schema: Partial<Record<Provider, string>> = {}): Links {
@@ -199,5 +217,6 @@ export function links(c: Partial<Record<Provider, Sql | null>> = {}, schema: Par
     mms: mmsClient(link('mms', c.mms ?? null, schema.mms)),
     truebatch_injectables: injectablesClient(link('truebatch_injectables', c.truebatch_injectables ?? null, schema.truebatch_injectables)),
     qual: qualClient(link('qual', c.qual ?? null, schema.qual)),
+    recruitment: recruitmentClient(link('recruitment', c.recruitment ?? null, schema.recruitment)),
   };
 }

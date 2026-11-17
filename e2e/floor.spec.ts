@@ -2,15 +2,15 @@ import { expect, test, type Page } from '@playwright/test';
 import { connect } from '../server/db.js';
 import { TEST_DATABASE_URL } from '../test/helpers.js';
 import { small } from '../test/engine-fixture.js';
-import { E2E_SCHEMA } from './config.js';
+import { E2E_RECRUITMENT, E2E_SCHEMA } from './config.js';
 import { clearOfActionBar, justAboveActionBar, logIn } from './helpers.js';
 
 // The floor screens, one stage of a small fixture master: a pH check (second-person check) and the stage yield.
 
 /** Writes the fixture master through the API, makes it effective (the database owner does it, as in the server tests) and issues a batch on the master records screen (TI-03). */
-async function issueBatch(page: Page): Promise<{ id: number; batchNo: string }> {
+async function issueBatch(page: Page, step: object = {}): Promise<{ id: number; batchNo: string }> {
   await logIn(page, 'iss1');
-  const doc = small([{ name: 'Blending', steps: [{ checker: true },
+  const doc = small([{ name: 'Blending', steps: [{ checker: true, ...step },
     { block: { id: 'stage-yield', version: 1 }, checker: true, settings: { theoretical: '0.100 kg', yieldLimit: { low: '97.0', high: '100.5', unit: '%' } } }] }]);
   const m = await page.request.post('/api/masters', { data: { doc } });
   expect(m.ok()).toBe(true);
@@ -121,5 +121,55 @@ test('TI-14 floor journey: start, a value out of limits needs a deviation note, 
   expect(await line.evaluate((e) => getComputedStyle(e).textDecorationLine)).toBe('none');
   expect(await line.locator('s').evaluate((e) => getComputedStyle(e).textDecorationLine)).toBe('line-through');
   await opCtx.close();
+  await chkCtx.close();
+});
+
+test('TI-32 only trained people sign: the sign dialog shows the training from Recruitment, refuses an untrained checker, and asks for the tick while Recruitment is down', async ({ browser }) => {
+  const setup = await browser.newContext();
+  const batch = await issueBatch(await setup.newPage(), { training: { code: 'SOP-STR-004', title: 'Operating the stirrer' } });
+  await setup.close();
+
+  // op1 is trained in it (e2e/server.ts): the dialog says so and the signature records it.
+  const opCtx = await browser.newContext();
+  const op = await opCtx.newPage();
+  await logIn(op, 'op1');
+  await op.goto(`/#/batch/${batch.id}`);
+  await op.getByRole('button', { name: /^1 Check a value against limits: pH/ }).click();
+  await expect(op.getByRole('region', { name: 'Instruction' })).toContainText('Done by a person trained in SOP-STR-004 Operating the stirrer; checked by a person trained in it too (Recruitment).');
+  await op.getByRole('button', { name: 'Start', exact: true }).click();
+  await op.getByLabel('Reading').fill('6.0');
+  await op.getByLabel('Reading').press('Enter');
+  await op.getByRole('button', { name: 'Done', exact: true }).click();
+  await expect(op.getByRole('dialog')).toContainText('Your training: trained: SOP-STR-004 Operating the stirrer, valid until 9 Jan 2099 (Recruitment).');
+  await sign(op);
+  await expect(op.getByRole('region', { name: 'History' })).toContainText('Signed: performed · trained: SOP-STR-004 Operating the stirrer, valid until 9 Jan 2099 (Recruitment)');
+  await opCtx.close();
+
+  // chk1 is not: refused in plain words, Sign is off.
+  const chkCtx = await browser.newContext();
+  const chk = await chkCtx.newPage();
+  await logIn(chk, 'chk1');
+  await chk.getByRole('region', { name: 'Waiting for your check' }).getByRole('button', { name: /Check a value against limits: pH/ }).click();
+  await chk.getByRole('button', { name: 'Checked', exact: true }).click();
+  const dialog = chk.getByRole('dialog');
+  await expect(dialog).toContainText('CHK1 has no valid training in SOP-STR-004 Operating the stirrer (Recruitment): ask QA, or another trained person signs.');
+  await expect(dialog.getByRole('button', { name: 'Sign', exact: true })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+
+  // Recruitment down: the checker ticks "I am trained in …"; the signature says so, for QA.
+  const owner = connect(TEST_DATABASE_URL);
+  await owner.unsafe(`revoke select on all tables in schema ${E2E_RECRUITMENT} from truebatch_injectables_app`);
+  try {
+    await chk.getByRole('button', { name: 'Checked', exact: true }).click();
+    await expect(dialog).toContainText('Recruitment cannot be reached');
+    await expect(dialog.getByRole('button', { name: 'Sign', exact: true })).toBeDisabled();
+    await dialog.getByLabel('I am trained in SOP-STR-004 Operating the stirrer').check();
+    await sign(chk);
+  } finally {
+    await owner.unsafe(`grant select on all tables in schema ${E2E_RECRUITMENT} to truebatch_injectables_app`);
+    await owner.end();
+  }
+  await expect(chk.locator('.step-title')).toContainText('Checked');
+  await expect(chk.getByRole('region', { name: 'History' })).toContainText('Signed: verified (second person) · training typed by hand (Recruitment not reachable): SOP-STR-004 Operating the stirrer');
   await chkCtx.close();
 });

@@ -10,6 +10,7 @@ import { keyId, parseKey, type State, type StepEvent } from './state.js';
 import { failed } from './values.js';
 import { isHand, LINK_OF, type Source } from './links.js';
 import type { Returned } from './stock.js';
+import { trainingTyped } from './training.js';
 
 export const BATCH_EVENT_KINDS = ['production_approved', 'qc_approved', 'released', 'rejected', 'deviation_closed'] as const;
 export type BatchEventKind = (typeof BATCH_EVENT_KINDS)[number];
@@ -169,6 +170,8 @@ export function review(doc: MasterDoc, events: readonly StepEvent[], batchEvents
     hand: events.flatMap((e) => Object.entries(e.payload.source ?? {}).filter(([, x]) => isHand(x))
       .map(([field, x]) => ({ step: keyId(e), event: e.id, kind: e.kind, field, ...(x as Extract<Source, { from: 'hand' }>), person: e.person, at: e.at }))),
     notApplicable: events.filter((e) => e.kind === 'not_applicable'),
+    // Every signature whose training was typed by hand because Recruitment was not reachable (owner, 17 Nov 2026).
+    trainingTyped: trainingTyped(events),
     // Demo installations only: every wait ended at once by a person (server/demo.ts).
     demoSkips: events.filter((e) => e.kind === 'demo_wait_skipped'),
     batchEvents,
