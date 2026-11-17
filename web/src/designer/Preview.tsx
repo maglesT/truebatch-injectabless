@@ -2,12 +2,12 @@
 // quantities, the compensated fillers and the theoretical yields, all from the templates library. Nothing is saved.
 import { Fragment, useMemo, useState } from 'react';
 import { findBlock } from '../../../shared/blocks/index.js';
-import { evaluate, type Stored } from '../../../shared/engine/index.js';
-import { Dec } from '../../../shared/templates/index.js';
+import { evaluate } from '../../../shared/engine/index.js';
 import { masterSchema, type MasterDoc } from '../../../shared/master/schema.js';
 import { dispensing, type LotValues } from './example.js';
 import { batchText, headerValue } from '../../../shared/engine/values.js';
 import { settingText } from './sentences.js';
+import { qtyText } from './model.js';
 import { Decimal } from './ui.js';
 
 const FIELDS: { k: keyof LotValues; label: string; when: (a: NonNullable<MasterDoc['formula'][number]['adjust']>) => boolean }[] = [
@@ -16,7 +16,6 @@ const FIELDS: { k: keyof LotValues; label: string; when: (a: NonNullable<MasterD
   { k: 'lod', label: 'LOD %', when: (a) => a.potency?.basis === 'dried' },
   { k: 'content', label: 'Content %', when: (a) => !!a.content },
 ];
-const qty = (r: Stored | undefined) => (r?.ok ? `${new Dec(r.value).toFixed(3)} ${r.unit}` : '—');
 
 export function Preview({ doc: raw }: { doc: MasterDoc }) {
   const parsed = useMemo(() => masterSchema.safeParse(raw), [raw]);
@@ -59,8 +58,8 @@ export function Preview({ doc: raw }: { doc: MasterDoc }) {
               {rows.map(({ line, standard, adjusted: a }) => (
                 <tr key={line.key} className={a && !a.ok ? 'bad-row' : ''}>
                   <td><b>{line.code}</b><span className="cell-sub">{line.name}{line.adjust?.compensates?.length ? ' · compensating filler' : ''}</span></td>
-                  <td className="num nowrap">{qty(standard)}</td>
-                  <td className="num nowrap"><b>{qty(a ?? standard)}</b></td>
+                  <td className="num nowrap">{qtyText(standard)}</td>
+                  <td className="num nowrap"><b>{qtyText(a ?? standard)}</b></td>
                   <td className="small">{a ? (a.ok ? a.shown : <span className="error">{a.message}</span>) : <span className="muted">not adjusted</span>}</td>
                 </tr>
               ))}

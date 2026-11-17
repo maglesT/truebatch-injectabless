@@ -4,16 +4,14 @@
 import { useState } from 'react';
 import type { MasterData, MasterRow } from '../api-designer.js';
 import type { Problem } from '../../../shared/master/checks.js';
-import { lineQuantity, type Stored } from '../../../shared/engine/index.js';
-import { Dec } from '../../../shared/templates/index.js';
+import { lineQuantity } from '../../../shared/engine/index.js';
 import type { FormulaLine, MasterDoc } from '../../../shared/master/schema.js';
 import { AnswerBox, type OnAnswer } from './CheckPanel.js';
-import { move, newKey } from './model.js';
+import { move, newKey, qtyText } from './model.js';
 import { Decimal, Order, Picker } from './ui.js';
 
 type Adjust = NonNullable<FormulaLine['adjust']>;
 const HERE = { stage: 0, sub: 1, step: 0, round: 1 };
-const kg = (r: Stored) => (r.ok ? `${new Dec(r.value).toFixed(3)} ${r.unit}` : '—');
 
 export function FormulaTable({ doc, onChange, md, masters, selected, onSelect, problems, onAnswer }: {
   doc: MasterDoc; onChange: (d: MasterDoc) => void; md: MasterData; masters: MasterRow[]; selected?: number; onSelect: (i?: number) => void; problems: Problem[]; onAnswer?: OnAnswer;
@@ -44,7 +42,7 @@ export function FormulaTable({ doc, onChange, md, masters, selected, onSelect, p
                       onChange={(v) => put(i, v ? { ...l, mg: v } : (({ mg: _, ...x }) => x)(l))} /></td>
                     <td><select aria-label={`Role of ${l.name}`} value={l.role} onChange={(e) => put(i, { ...l, role: e.target.value as FormulaLine['role'] })}>
                       <option value="api">API</option><option value="excipient">Excipient</option><option value="solvent">Vehicle made up to volume (q.s.), or removed in processing</option></select></td>
-                    <td className="nowrap num">{valid(l.mg) && valid(doc.header.batchSize) ? kg(lineQuantity(doc, [], HERE, l, false, {})) : l.mg === undefined && l.role === 'solvent' ? 'q.s.' : '—'}</td>
+                    <td className="nowrap num">{valid(l.mg) && valid(doc.header.batchSize) ? qtyText(lineQuantity(doc, [], HERE, l, false, {})) : l.mg === undefined && l.role === 'solvent' ? 'q.s.' : '—'}</td>
                     <td><button type="button" className="link dark" onClick={(e) => { e.stopPropagation(); onSelect(i); }}>{adjustSummary(l.adjust)}</button></td>
                     <td><Order index={i} count={lines.length} what={l.name} onMove={(by) => set(move(lines, i, by))} onRemove={() => { set(lines.filter((_, j) => j !== i)); onSelect(undefined); }} /></td>
                   </tr>

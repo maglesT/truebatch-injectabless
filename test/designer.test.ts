@@ -4,7 +4,7 @@ import { blocking, masterChecks } from '../shared/master/checks.js';
 import { masterSchema } from '../shared/master/schema.js';
 import { describeMaster, diffMasters, stepText } from '../web/src/designer/describe.js';
 import { dispensing, workedExample } from '../web/src/designer/example.js';
-import { answerDoc, earlierRefs, neededKind, scaleDoc, stepFrom } from '../web/src/designer/model.js';
+import { answerDoc, earlierRefs, neededKind, qtyText, scaleDoc, stepFrom } from '../web/src/designer/model.js';
 import { sentence, sentenceText } from '../web/src/designer/sentences.js';
 import { stepTitle } from '../shared/engine/batch.js';
 import { defaultDispensingRooms, skeletonList, skeletonStages } from '../web/src/designer/skeletons.js';
@@ -126,6 +126,13 @@ describe('master designer', () => {
   it('a limit on a T6 result is of its own kind: diavolumes (a ratio of two volumes) have no unit, not litres', () => {
     expect(neededKind(block('tff'), 'diavolumeLimit')).toBe('number');
     expect(neededKind(block('tff'), 'tmpLimit')).not.toBe('number');
+  });
+
+  it('a batch quantity under 0.01 kg reads in g, so a small excipient is not rounded away', () => {
+    expect(qtyText({ ok: true, value: '0.0025', unit: 'kg', shown: '' })).toBe('2.500 g');
+    expect(qtyText({ ok: true, value: '1.2625', unit: 'kg', shown: '' })).toBe('1.263 kg');
+    expect(qtyText({ ok: true, value: '0', unit: 'kg', shown: '' })).toBe('0.000 kg');
+    expect(qtyText({ ok: false, message: 'x' })).toBe('—');
   });
 
   it('a weigh step added from the library starts with the usual tolerance', () => {
