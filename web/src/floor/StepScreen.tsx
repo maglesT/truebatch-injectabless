@@ -202,7 +202,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   return (
     <>
       <div className="step-title">
-        <span className="where">{block.gmp === 'yield' ? `Stage end · ${stage.name}` : stage.name}{stage.kind === 'sub-batch' ? ` · sub-batch ${row.key.sub}` : ''}{repeatUntil ? ` · round ${row.key.round}` : ''}</span>
+        <span className="where">{block.gmp === 'yield' ? `${stage.name} · stage yield` : stage.name}{stage.kind === 'sub-batch' ? ` · sub-batch ${row.key.sub}` : ''}{repeatUntil ? ` · round ${row.key.round}` : ''}</span>
         <h1>{title}</h1>
         <span className={`chip ${row.needsResign ? 'chip-warn' : stateLabel(row.state, d.batch.terminated)[1]}`}>{row.needsResign ? 'Sign again' : stateLabel(row.state, d.batch.terminated)[0]}</span>
         {st.critical && <span className="chip chip-bad">Critical step</span>}

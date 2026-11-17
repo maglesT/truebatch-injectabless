@@ -242,6 +242,9 @@ describe('the packing blocks', () => {
     expect(r('40').sampled).toMatchObject({ ok: true, value: '40', unit: 'units' });
     expect(r('40').yield).toMatchObject({ value: '98', check: { pass: true } });
     expect(r('40').accountability).toMatchObject({ value: '100', check: { pass: true } });
+    // Whole counts read whole in the worked lines (17 Nov 2026 run, F25): "÷ 1000 units", not "÷ 1000.000 units".
+    expect(r('40').yield).toMatchObject({ shown: expect.stringMatching(/^980 units ÷ 1000 units × 100/) });
+    expect(r('40').accountability).toMatchObject({ shown: expect.stringMatching(/^\(9800 units in packs \+ 40 units samples/) });
     // Filled containers are counted, never weighed: no weights, no mean weight.
     expect(findBlock({ id: 'finished-goods', version: 1 })!.fields.filter((x) => x.kind === 'number').every((x) => x.unit === 'units')).toBe(true);
     // 160 units not accounted for: out of limits.
