@@ -41,6 +41,11 @@ export function neededKind(block: Block, setting: string, settings: Step['settin
     if (s?.kind === 'limit' && PERCENT_RESULT.includes(c.template)) return 'fraction';
     if (s?.kind === 'limit' && c.template === 'F2') return undefined;
     if (s?.kind === 'limit' && c.template === 'T13') return 'time';
+    // I19's test temperature range limits the test temperature (°C), not the result (a pressure).
+    if (s?.kind === 'limit' && c.template === 'I19' && refsIn(c.args.temperatureRange).includes(setting)) {
+      const t = refsIn(c.args.temperature)[0];
+      return t ? kindOf(block, t, settings, new Set(seen)) : undefined;
+    }
     // T6's result has a kind of its own, not its inputs' (a ratio of two volumes has no unit; Carr index is a %).
     if (s?.kind === 'limit' && c.template === 'T6') {
       const mode = (c.args as { mode?: string }).mode;
