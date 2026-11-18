@@ -10,6 +10,7 @@ import { masterChecks } from '../shared/master/checks.js';
 import { neededKind, quantityChoices, stepFrom } from '../web/src/designer/model.js';
 import { workedExample } from '../web/src/designer/example.js';
 import { at, ev } from './engine-fixture.js';
+import { durations } from '../shared/engine/values.js';
 
 // A liquid vial batch: 100 L at 1.012 g/mL, filled at 10.0 mL + 0.5 mL excess.
 const header = { productItemId: 'p', productCode: 'P', productName: 'P', batchSize: '100', batchUnit: 'L', densityGPerMl: '1.012', fillVolumeMl: '10.0', fillExcessMl: '0.5', dispensingRooms: ['D'] };
@@ -319,5 +320,16 @@ describe('a repeat-until step whose stop check can never pass', () => {
       return c.template !== 'C1' ? [] : [...JSON.stringify(c.args).matchAll(/"\$([a-zA-Z0-9]+)\?"/g)].filter(([, n]) => b.settings.some((s) => s.name === n)).map(([, n]) => `${b.id}.${n}`);
     });
     expect(optional).toEqual([]);
+  });
+});
+
+describe('an optional minimum time is a wait (as TrueBatch Tablets round 39)', () => {
+  // T13 limits read "$timeLimit?": the "?" was kept in the setting's name, so an optional minimum time never became a
+  // wait (no timer, no demo skip). The mixing, thaw, sparge, filtration and incubation times are all optional limits.
+  it('the T13 duration of a dissolve (mixing) step with its time limit set gives a wait; not set, none', () => {
+    const block = latestBlock('dissolve');
+    const step = (settings: Record<string, unknown>) => ({ key: 'mix', title: 'Mix', block: 'dissolve', flow: { kind: 'once' }, settings }) as never;
+    expect(durations(block, step({ timeLimit: { low: '10', unit: 'min' } })).map((d) => [d.calc, d.limit.low, d.limit.unit])).toEqual([['mixTime', '10', 'min']]);
+    expect(durations(block, step({}))).toEqual([]);
   });
 });
