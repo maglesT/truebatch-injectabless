@@ -50,6 +50,12 @@ export const settingSchema = z.object({
   // text: the fixed list the master picks from.
   options: z.array(z.string().min(1)).optional(),
   optional: z.boolean().optional(),
+  // quantity: never a batch quantity (as TrueBatch Tablets), so a formula line (its batch quantity) and a batch value of
+  // the header (the batch size, volume, mass, expected units) are refused (checks.ts), and the designer does not offer
+  // them. 'tablet': a value per vial or container (the fill target); the header's nominal fill and fill target, an
+  // earlier step's result and a typed value are taken. 'tolerance': a small difference (the largest change between
+  // rounds of drying to constant weight); typed only, no header value or earlier step.
+  notBatch: z.enum(['tablet', 'tolerance']).optional(),
 }).strict();
 
 export const calcSchema = z.object({
@@ -130,6 +136,7 @@ export function blockProblems(b: Block): string[] {
     if (typeof f.count === 'string' && b.settings.find((s) => s.name === String(f.count).slice(1))?.kind !== 'number') p.push(`field ${f.name}: its count ${f.count} is not a number setting`);
   }
   for (const s of b.settings) if (s.options && (s.kind !== 'text' || !s.options.length)) p.push(`setting ${s.name}: only a text setting has a list`);
+  for (const s of b.settings) if (s.notBatch && s.kind !== 'quantity') p.push(`setting ${s.name}: only a quantity setting is marked not a batch quantity`);
   const known = new Set([...b.fields.map((f) => f.name), ...b.settings.map((s) => s.name), ...PACK_FACTS.map((x) => `pack.${x}`), ...BATCH_FACTS.map((x) => `batch.${x}`)]);
   for (const f of b.atIssue ?? []) if (!b.fields.some((x) => x.name === f)) p.push(`atIssue: no field ${f}`);
   for (const c of b.calcs) {

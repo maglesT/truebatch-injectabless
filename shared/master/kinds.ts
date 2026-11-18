@@ -66,3 +66,4 @@ export function neededKind(block: Block, setting: string, settings: Step['settin
   return undefined;
 }
 
+export const what = (k: Kind) => (k === 'number' ? 'a plain number' : k === 'fraction' ? 'a percentage' : `${/^[aeiou]/i.test(k) ? 'an' : 'a'} ${k}`);

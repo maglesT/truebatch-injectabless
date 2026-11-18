@@ -20,6 +20,9 @@ export const limitSchema = z.object({
 // density), the expected units (the volume ÷ the fill target, or the units of a batch in units), the nominal fill and
 // the fill target (fill + excess, mL), and the density.
 export const HEADER_VALUES = ['batchSize', 'batchVolume', 'batchMass', 'units', 'fillVolume', 'fillTarget', 'density'] as const;
+// The header values per vial or container: the only ones a block setting with notBatch 'tablet' takes (the others are
+// per batch, or the density).
+export const PER_UNIT_HEADERS: readonly (typeof HEADER_VALUES)[number][] = ['fillVolume', 'fillTarget'];
 export const settingValueSchema = z.union([
   text(),
   limitSchema,

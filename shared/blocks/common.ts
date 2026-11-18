@@ -322,7 +322,8 @@ export const fill: Block = {
   settings: [
     { name: 'needles', label: 'Number of filling needles', kind: 'number' },
     limit('meanLimit', 'Mean fill weight limits', false), { name: 'band', label: 'Each fill weight within (± % of the target)', kind: 'number' },
-    { name: 'fillTarget', label: 'Fill target (fill + excess)', kind: 'quantity' }, { name: 'density', label: 'Density of the bulk', kind: 'quantity' },
+    // Per container: the header's fill target (or nominal fill), an earlier step's result or typed; never a batch volume.
+    { name: 'fillTarget', label: 'Fill target (fill + excess)', kind: 'quantity', notBatch: 'tablet' }, { name: 'density', label: 'Density of the bulk', kind: 'quantity' },
     limit('headspaceLimit', 'Headspace oxygen limit'),
   ],
   calcs: [
