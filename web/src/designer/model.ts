@@ -7,7 +7,7 @@ import { stepTitle as title } from '../../../shared/engine/batch.js';
 import { Dec, UNIT_LIST, type Kind } from '../../../shared/templates/index.js';
 import type { Problem } from '../../../shared/master/checks.js';
 import type { Stored } from '../../../shared/engine/index.js';
-import type { HEADER_VALUES, MasterDoc, SettingValue, Stage, Step } from '../../../shared/master/schema.js';
+import { HEADER_VALUES, PER_UNIT_HEADERS, type MasterDoc, type SettingValue, type Stage, type Step } from '../../../shared/master/schema.js';
 
 // The unit list as offered in pick lists: every unit of the templates' unit table (shared/templates/units.ts).
 export const UNITS = UNIT_LIST;
@@ -45,6 +45,24 @@ export const move = <T,>(list: T[], i: number, by: -1 | 1): T[] => {
 
 export { kindOf, neededKind, CHECKS } from '../../../shared/master/kinds.js';
 import { kindOf, kindOfUnit, CHECKS } from '../../../shared/master/kinds.js';
+
+/**
+ * What the designer offers for a quantity setting besides "a value I type" (same rules as the master check), of the
+ * kind it needs: the formula lines' batch quantities (a mass), the header values (not the batch size as written) and
+ * earlier steps. Not a batch quantity (notBatch): no formula line and no batch value of the header; a value per vial or
+ * container takes the header's nominal fill and fill target and earlier steps, a tolerance is typed only.
+ */
+export function quantityChoices(doc: MasterDoc, si: number, ti: number, kind?: Kind, notBatch?: 'tablet' | 'tolerance'): {
+  lines: boolean; headers: (typeof HEADER_VALUES)[number][]; refs: RefOption[];
+} {
+  const fits = (k: Kind | undefined) => !kind || k === kind;
+  if (notBatch === 'tolerance') return { lines: false, headers: [], refs: [] };
+  return {
+    lines: !notBatch && fits('mass') && doc.formula.length > 0,
+    headers: HEADER_VALUES.filter((h) => fits(HEADER_LABEL[h].kind) && h !== 'batchSize' && (!notBatch || PER_UNIT_HEADERS.includes(h))),
+    refs: earlierRefs(doc, si, ti).filter((r) => fits(r.kind)),
+  };
+}
 
 export interface RefOption { ref: string; label: string; kind: Kind | undefined }
 /** Earlier steps' recorded numbers and worked-out values this step may use (same rules as the master check). */

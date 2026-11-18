@@ -7,9 +7,9 @@ import { findBlock, type Block } from '../blocks/index.js';
 import { refsIn } from '../blocks/format.js';
 import { Dec, c1WithinLimits, findUnit, t10Compensating, t11SaltFactor, t2Total, t8BatchScaling, type Q } from '../templates/index.js';
 import { decimalsOf } from '../templates/core.js';
-import { evaluate, headerValue, lineQuantity } from '../engine/values.js';
-import { kindOf, kindOfUnit, neededKind } from './kinds.js';
-import { materialLines, type Answer, type FormulaLine, type Limit, type MasterDoc, type SettingValue } from './schema.js';
+import { evaluate, headerValue, HEADER_WORDS, lineQuantity } from '../engine/values.js';
+import { kindOf, kindOfUnit, neededKind, what as kindWords } from './kinds.js';
+import { materialLines, PER_UNIT_HEADERS, type Answer, type FormulaLine, type Limit, type MasterDoc, type SettingValue } from './schema.js';
 import { isBalance } from '../engine/picks.js';
 import { sterileChecks } from './sterile-checks.js';
 import { packingChecks } from './packing.js';
@@ -112,7 +112,7 @@ export function masterChecks(doc: MasterDoc): Problem[] {
       for (const [name, v] of Object.entries(st.settings)) {
         const bs = block.settings.find((x) => x.name === name);
         const listed = !bs?.options || (typeof v === 'string' && bs.options.includes(v));
-        const why = !bs ? `The block ${block.name} has no setting ${name}` : listed ? settingProblem(doc, si, ti, bs.kind, v) : `${bs.label}: choose one of ${bs.options!.join(', ')}`;
+        const why = !bs ? `The block ${block.name} has no setting ${name}` : listed ? settingProblem(doc, si, ti, block, bs, st.settings, v) : `${bs.label}: choose one of ${bs.options!.join(', ')}`;
         if (why) error(`${p}.settings.${name}`, why);
         // A limit of another kind than what it limits (a lethality written in minutes): the designer offers only the
         // right kinds; a master written otherwise is refused here (found in the first Injectables batch run).
@@ -124,12 +124,6 @@ export function masterChecks(doc: MasterDoc): Problem[] {
           const i19 = block.calcs.some((c) => c.template === 'I19' && refsIn(c.args.temperatureRange).includes(name));
           const needed = value ? kindOf(block, value, st.settings) : i19 ? neededKind(block, name, st.settings) : undefined, has = kindOfUnit(v.unit);
           if (needed && has && needed !== has) error(`${p}.settings.${name}`, `${bs.label}: a ${needed} limit is needed here, not ${has} (${v.unit})`);
-        }
-        // A formula line gives its batch quantity, a mass: a value of another kind (a target concentration, a number of
-        // units) never takes one, or the batch is stopped at the step (as TrueBatch Tablets' label claim, 18 Nov 2026).
-        else if (bs?.kind === 'quantity' && typeof v === 'object' && 'formula' in v) {
-          const needed = neededKind(block, name, st.settings);
-          if (needed && needed !== 'mass') error(`${p}.settings.${name}`, `${bs.label}: a formula line gives its batch quantity (a mass), but this step needs a ${needed}: type the value`);
         }
       }
       // A container issued by its material (container-issue v2 on) and never counted back, in its stage or a later one
@@ -381,7 +375,19 @@ function calculationChecks(doc: MasterDoc, out: Problem[]): void {
 }
 
 /** Whether a step setting fits its kind, and a reference points at something earlier that exists. */
-function settingProblem(doc: MasterDoc, si: number, ti: number, kind: Block['settings'][number]['kind'], v: SettingValue): string | null {
+function settingProblem(doc: MasterDoc, si: number, ti: number, block: Block, bs: Block['settings'][number], settings: Record<string, SettingValue>, v: SettingValue): string | null {
+  const kind = bs.kind;
+  // Not a batch quantity (notBatch, as TrueBatch Tablets): a formula line gives its batch quantity and the header's batch
+  // values are per batch, so a fill target of 100 L would make every fill weight fail, and a largest change of 25 kg
+  // would let every round of drying pass. A value per container also takes the header's nominal fill and fill target and
+  // an earlier step; a tolerance is typed only. What is left is checked as any quantity below.
+  const perBatch = (x: SettingValue) => typeof x === 'object' && ('formula' in x || ('header' in x && !PER_UNIT_HEADERS.includes(x.header)));
+  if (bs.notBatch && typeof v === 'object' && !('unit' in v) && (bs.notBatch === 'tolerance' || perBatch(v))) {
+    const said = 'formula' in v ? `the batch quantity of ${doc.formula.find((l) => l.key === v.formula)?.name ?? v.formula}` : 'header' in v ? `the ${HEADER_WORDS[v.header]}` : `${v.ref} (an earlier step)`;
+    return bs.notBatch === 'tablet'
+      ? `${bs.label} is a value per vial or container: pick the fill target or nominal fill from the header, an earlier step's result, or type it (${said} is per batch)`
+      : `${bs.label} is a tolerance: type it (${said} is not a tolerance)`;
+  }
   if (typeof v === 'string') {
     if (kind === 'number') return DECIMAL.test(v) ? null : `"${v}" is not a plain decimal`;
     if (kind === 'quantity') {
@@ -397,7 +403,11 @@ function settingProblem(doc: MasterDoc, si: number, ti: number, kind: Block['set
   }
   if ('formula' in v) {
     if (kind !== 'material' && kind !== 'quantity') return `A formula line is given where a ${kind} is wanted`;
-    return materialLines(doc).some((l) => l.key === v.formula) ? null : `No formula line ${v.formula}`;
+    if (!materialLines(doc).some((l) => l.key === v.formula)) return `No formula line ${v.formula}`;
+    // A formula line gives its batch quantity, a mass: a setting of another known kind (a target concentration, a number
+    // of units) never takes one, or the batch is stopped at the step (Tablets round 29).
+    const need = kind === 'quantity' ? neededKind(block, bs.name, settings) : undefined;
+    return need && need !== 'mass' ? `${bs.label}: a formula line gives its batch quantity (a mass), but this step needs ${kindWords(need)}: type the value` : null;
   }
   if ('header' in v) {
     if (kind !== 'quantity') return `A header value is given where a ${kind} is wanted`;

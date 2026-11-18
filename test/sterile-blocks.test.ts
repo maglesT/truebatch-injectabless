@@ -7,7 +7,7 @@ import { blockProblems } from '../shared/blocks/format.js';
 import { doneProblems, evaluate, openSteps, parseKey, usedQuantity, type StepEvent } from '../shared/engine/index.js';
 import { masterSchema, type MasterDoc } from '../shared/master/schema.js';
 import { masterChecks } from '../shared/master/checks.js';
-import { neededKind, stepFrom } from '../web/src/designer/model.js';
+import { neededKind, quantityChoices, stepFrom } from '../web/src/designer/model.js';
 import { workedExample } from '../web/src/designer/example.js';
 import { at, ev } from './engine-fixture.js';
 
@@ -250,5 +250,43 @@ describe('a formula line is only a mass (its batch quantity)', () => {
     expect(errorsAt(adjust('50.0 mg/mL'), 'target')).toEqual([]);
     expect(errorsAt(one('unit-reconcile', { theoretical: { formula: 'x' } }), 'theoretical')).toEqual(['Theoretical units: a formula line gives its batch quantity (a mass), but this step needs a count: type the value']);
     expect(errorsAt(one('weigh', { target: { formula: 'x' } }), 'target')).toEqual([]);
+  });
+});
+
+// Ported from TrueBatch Tablets round 31 (notBatch): a value per vial or container, or a tolerance, is never a batch
+// quantity. A fill target of the batch volume (100 L) made every fill weight fail; a largest change of a batch quantity
+// (kilograms) let every round of drying pass.
+describe('a value per container or a tolerance is never a batch quantity', () => {
+  const fill = (fillTarget: object | string) => one('fill', { needles: '2', band: '2', meanLimit: { low: '10.50', high: '10.75', unit: 'g' }, fillTarget, density: { header: 'density' } });
+  const dry = (maxChange: object | string) => one('dry-constant', { maxChange }, { flow: { kind: 'repeat-until', maxRounds: 5 } });
+  const errorsAt = (doc: MasterDoc, name: string) => masterChecks(doc).filter((p) => p.level === 'error' && p.path === `stages[0].steps[0].settings.${name}`).map((p) => p.message);
+
+  it('only a quantity setting is marked', () => {
+    const b = findBlock({ id: 'fill', version: 1 })!;
+    expect(blockProblems({ ...b, settings: b.settings.map((s) => (s.name === 'needles' ? { ...s, notBatch: 'tablet' as const } : s)) }))
+      .toEqual(['setting needles: only a quantity setting is marked not a batch quantity']);
+    expect(b.settings.find((s) => s.name === 'fillTarget')?.notBatch).toBe('tablet');
+    expect(findBlock({ id: 'dry-constant', version: 1 })!.settings[0]!.notBatch).toBe('tolerance');
+  });
+
+  it('master check: the fill target is the header\'s fill target or nominal fill, or typed; never the batch volume or a formula line', () => {
+    expect(errorsAt(fill({ header: 'fillTarget' }), 'fillTarget')).toEqual([]);
+    expect(errorsAt(fill({ header: 'fillVolume' }), 'fillTarget')).toEqual([]);
+    expect(errorsAt(fill('10.5 mL'), 'fillTarget')).toEqual([]);
+    expect(errorsAt(fill({ header: 'batchVolume' }), 'fillTarget')).toEqual(['Fill target (fill + excess) is a value per vial or container: pick the fill target or nominal fill from the header, an earlier step\'s result, or type it (the batch volume is per batch)']);
+    expect(errorsAt(fill({ formula: 'x' }), 'fillTarget')).toEqual(['Fill target (fill + excess) is a value per vial or container: pick the fill target or nominal fill from the header, an earlier step\'s result, or type it (the batch quantity of M is per batch)']);
+  });
+
+  it('master check: the largest change between rounds is typed only', () => {
+    expect(errorsAt(dry('0.05 g'), 'maxChange')).toEqual([]);
+    expect(errorsAt(dry({ formula: 'x' }), 'maxChange')).toEqual(['Largest change between rounds is a tolerance: type it (the batch quantity of M is not a tolerance)']);
+    expect(errorsAt(dry({ header: 'batchMass' }), 'maxChange')).toEqual(['Largest change between rounds is a tolerance: type it (the batch mass is not a tolerance)']);
+  });
+
+  it('designer: the picker offers what the master check takes', () => {
+    const doc = fill('10.5 mL');
+    expect(quantityChoices(doc, 0, 0, undefined, 'tablet')).toMatchObject({ lines: false, headers: ['fillVolume', 'fillTarget'] });
+    expect(quantityChoices(doc, 0, 0, undefined, 'tolerance')).toEqual({ lines: false, headers: [], refs: [] });
+    expect(quantityChoices(doc, 0, 0, 'mass')).toMatchObject({ lines: true, headers: ['batchMass'] });
   });
 });
