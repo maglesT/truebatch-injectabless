@@ -428,6 +428,32 @@ describe('TI-12 a lot typed by hand after an MMS lot', () => {
       expect(JSON.stringify((await sign('asha', x.id, '0.1.0.1', 'done')).json())).not.toMatch(/previous lot/);
     } finally { await restore(S.mms); }
   });
+
+  it('TI-12 a lot from MMS after a lot typed by hand (as TrueBatch Tablets, 18 Nov 2026): the typed lot\'s label answers are not asked of it, so the step can be signed; they stay in its history', async () => {
+    const d = tablet();
+    const g = d.stages[1]!;
+    d.stages = [{ ...g, uses: [], steps: [g.steps[0]!, g.steps[2]!, g.steps[6]!] }];
+    const x = await issue(d);
+    await act('asha', x.id, '0.1.0.1', 'start');
+    await cut(S.mms);
+    try {
+      const r = await record(x.id, '0.1.0.1', { lot: 'API-A', ...handLabels('lot', 'lot'), 'lot.report': 'QC-HAND-1', assay: '99.0', lod: '0.4', balance: 'eq-bal', gross: '10.981', tare: '0.850' });
+      expect(r.statusCode, r.body).toBe(200);
+    } finally { await restore(S.mms); }
+    // MMS answers again: the lot is picked from it.
+    { const r = await record(x.id, '0.1.0.1', { lot: 'API-OK' }); expect(r.statusCode, r.body).toBe(200); }
+    const s = await stepOf(x.id, '0.1.0.1');
+    expect(s.source.lot).toMatchObject({ from: 'mms' });
+    expect(s.handFields).toEqual([]);
+    // The label answers are not asked for a lot from MMS: the step takes none.
+    expect(await problems(record(x.id, '0.1.0.1', { 'lot.released': 'yes' }))).toEqual(['There is no field lot.released']);
+    const done = await sign('asha', x.id, '0.1.0.1', 'done');
+    expect(done.statusCode, done.body).toBe(200);
+    // The typed lot and its label answers stay in the step's history (and the record).
+    const h = (await as('asha', 'GET', `/api/batches/${x.id}/steps/0.1.0.1/events`)).json() as { events: { payload: { values?: Record<string, unknown> } }[] };
+    expect(h.events.find((e) => e.payload.values?.lot === 'API-A')?.payload.values).toMatchObject({ 'lot.released': 'yes', 'lot.expiry': '2099-12-31', 'lot.report': 'QC-HAND-1' });
+    expect((await stepOf(x.id, '0.1.0.1')).values).toMatchObject({ lot: 'API-OK', 'lot.released': 'yes' });
+  });
 });
 
 describe('TI-21 Deviations: the deviation number and its status come from the Deviations system', () => {
