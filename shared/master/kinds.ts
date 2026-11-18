@@ -46,6 +46,12 @@ export function neededKind(block: Block, setting: string, settings: Step['settin
       const t = refsIn(c.args.temperature)[0];
       return t ? kindOf(block, t, settings, new Set(seen)) : undefined;
     }
+    // T26's target and the donor's value are of the kind of the measured value (a concentration), not of the bulk's mass.
+    const mixed = c.template === 'T26' ? refsIn([c.args.a, c.args.b, c.args.target]) : [];
+    if (mixed.includes(setting)) {
+      for (const r of mixed) { const k = r === setting ? undefined : kindOf(block, r, settings, new Set(seen)); if (k) return k; }
+      continue;
+    }
     // T6's result has a kind of its own, not its inputs' (a ratio of two volumes has no unit; Carr index is a %).
     if (s?.kind === 'limit' && c.template === 'T6') {
       const mode = (c.args as { mode?: string }).mode;
