@@ -151,6 +151,13 @@ adding anything, look how TrueBatch Tablets does it and copy that.
   the same names kept), asks before removing a step, moves steps by their key, and the changes view ignores a step's
   new number and names the fields a newer block version records. The change control list offers those naming the
   product (QMS's products or the code in the title; a pack's code no longer names its bulk).
+- **The changes view shows every change** (as TrueBatch Tablets round 38, 18 Nov 2026): the review's changes from the
+  previous version compare the plain view's lines, so every field of a master has a line (alert limits, a salt form's
+  charge, the route and what the label claim is per, an aseptic stage, a stage's name, the master data item of the
+  product, the filled units and each material, shown only in the changes view). A guard test
+  (`test/describe-guard.test.ts`) changes each field of the schema in turn, for an injection and a packing master, and
+  expects a changed line, so a field added later fails until it has one. Safety net: when the versions differ but no
+  line changed, the view says "Changed (not described)" with the changed fields' paths, never "No changes".
 - **Aseptic blow-fill-seal and sterile powder filling** (owner, 17 Nov 2026; no new mechanism, no new rule): two
   starting masters, as data. "Ampoules or nebules, blow-fill-seal, aseptic": compounding with the sterile filtration
   and filter tests, an aseptic blow-fill-seal stage in the Aseptic filling area (set-up, interventions, clean-air
