@@ -62,6 +62,10 @@ test('TI-P2 packing journey: packing master from the skeleton (labelling, carton
   await expect(check).toContainText('Vial label has no issue step');
   await author.page.getByRole('button', { name: 'Add their issue and reconciliation steps' }).click();
   await expect(check).not.toContainText('has no issue step');
+  // A unit changed after the steps exist changes them too: the check finds no unit mismatch.
+  await author.page.getByLabel('Unit of Vial label').selectOption('g');
+  await expect(check).not.toContainText('make them the same');
+  await author.page.getByLabel('Unit of Vial label').selectOption('units');
   // Vials in cartons: no blister forming or leak test in the skeleton, so no limits of theirs to set.
   await expect(check).toContainText('No problems');
   await expect(author.page.getByRole('status')).toHaveText('All changes saved');
