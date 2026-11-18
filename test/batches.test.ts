@@ -394,6 +394,11 @@ describe('production approval, QC approval and QA release', () => {
     const [ev] = await t.owner<{ at: Date }[]>`select at from batch_events where batch_id = ${id} and kind = 'released'`;
     const [f] = await t.owner.unsafe(`select status, released, released_at, released_by from ${t.schema}_report.batch_fact_v1 where batch_number = (select batch_no from batches where id = $1)`, [id]);
     expect(f).toEqual({ status: 'RELEASED', released: true, released_at: ev!.at, released_by: 'MEERA' });
+    // 0022 (owner's "A", 18 Nov 2026): the ids carry this product's own prefix, never Tablets' ('truebatch:batch:').
+    const [ids] = await t.owner.unsafe(`select f.batch_id::text = md5('truebatch_injectables:batch:' || $1::bigint)::uuid::text as own,
+      f.mbr_version_id::text = md5('truebatch_injectables:master_version:' || b.master_version_id)::uuid::text as own_version
+      from ${t.schema}_report.batch_fact_v1 f join batches b on b.batch_no = f.batch_number where b.id = $1::bigint`, [id]);
+    expect(ids).toEqual({ own: true, own_version: true });
   });
 
   it('TI-21 the review list shows the deviations with their status and every signature of the batch', async () => {
