@@ -54,6 +54,10 @@ export function packingChecks(doc: MasterDoc): Problem[] {
     if (!issue) error(`pack.materials[${i}]`, `${m.name} has no issue step`, 'TI-P4');
     else if (setup && pos(issue) > pos(setup)) error(issue.path, `${m.name} is issued after the line set-up`, 'TI-P4');
     if (m.printed && !of('printed-reconciliation').some((x) => material(x) === m.key)) error(`pack.materials[${i}]`, `The printed ${m.name} has no reconciliation step`, 'TI-P6');
+    // Its steps count in the material's unit (a unit changed after the steps were added left them in the old one).
+    for (const x of [...of('pack-material-issue'), ...of('printed-reconciliation')].filter((y) => material(y) === m.key && y.t.settings.unit !== m.unit)) {
+      error(`${x.path}.settings.unit`, `${m.name} is counted in ${m.unit} in the packing materials, but this step in ${String(x.t.settings.unit)}: make them the same`, 'TI-P4');
+    }
   });
 
   // TI-P5: coding checked at the start and at intervals; packs inspected on line.

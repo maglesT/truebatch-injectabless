@@ -13,6 +13,7 @@ import { asPermissions } from '../server/auth.js';
 import { ownCodes } from '../server/product.js';
 import { demoSkipCommand } from '../server/demo.js';
 import { PACKING } from '../packing/product.js';
+import { withMaterialUnit } from '../web/src/designer/skeletons.js';
 
 // TrueBatch Injectables Packing: the packing master checks (TI-P1 to TI-P9), the packing blocks run by the shared engine,
 // the serialisation check (match, mismatch, duplicate, reconciliation), printed materials reconciled, the expiry from
@@ -123,6 +124,24 @@ describe('the packing master (TI-P1 to TI-P9)', () => {
   it('TI-P9 a pack for India domestic carries its MRP; an export pack may have none', () => {
     expect(errors(packing({ mrp: undefined }), 'TI-P9')).toEqual(['A pack for India domestic needs its MRP: it is printed on the pack and checked']);
     expect(errors(packing({ mrp: undefined, destination: 'Export' }))).toEqual([]);
+  });
+});
+
+// Ported from TrueBatch Tablets (round 32): a unit changed after the steps were added left them in the old one.
+describe('a packing material\'s unit changed after its steps were added', () => {
+  const units = (d: MasterDoc) => d.stages.flatMap((s) => s.steps).filter((t) => (t.settings.material as { formula?: string } | undefined)?.formula === 'label').map((t) => `${t.block.id} ${String(t.settings.unit)}`);
+  it('TI-P4 the master refuses an issue or reconciliation step in another unit than its material', () => {
+    const d = packing();
+    d.pack!.materials[0]!.unit = 'g';
+    expect(errors(d, 'TI-P4')).toEqual(['Vial label is counted in g in the packing materials, but this step in units: make them the same',
+      'Vial label is counted in g in the packing materials, but this step in units: make them the same']);
+  });
+  it('the designer changes the unit on the material and on its steps together', () => {
+    const d = withMaterialUnit(packing(), 'label', 'g');
+    expect(d.pack!.materials[0]!.unit).toBe('g');
+    expect(units(d)).toEqual(['pack-material-issue g', 'printed-reconciliation g']);
+    expect(errors(d)).toEqual([]);
+    expect(units(packing())).toEqual(['pack-material-issue units', 'printed-reconciliation units']);
   });
 });
 
