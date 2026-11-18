@@ -104,6 +104,14 @@ describe('TrueBatch Injectables Packing: its own product on the platform', () =>
     mv = await effective();
     await expect(t.sql`update step_events set kind = 'done'`).rejects.toMatchObject({ code: '42501' });
     await expect(t.sql`delete from signatures`).rejects.toMatchObject({ code: '42501' });
+    // A batch row is insert-only for the owner too (0023, as TrueBatch Tablets round 34).
+    await expect(t.owner`update batches set batch_no = batch_no`).rejects.toMatchObject({ code: '42501' });
+    await expect(t.owner`truncate batches cascade`).rejects.toMatchObject({ code: '42501' });
+  });
+
+  it('PL-06 packing publishes only its own views: no batch_fact_v1 (0022 skipped, 0112 drops the stray view)', async () => {
+    const views = await t.owner.unsafe(`select viewname from pg_views where schemaname = $1 order by viewname`, [`${t.schema}_report`]);
+    expect(views.map((v) => v.viewname)).toEqual(['deviation_note_v1', 'equipment_use_v1', 'material_use_v1', 'packing_batch_v1']);
   });
 });
 
