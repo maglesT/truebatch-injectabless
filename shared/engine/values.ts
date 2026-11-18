@@ -361,7 +361,7 @@ export function durations(block: Block | undefined, st: Step): { calc: string; l
   const timer = (x: unknown) => block?.fields.find((f) => f.kind === 'timer' && x === `$${f.name}`)?.name;
   return (block?.calcs ?? []).flatMap((c) => {
     const a = c.args;
-    const limit = typeof a.limit === 'string' ? st.settings[a.limit.slice(1)] : undefined;
+    const limit = typeof a.limit === 'string' ? st.settings[a.limit.slice(1).replace(/\?$/, '')] : undefined;
     const [start, end] = [timer(a.start), timer(a.end)];
     return c.template === 'T13' && a.mode === 'duration' && start && end && typeof limit === 'object' && 'low' in limit && limit.low
       ? [{ calc: c.name, label: c.label, start, end, limit: { ...limit, low: limit.low } }] : [];
