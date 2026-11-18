@@ -125,6 +125,12 @@ export function masterChecks(doc: MasterDoc): Problem[] {
           const needed = value ? kindOf(block, value, st.settings) : i19 ? neededKind(block, name, st.settings) : undefined, has = kindOfUnit(v.unit);
           if (needed && has && needed !== has) error(`${p}.settings.${name}`, `${bs.label}: a ${needed} limit is needed here, not ${has} (${v.unit})`);
         }
+        // A formula line gives its batch quantity, a mass: a value of another kind (a target concentration, a number of
+        // units) never takes one, or the batch is stopped at the step (as TrueBatch Tablets' label claim, 18 Nov 2026).
+        else if (bs?.kind === 'quantity' && typeof v === 'object' && 'formula' in v) {
+          const needed = neededKind(block, name, st.settings);
+          if (needed && needed !== 'mass') error(`${p}.settings.${name}`, `${bs.label}: a formula line gives its batch quantity (a mass), but this step needs a ${needed}: type the value`);
+        }
       }
       // A container issued by its material (container-issue v2 on) and never counted back, in its stage or a later one
       // (the starting masters count the vials back after filling): all of it would count as used in MMS (whole-suite

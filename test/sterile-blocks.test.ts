@@ -7,7 +7,7 @@ import { blockProblems } from '../shared/blocks/format.js';
 import { doneProblems, evaluate, openSteps, parseKey, usedQuantity, type StepEvent } from '../shared/engine/index.js';
 import { masterSchema, type MasterDoc } from '../shared/master/schema.js';
 import { masterChecks } from '../shared/master/checks.js';
-import { stepFrom } from '../web/src/designer/model.js';
+import { neededKind, stepFrom } from '../web/src/designer/model.js';
 import { workedExample } from '../web/src/designer/example.js';
 import { at, ev } from './engine-fixture.js';
 
@@ -223,5 +223,32 @@ describe('fill-weight limits and the fill target', () => {
     expect(warns({ low: '10.500', high: '10.750', unit: 'g' })).toEqual([]);
     expect(warns({ low: '2.130', high: '2.200', unit: 'g' })).toEqual([expect.objectContaining({ level: 'warning', path: 'stages[0].steps[0].settings.meanLimit' })]);
     expect(warns({ low: '0.0105', high: '0.0108', unit: 'kg' })).toEqual([]);
+  });
+});
+
+// Ported from TrueBatch Tablets (18 Nov 2026): a formula line picked for a value per mL or per unit gave the line's
+// batch quantity (kg). The bulk correction's target concentration took it, and the batch stopped at the step.
+describe('a formula line is only a mass (its batch quantity)', () => {
+  const adjust = (target: object | string) => one('bulk-adjust', { target, donor: '0 mg/mL', direction: 'dilute with the vehicle', tolerance: '2.0' });
+  const errorsAt = (doc: MasterDoc, name: string) => masterChecks(doc).filter((p) => p.level === 'error' && p.path === `stages[0].steps[0].settings.${name}`).map((p) => p.message);
+
+  it('the target concentration and the donor are concentrations, so the designer offers no formula line for them', () => {
+    const b = findBlock({ id: 'bulk-adjust', version: 1 })!;
+    expect(neededKind(b, 'target')).toBe('mass concentration');
+    expect(neededKind(b, 'donor')).toBe('mass concentration');
+    expect(neededKind(b, 'largestLimit')).toBe('mass');
+  });
+
+  it('engine: a typed target works the quantity out; a formula line\'s batch quantity (kg) is refused at the step', () => {
+    const values = { measured: { value: '52.0', unit: 'mg/mL' }, bulk: { value: '100.0', unit: 'kg' } };
+    expect(run(adjust('50.0 mg/mL'), values).toAdd).toMatchObject({ ok: true, unit: 'kg' });
+    expect(run(adjust({ formula: 'x' }), values).toAdd).toMatchObject({ ok: false });
+  });
+
+  it('master check: a formula line where a concentration or a number of units is needed is refused; a mass still takes one', () => {
+    expect(errorsAt(adjust({ formula: 'x' }), 'target')).toEqual(['Target concentration: a formula line gives its batch quantity (a mass), but this step needs a mass concentration: type the value']);
+    expect(errorsAt(adjust('50.0 mg/mL'), 'target')).toEqual([]);
+    expect(errorsAt(one('unit-reconcile', { theoretical: { formula: 'x' } }), 'theoretical')).toEqual(['Theoretical units: a formula line gives its batch quantity (a mass), but this step needs a count: type the value']);
+    expect(errorsAt(one('weigh', { target: { formula: 'x' } }), 'target')).toEqual([]);
   });
 });
