@@ -159,7 +159,16 @@ export function masterChecks(doc: MasterDoc): Problem[] {
       if (st.flow.kind === 'repeat-until') {
         if (!st.flow.maxRounds) error(`${p}.flow`, 'A repeat-until step needs the most rounds allowed');
         const stop = st.flow.stop ?? block.stop;
-        if (!stop || !block.calcs.some((c) => c.name === stop)) error(`${p}.flow`, 'A repeat-until step needs a stop check (a calculation of its block)');
+        const stopCalc = block.calcs.find((c) => c.name === stop);
+        if (!stop || !stopCalc) error(`${p}.flow`, 'A repeat-until step needs a stop check (a calculation of its block)');
+        // A stop check on an optional setting ("$name?") the master left unset is left out at run time, so it never
+        // passes and the rounds can only end at the most rounds allowed (as TrueBatch Tablets, 18 Nov 2026). Only the stop
+        // check, and only a limit check (C1): the engine leaves out only those; another template runs without the
+        // optional value (the filter integrity test without a product factor, wetted with water).
+        else if (stopCalc.template === 'C1') for (const [, name] of JSON.stringify(stopCalc.args).matchAll(/"\$([a-zA-Z0-9]+)\?"/g)) {
+          const bs = block.settings.find((x) => x.name === name);
+          if (bs && name && st.settings[name] === undefined) error(`${p}.flow`, `${stopCalc.label} stops the rounds, but ${bs.label} is not set, so it never passes: set it, or pick the check that stops the rounds under More options`);
+        }
       }
       if (st.everyMinutes && st.flow.kind !== 'repeat-until') error(`${p}.everyMinutes`, 'Checks every N minutes need a repeat-until step');
       const later = st.everyMinutesLater;
