@@ -290,3 +290,34 @@ describe('a value per container or a tolerance is never a batch quantity', () =>
     expect(quantityChoices(doc, 0, 0, 'mass')).toMatchObject({ lines: true, headers: ['batchMass'] });
   });
 });
+
+// Ported from TrueBatch Tablets round 37: a repeat-until step whose stop check reads an optional setting the master left
+// unset never passes at run time (a limit check of an unset limit is left out), so the rounds could only end at the most
+// rounds allowed.
+describe('a repeat-until step whose stop check can never pass', () => {
+  const flow = (stop?: string) => ({ flow: { kind: 'repeat-until', maxRounds: 5, ...(stop ? { stop } : {}) } });
+  const never = (doc: MasterDoc) => masterChecks(doc).filter((p) => p.level === 'error' && /never passes/.test(p.message)).map((p) => `${p.path}: ${p.message}`);
+
+  it('the pH check stops the rounds but the pH limits are not set: refused', () => {
+    expect(never(one('bulk-test', {}, flow('phCheck')))).toEqual(['stages[0].steps[0].flow: pH stops the rounds, but pH limits is not set, so it never passes: set it, or pick the check that stops the rounds under More options']);
+  });
+
+  it('the limits set: taken; the other optional limits (not the stop check) stay optional; not a repeat-until step: nothing', () => {
+    expect(never(one('bulk-test', { phLimit: { low: '6.8', high: '7.2', unit: 'pH' } }, flow('phCheck')))).toEqual([]);
+    expect(never(one('bulk-test', {}))).toEqual([]);
+  });
+
+  it('only a limit check is left out: the filter integrity test (I19) without a product factor, wetted with water, still stops the rounds', () => {
+    const ft = one('filter-test', { test: 'bubble point', resultUnit: 'bar g', makerLimit: '3.2 bar g', wettedWith: 'water' }, flow());
+    expect(findBlock({ id: 'filter-test', version: 1 })!.stop).toBe('integrity');
+    expect(never(ft)).toEqual([]);
+  });
+
+  it('no block\'s own stop check is a limit check on an optional setting (each stop check of the blocks as shipped can pass)', () => {
+    const optional = BLOCKS.filter((b) => b.stop).flatMap((b) => {
+      const c = b.calcs.find((x) => x.name === b.stop)!;
+      return c.template !== 'C1' ? [] : [...JSON.stringify(c.args).matchAll(/"\$([a-zA-Z0-9]+)\?"/g)].filter(([, n]) => b.settings.some((s) => s.name === n)).map(([, n]) => `${b.id}.${n}`);
+    });
+    expect(optional).toEqual([]);
+  });
+});
