@@ -176,7 +176,8 @@ describe('master designer', () => {
     const d = masterSchema.parse({ header: h, formula: [], stages: skeletonStages('liquid-aseptic', h) });
     d.stages[0]!.steps[3]!.orderAfter = d.stages[0]!.steps[2]!.key;
     const lines = describeMaster(d).filter((s) => s.key.startsWith('stage:')).flatMap((s) => s.lines.filter((l) => l.key !== 'about'));
-    expect(lines.map((l) => /^\d+\. ([^:]+):/.exec(l.text)?.[1])).toEqual(d.stages.flatMap((s) => s.steps.map((t) => stepTitle(d, t))));
+    // A later block version is named after the title (round 38).
+    expect(lines.map((l) => /^\d+\. ([^:]+?)(?: \(block version \d+\))?:/.exec(l.text)?.[1])).toEqual(d.stages.flatMap((s) => s.steps.map((t) => stepTitle(d, t))));
     for (const l of lines) for (const t of d.stages.flatMap((s) => s.steps)) expect(l.text, l.key).not.toContain(`(${t.key})`);
     expect(lines.map((l) => l.text).filter((x) => /Order-critical/.test(x)).map((x) => /Order-critical: [^.]*\.[^.]*\./.exec(x)![0]))
       .toEqual([`Order-critical: after step 3. ${stepTitle(d, d.stages[0]!.steps[2]!)}.`]);
