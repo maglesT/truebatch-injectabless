@@ -5,7 +5,7 @@ import {
   blockOf, changed, go, headline, pdfLink, plainClock, plainError, statusText, stepOf, tone, useBlocks, useLims, valueText, words,
   type BatchDetail, type Block, type FloorEvent, type Source, type TimerRow, type Value,
 } from '../api-floor.js';
-import { fieldLabel as labelOf, PROVIDER_NAME } from '../../../shared/engine/links.js';
+import { fieldLabel as labelOf, handWhy, PROVIDER_NAME } from '../../../shared/engine/links.js';
 import { stepLabel } from '../../../shared/engine/batch.js';
 import { deviationNumber, deviationStatusWords, qcReportText } from '../../../shared/engine/release.js';
 import { plantText } from '../../../shared/plant-time.js';
@@ -152,7 +152,7 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
         {r.bulkOpen && <Group title={`Open deviations of the bulk batch ${r.bulkOpen.bulk}`} empty="">{r.bulkOpen.open.map((x) => (
           <li key={x.number} className="bad"><b>{x.number}</b><span>{x.title}</span><small>{deviationStatusWords(x.status)} in the Deviations system: closed there before release</small></li>))}</Group>}
         <Group title="Typed by hand (a link was off or down)" empty="Every linked value came through its link.">{r.hand.map((h, i) => (
-          <li key={i}><b>{name(h.step)} · {handLabel(h.step, h.field)}</b><span>{PROVIDER_NAME[h.link]} {h.state === 'down' ? 'link was down' : 'not linked'}</span>
+          <li key={i}><b>{name(h.step)} · {handLabel(h.step, h.field)}</b><span>{handWhy(h, 'link was down')}</span>
             <small>{h.personName}, {plainClock(h.at)}</small></li>))}</Group>
         {(r.trainingTyped.length > 0 || d.master.doc.stages.some((s) => s.steps.some((t) => t.training))) && <Group title="Training typed by hand (Recruitment not reachable)" empty="Every training was read from Recruitment.">{r.trainingTyped.map((x) => (
           <li key={x.event} className="bad"><b>{name(x.step)}</b><span>{x.personName} ({x.kind === 'checked' ? 'checked' : 'performed'}) ticked “I am trained in {skillText(x)}”: Recruitment {x.state === 'down' ? 'link was down' : 'not linked'}</span>

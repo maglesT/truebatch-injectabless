@@ -14,6 +14,8 @@
  * batch and product, this step. A list of readings (blend or content uniformity) takes LIMS's individual values in their
  * order, exactly as many as the block asks for (never padded or cut); LIMS's reported figure of them (their mean, or the
  * acceptance value) is worked out again from the values and must agree, rounded as LIMS wrote it.
+ * Round 43 (found by the API edition's periodic reactions): a step with rounds also takes the report of an EARLIER
+ * round of the same step (requestFits), each result filling one round; the record says which round it was sampled in.
  */
 import type { BlockField } from '../blocks/format.js';
 import { Dec, roundHalfUp, t14ContentUniformity, writtenDecimals } from '../templates/index.js';
@@ -56,7 +58,7 @@ export function coaRefusal(c: Coa, want: CoaFor): string | null {
   // Round 42: an in-process field takes only an in-process report of this step's own request.
   if (want.kind === 'PRODUCT' && want.request !== undefined) {
     if (c.purpose !== 'in_process') return `CoA ${no} is of a ${c.purpose ?? 'other'} sample: only an in-process report of request ${want.request} (this step) may be used.`;
-    if (!same(c.requestId, want.request)) return `In-process report ${no} is for request ${c.requestId ?? '—'}, not request ${want.request} (this step).`;
+    if (!requestFits(c.requestId, want.request)) return `In-process report ${no} is for request ${c.requestId ?? '—'}, not request ${want.request} (this step) or an earlier round of it.`;
     return null;
   }
   if (!PURPOSES[want.kind].includes(c.purpose ?? '')) return `CoA ${no} is of a${c.purpose === 'in_process' ? 'n' : ''} ${(c.purpose ?? 'other').replace(/_/g, '-')} sample: only the ${PURPOSES[want.kind].join(' or ')} CoA of ${what} may be used.`;
@@ -94,17 +96,42 @@ export const isPick = (x: unknown): x is { lims: string } => !!x && typeof x ===
 
 /** The lab request of a step instance: '<batch number>/<step key>' (a repeated round or sub-batch has its own key). */
 export const labRequestId = (batchNo: string, key: string) => `${batchNo}/${key}`;
+/** A request id's step (batch and stage.sub-batch.step, without case) and round; null when it is not one. */
+export function requestRound(id: string | null | undefined): { step: string; round: number } | null {
+  const m = /^(.+\/\d+\.\d+\.\d+)\.(\d+)$/.exec((id ?? '').trim());
+  return m ? { step: m[1]!.toLowerCase(), round: Number(m[2]) } : null;
+}
+/**
+ * Round 43 (general rule, found by the API edition's periodic reactions): a step takes an in-process report of its own
+ * request or of an EARLIER round of the same step. A sample taken in round 3 is often approved while the rounds go on:
+ * a later round uses it (the record says which round it was sampled in). A later round's sample never fills an earlier
+ * round, and a step without rounds (round 1) takes only its own request. Whether another round picked it already is
+ * the server's (pull.ts: one result fills one round).
+ */
+export function requestFits(candidate: string | null | undefined, want: string): boolean {
+  const c = requestRound(candidate);
+  const w = requestRound(want);
+  return !!c && !!w && c.step === w.step && c.round <= w.round;
+}
 /** A test of a lab request, as lab_request_v1.tests lists it. individual: the number of values (a list), else null. */
 export interface LabTest { name: string; label: string; unit: string; individual: number | null }
-/** The in-process QC fields of a step, as the tests of its lab request (`unitOf`: the field's unit in this step). */
+/**
+ * The in-process QC fields of a step, as the tests of its lab request (`unitOf`: the field's unit in this step). Round
+ * 43: a field whose unit is not set is not asked for (the rule is the same in every edition).
+ */
 export const labTests = (fields: readonly BlockField[], unitOf: (f: BlockField) => string): LabTest[] =>
-  fields.filter((f) => f.qc === 'in_process').map((f) => ({ name: f.name, label: f.label, unit: unitOf(f), individual: countOf(f) ?? null }));
+  fields.filter((f) => f.qc === 'in_process' && unitOf(f)).map((f) => ({ name: f.name, label: f.label, unit: unitOf(f), individual: countOf(f) ?? null }));
 /** TrueBatch Injectables: a list's count may be a step setting ("$needles"); an in-process list has a fixed count (format.ts). */
 const countOf = (f: BlockField | undefined) => (typeof f?.count === 'number' ? f.count : undefined);
 
 const FIGURE: Record<string, string> = { mean: 'mean', AV: 'acceptance value', result: 'result' };
-/** An in-process result as the step, the review and the PDF show it (kept with the record as the source's `shown`). */
-export const inProcessText = (r: QcResult, request: string) => `LIMS in-process report ${r.coaNumber}: ${r.testName ?? 'result'} (request ${request})${r.individual ? `, ${r.individual.length} values` : ''}`
+/**
+ * An in-process result as the step, the review and the PDF show it (kept with the record as the source's `shown`): the
+ * request it was sampled for and (round 43) when: "sampled in round 3 at <time>" in a step with rounds, else "requested
+ * <time>" (the time its request opened).
+ */
+export const inProcessText = (r: QcResult, request: string, sampled?: { round?: number; at?: string }) => `LIMS in-process report ${r.coaNumber}: ${r.testName ?? 'result'} (request ${request}`
+  + `${sampled?.round ? `, sampled in round ${sampled.round}` : ''}${sampled?.at ? `${sampled.round ? ' at' : ', requested'} ${sampled.at}` : ''})${r.individual ? `, ${r.individual.length} values` : ''}`
   + `${r.reported ? `, ${r.individual ? `${FIGURE[r.figure ?? ''] ?? 'reported'} ` : ''}${r.reported}${r.unit ? ` ${r.unit}` : ''} as reported` : ''}${r.limitText ? ` (limit ${r.limitText})` : ''}`
   + `${r.analysisNumber ? `, analysis ${r.analysisNumber}` : ''}${r.outsideLab ? `, outside lab ${r.outsideLab}` : ''}`;
 
