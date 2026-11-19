@@ -293,13 +293,36 @@ answering) or **ok**.
   (`source`) and signed with it; the release screen and the PDF show "QC report X (LIMS CoA …)"; (2) the "QC report or
   certificate number" of a lot typed by hand (MMS off or down) is an approved CoA of that lot and the step's material;
   (3) a QC result field of a step (`qc` on a single number field) takes the `reported` figure of a result of this
-  batch's approved CoA in the field's unit. No injectables block marks a field `qc`: the bulk test (QA hold) is an
-  in-process sample and LIMS has no in-process purpose (only release, retest, stability, investigation, monitoring),
-  and sterility, endotoxin, bioburden and EM results are judged at QC approval, not typed in a step. Fixed rules
+  batch's approved CoA in the field's unit. No injectables block marks a field `qc: true`: the bulk test is an
+  in-process sample (see "LIMS in-process tests" below), and sterility, endotoxin, bioburden and EM results are judged
+  at QC approval, not typed in a step. Fixed rules
   (`coaRefusal`): only an APPROVED CoA (not one LIMS also rejected), of this batch number (product sample, the batch's
   product code) or this lot number (material sample, the line's material), of a release sample (a lot: release or
   retest); anything else is never offered and is refused with its reason. Absent or down: typed by hand as before,
   marked "typed by hand: LIMS …" (a step value then needs a second-person check and is listed for QA).
+- **LIMS in-process tests** (as TrueBatch Tablets round 42; owner 19 Nov 2026: in-process lab tests are picked from
+  LIMS, not typed). A block field with `qc: 'in_process'` is a test the QC lab does on a sample of THIS step. When such
+  a step starts it opens a lab request: the "started" event keeps the stage and step in words and the tests
+  (`labRequestOf`; insert-only like every event, so the batches table stays insert-only, 0023), published as
+  `report.lab_request_v1` (`db/migrations/0024`; columns `request_id` '<batch number>/<step key>' (stage.sub-batch.step.
+  round), `batch_no`, `product_code`, `stage_title`, `step_key`, `step_title`, `tests` ([{name, label, unit, individual:
+  n or null}]), `requested_at`, `status` (open; done once the step is signed; cancelled when the step is set not
+  applicable or the batch rejected or terminated before that), `read_at`, `data_as_of`: the same in every TrueBatch
+  edition). LIMS reads it from every edition, so packing migrates the same file (not on packing's skip list) and
+  publishes the same view (empty: no packing block has such a test). The field picks a result of an APPROVED
+  in-process report (purpose `in_process`, an IPR number) of THIS step's request, in the field's unit (`sameUnit`; a
+  pH result without a unit in LIMS is pH). A single number takes LIMS's reported figure (a list, or a mean or AV, is
+  refused); a list takes LIMS's individual values in order, exactly the block's count, and LIMS's figure (`figure`:
+  mean or AV) is worked out again from the values and must agree (`inProcessFit`, `shared/engine/lims.ts`, as Tablets
+  except that a count may be a step setting here: an in-process list must have a fixed count, a block check). The
+  block's calculations then run on the picked values as on typed ones; the source keeps "LIMS in-process report IPR…:
+  test (request …) …", shown on the step, in QA's review and in the PDF ("from LIMS …"). While LIMS answers typing is
+  refused; the step screen offers the results that fit, says why others do not, and shows "Waiting for LIMS: request
+  <id> (sample not yet approved)". Absent or down: typed by hand as before (second-person check, listed for QA).
+  Marked in Injectables: the in-process bulk test (QA hold; pH, density, assay, osmolality, dissolved oxygen, residual
+  solvent: one figure each) and blend uniformity (10 locations, figure mean). Not marked (done on the line, typed where
+  they are done): fill weights and volumes, powder-fill and FFS weights, the gas sparge oxygen, the in-process checks
+  (`check`), container and chamber readings.
 - **Published** (`db/migrations/0006_report_views.sql`): `batch_fact_v1` and `equipment_use_v1` with Batchwright's
   names and columns, so the Logbook and Deviations read TrueBatch as they read Batchwright, and `deviation_note_v1`
   for Deviations to file notes later. `batch_fact_v1` has one more column at its end (`0007`): `manufactured_on`, the

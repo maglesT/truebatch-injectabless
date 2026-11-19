@@ -1,4 +1,4 @@
-import type { Block } from './format.js';
+import type { Block, BlockField } from './format.js';
 
 // TrueBatch Injectables library v1, section 4.2: dispensing, compounding, filtration, components, filling, sterilisation
 // and inspection. Each block is data; the engine runs it. Where a library "setting" changes which fields are needed, the
@@ -123,14 +123,17 @@ export const makeUp: Block = {
   ],
 };
 
-// 6. In-process bulk test, held for QC's result (a QA hold).
+// 6. In-process bulk test, held for QC's result (a QA hold). Round 42 (owner: in-process lab tests are picked from LIMS,
+// not typed): each result is an in-process test of the QC lab, one figure, picked from an approved in-process report of
+// the step's lab request (report.lab_request_v1); typed from the QC report only while LIMS cannot be reached.
+const lab = (f: BlockField): BlockField => ({ ...f, qc: 'in_process' });
 export const bulkTest: Block = {
   id: 'bulk-test', version: 1, name: 'In-process bulk test (hold)', checker: true, qaHold: true,
-  instruction: 'Take the bulk sample, send it to QC and record the results when they come. Wait for QA to release the hold.',
+  instruction: 'Take the bulk sample and send it to QC. Pick each result from LIMS once QC has approved it (typed from the QC report only while LIMS cannot be reached). Wait for QA to release the hold.',
   fields: [
     text('reference', 'Sample reference'),
-    num('ph', 'pH', 'pH', true), num('density', 'Density', 'g/mL', true), num('assay', 'Assay (% of target)', '%', true),
-    num('osmolality', 'Osmolality', 'mOsm/kg', true), num('oxygen', 'Dissolved oxygen', 'mg/L', true), num('solvent', 'Residual solvent', 'ppm', true),
+    lab(num('ph', 'pH', 'pH', true)), lab(num('density', 'Density', 'g/mL', true)), lab(num('assay', 'Assay (% of target)', '%', true)),
+    lab(num('osmolality', 'Osmolality', 'mOsm/kg', true)), lab(num('oxygen', 'Dissolved oxygen', 'mg/L', true)), lab(num('solvent', 'Residual solvent', 'ppm', true)),
     yes('appearance', 'Appearance as specified'),
   ],
   settings: [limit('phLimit', 'pH limits'), limit('densityLimit', 'Density limits'), limit('assayLimit', 'Assay limits'), limit('osmolalityLimit', 'Osmolality limits'),

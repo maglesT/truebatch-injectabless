@@ -97,7 +97,7 @@ describe('TrueBatch Injectables Packing: its own product on the platform', () =>
     expect([m.product, m.database]).toEqual(['truebatch_injectables_packing', 'truebatch_injectables_packing']);
     for (const p of m.permissions) expect(p.code).toMatch(/^truebatch_injectables_packing(\.[a-z0-9_]+)+$/);
     expect(m.reads.truebatch_injectables).toEqual(['batch_fact_v1']);
-    expect(m.publishes).toEqual(['packing_batch_v1', 'equipment_use_v1', 'material_use_v1', 'deviation_note_v1']);
+    expect(m.publishes).toEqual(['packing_batch_v1', 'equipment_use_v1', 'material_use_v1', 'deviation_note_v1', 'lab_request_v1']);
   });
 
   it('PL-06 the packing app login keeps the step events and signatures insert-only', async () => {
@@ -111,7 +111,7 @@ describe('TrueBatch Injectables Packing: its own product on the platform', () =>
 
   it('PL-06 packing publishes only its own views: no batch_fact_v1 (0022 skipped, 0112 drops the stray view)', async () => {
     const views = await t.owner.unsafe(`select viewname from pg_views where schemaname = $1 order by viewname`, [`${t.schema}_report`]);
-    expect(views.map((v) => v.viewname)).toEqual(['deviation_note_v1', 'equipment_use_v1', 'material_use_v1', 'packing_batch_v1']);
+    expect(views.map((v) => v.viewname)).toEqual(['deviation_note_v1', 'equipment_use_v1', 'lab_request_v1', 'material_use_v1', 'packing_batch_v1']);
   });
 });
 

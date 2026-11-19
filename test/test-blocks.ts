@@ -106,7 +106,22 @@ export const qcAssay: Block = {
   calcs: [{ name: 'assayCheck', label: 'Assay against limits', template: 'C1', args: { value: '$assay', limit: '$assayLimit' } }],
 };
 
-export const TEST_BLOCKS: Block[] = [granulate, dry, compress, coat, dryMix, qcAssay];
+// Content uniformity in two stages (TrueBatch Tablets' block, round 42): a staged in-process list from LIMS (10, then 20
+// more), its figure the acceptance value. No injectables block is staged; the LIMS rules for it are tested on this one.
+export const contentUniformity: Block = {
+  id: 'content-uniformity', version: 1, name: 'Content uniformity sampling', checker: true,
+  instruction: 'Take the units for content uniformity as the sampling plan says and send them to QC. Pick the content of each from LIMS once QC has approved it; if the first 10 do not pass and QC tested 20 more, pick those too.',
+  fields: [
+    { name: 'results', label: 'Content of 10 tablets (% of label claim)', kind: 'number', unit: '%', count: 10, qc: 'in_process', figure: 'AV', nextStage: 'moreResults' },
+    { name: 'moreResults', label: 'Content of 20 more tablets (% of label claim)', kind: 'number', unit: '%', count: 20, optional: true, qc: 'in_process', figure: 'AV' },
+  ],
+  settings: [{ name: 'coating', label: 'Coating', kind: 'text', options: ['uncoated', 'film-coated', 'sugar-coated', 'other coated'] }],
+  calcs: [
+    { name: 'acceptance', label: 'Content uniformity', template: 'C6', args: { test: 'content uniformity', coating: '$coating', stages: ['$results', '$moreResults?'] } },
+  ],
+};
+
+export const TEST_BLOCKS: Block[] = [granulate, dry, compress, coat, dryMix, qcAssay, contentUniformity];
 
 /** The mock factory: the product's blocks plus the test blocks, found by the same findBlock. */
 export async function withTestBlocks(original: () => Promise<typeof import('../shared/blocks/index.js')>) {
