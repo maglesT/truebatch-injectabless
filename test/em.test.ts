@@ -65,7 +65,7 @@ describe('the EM rules (shared/engine/em.ts)', () => {
     expect(plates.fields.find((f) => f.name === 'kind')!.options).toEqual(['air sample', 'settle plate', 'contact plate', 'glove print']);
     expect(plates.fields.some((f) => f.qc)).toBe(false);
     expect(lab.fields.find((f) => f.name === 'kind')!.options).toEqual(['biological indicator', 'bioburden']);
-    expect(labTests(lab.fields, (f) => f.unit ?? '')).toEqual([{ name: 'count', label: 'Count (CFU; a BI: 0 = no growth)', unit: 'CFU', individual: null }]);
+    expect(labTests(lab.fields, (f) => f.unit ?? '', { count: 'incubated-lab.count' })).toEqual([{ code: 'incubated-lab.count', name: 'count', label: 'Count (CFU; a BI: 0 = no growth)', unit: 'CFU', individual: null }]);
     for (const b of [plates, lab]) expect(blockProblems(b)).toEqual([]);
     // Masters made before keep the old block.
     expect(findBlock({ id: 'incubated-results', version: 1 })).toBeDefined();
