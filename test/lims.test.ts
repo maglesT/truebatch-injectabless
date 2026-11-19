@@ -55,6 +55,14 @@ describe('the LIMS rules (shared/engine/lims.ts): only an approved CoA of this b
     expect(resultRefusal(r({ reported: null }), '%')).toBe('Assay of CoA COA26001 has no reported figure in LIMS.');
     expect(resultRefusal(r({ reported: 'complies' }), '%')).toBe('Assay of CoA COA26001 has no reported figure in LIMS.');
     expect(resultRefusal(r({ unit: 'mg' }), '%')).toBe('Assay of CoA COA26001 is in mg, not in %.');
+    // round 41: the same unit written two ways matches; a different unit still does not
+    expect(resultRefusal(r({ unit: null, testName: 'pH' }), 'pH')).toBeNull();
+    expect(resultRefusal(r({ unit: 'pH', testName: 'pH' }), 'pH')).toBeNull();
+    expect(resultRefusal(r({ unit: 'mPa.s', testName: 'Viscosity' }), 'mPa·s')).toBeNull();
+    expect(resultRefusal(r({ unit: 'g/ml', testName: 'Density' }), 'g/mL')).toBeNull();
+    expect(resultRefusal(r({ unit: '% w/w' }), '%w/w')).toBeNull();
+    expect(resultRefusal(r({ unit: '%w/v' }), '%w/w')).toBe('Assay of CoA COA26001 is in %w/v, not in %w/w.');
+    expect(resultRefusal(r({ unit: null }), '%')).toBe('Assay of CoA COA26001 is in no unit, not in %.');
   });
 
   it('a QC result field is a single number (the block check)', () => {
@@ -165,6 +173,12 @@ describe('a QC result of the batch, picked from LIMS', () => {
     expect(p.link).toBe('ok');
     expect(p.results.map((r) => [r.coaNumber, r.testName, r.reported])).toEqual([[good, 'Assay', '99.4']]);
     expect(p.results[0]!.shown).toBe(`LIMS CoA ${good}: Assay 99.4 % as reported (limit 95.0 - 105.0), analysis LA26001`);
+  });
+
+  it('TI-14 round 41: one read gives the results for every QC field of a step, each in its own unit', async () => {
+    const both = await picks(b.id, `?units=${encodeURIComponent(encodeURIComponent('%'))},${encodeURIComponent(encodeURIComponent('mg'))}`);
+    expect(both.results.map((r) => [r.testName, r.reported]).sort()).toEqual([['Assay', '99.4'], ['Average weight', '250.1']]);
+    expect((await picks(b.id, `?units=${encodeURIComponent(encodeURIComponent('mg'))}`)).results.map((r) => r.testName)).toEqual(['Average weight']);
   });
 
   it('TI-14 while LIMS answers the assay is picked (its reported figure, kept with the CoA number); typing it is refused', async () => {
