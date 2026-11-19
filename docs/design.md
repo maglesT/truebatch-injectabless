@@ -335,6 +335,13 @@ answering) or **ok**.
   42 (found in this edition) has no lab request, so no pick could ever come: its in-process fields are typed by hand
   while LIMS answers too, marked "started before LIMS in-process requests" (source state `no_request`), checked by a
   second person and listed in QA's review, as when LIMS is down; a pick is refused.
+- **LIMS: which field a result answers** (as TrueBatch Tablets round 44). LIMS's `result_v1.ipc_field` (read through
+  to_jsonb; null from an older LIMS) names the TrueBatch field an in-process result answers. A result that names a
+  field fills only that field (`answersField`, `fieldRefusal`: "<test> of report <IPR…> answers <field>, not <this
+  field>."); one that names none fills any field in its unit, as before. The step screen offers each field only its own
+  results; the server checks again when it is picked (in-process and release-CoA picks alike). This matters for the
+  bulk test, whose six results come from one lab request. No injectables field is a release-CoA result (`qc: true`);
+  there is no uniformity-by-weight block here, so Tablets' change of that assay to in-process has nothing to change.
 - **Published** (`db/migrations/0006_report_views.sql`): `batch_fact_v1` and `equipment_use_v1` with Batchwright's
   names and columns, so the Logbook and Deviations read TrueBatch as they read Batchwright, and `deviation_note_v1`
   for Deviations to file notes later. `batch_fact_v1` has one more column at its end (`0007`): `manufactured_on`, the
