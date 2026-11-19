@@ -58,7 +58,7 @@ const [film, filmBack] = plastic('plastic', 'plastic film or granules');
 const dispensing: StagePlan = { key: 'dispensing', name: 'Sterile dispensing', kind: 'preparation', role: 'Dispensing operator', rooms: ['Sterile dispensing'], produces: ['dispensed sterile powder', 24],
   steps: [s('weigh', 'weigh-api', 'Weigh the sterile powder')] };
 const resultsLater = (after: string): StagePlan => ({ key: 'results', name: 'Results later (EM plates, bioburden)', kind: 'preparation', role: 'QC microbiologist', rooms: [],
-  startsAfter: after, steps: [s('incubated-results', 'plates', 'EM plates read')] });
+  startsAfter: after, steps: [s('incubated-em', 'plates', 'EM plates read'), s('incubated-lab', 'bioburden', 'Biological indicator and bioburden results')] });
 const terminal = (fillName: string, fill: StepPlan[], uses: string[], after: StepPlan[], rooms: string[]): StagePlan[] => [
   { key: 'filling', name: fillName, role: 'Filling operator', rooms, uses, steps: [s('filtration-clarifying'), ...fill, ...after, s('unit-reconcile')] },
   { key: 'sterilisation', name: 'Terminal sterilisation', role: 'Sterilisation operator', rooms: ['Sterilisation'],

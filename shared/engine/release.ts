@@ -17,7 +17,7 @@ export type BatchEventKind = (typeof BATCH_EVENT_KINDS)[number];
 // A batch QA terminated (stopped, not finished) is a rejection with `terminated` (owner, 16 Nov 2026): the record is kept.
 // `returns`: what went back to stores unused of each lot the batch used (stock.ts returnsOf).
 // `source`: where QC approval's report number came from: an approved CoA of the batch in LIMS, or typed by hand (LIMS off or down).
-export interface BatchEvent { id: number; kind: BatchEventKind; payload: { reportNo?: string; emReview?: string; note?: number; reason?: string; terminated?: boolean; returns?: Returned[]; source?: Source }; person: number; at: Date }
+export interface BatchEvent { id: number; kind: BatchEventKind; payload: { reportNo?: string; emReview?: string; note?: number; reason?: string; terminated?: boolean; returns?: Returned[]; source?: Source; em?: { shown: string }; emSource?: Source }; person: number; at: Date }
 
 export const BATCH_STATUSES = ['in production', 'manufacturing complete', 'production approved', 'QC approved', 'released', 'rejected'] as const;
 export type BatchStatus = (typeof BATCH_STATUSES)[number];

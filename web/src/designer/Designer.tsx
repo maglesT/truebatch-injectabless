@@ -1,7 +1,7 @@
 // The master designer: one version open, in tabs (header, formula, process, calculation preview, review), with the
 // master check always beside it. A draft saves itself as it is edited; other states are read only.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ApiError, can, type Me } from '../api.js';
+import { api, ApiError, can, type Me } from '../api.js';
 import { getVersion, listMasters, loadMasterData, saveVersion, STATE_CHIP, STATE_LABEL, type MasterData, type MasterRow, type Version } from '../api-designer.js';
 import { blocking, masterChecks } from '../../../shared/master/checks.js';
 import { placeChecks } from '../../../shared/master/places.js';
@@ -35,6 +35,9 @@ export function Designer({ me, versionId, onBack, onOpen }: { me: Me; versionId:
   const [v, setV] = useState<Version | null>(null);
   const [doc, setDoc] = useState<MasterDoc | null>(null);
   const [md, setMd] = useState<MasterData | null>(null);
+  // Whether LIMS is linked here: it then owns the EM results (the master check names a step typing them again).
+  const [limsLinked, setLimsLinked] = useState(false);
+  useEffect(() => { void api<{ lims: boolean }>('GET', '/api/links').then((l) => setLimsLinked(l.lims), () => undefined); }, []);
   const [rows, setRows] = useState<MasterRow[]>([]);
   const [tab, setTab] = useState<Tab>('header');
   const [place, setPlace] = useState<Place>({ tab: 'process', stage: 0 });
@@ -75,7 +78,7 @@ export function Designer({ me, versionId, onBack, onOpen }: { me: Me; versionId:
 
   const parsed = useMemo(() => (doc ? masterSchema.safeParse(doc) : null), [doc]);
   // The master's own checks, and (once master data is read) whether the floor finds a machine for each step (TI-11).
-  const problems = useMemo(() => (parsed?.success ? [...masterChecks(parsed.data), ...(md ? placeChecks(parsed.data, md) : [])] : null), [parsed, md]);
+  const problems = useMemo(() => (parsed?.success ? [...masterChecks(parsed.data, { limsLinked }), ...(md ? placeChecks(parsed.data, md) : [])] : null), [parsed, md, limsLinked]);
   const go = (path: string) => { const p = placeOf(path); setPlace(p); setTab(p.tab); };
 
   if (error) return <><button className="link dark" onClick={onBack}>← {product.masters}</button><p className="notice">{error}</p></>;

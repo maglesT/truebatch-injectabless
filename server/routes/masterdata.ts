@@ -9,4 +9,6 @@ export function masterDataRoutes(app: FastifyInstance) {
   app.get('/api/master/materials', anyUser, async () => app.master.materials());
   app.get('/api/master/equipment', anyUser, async () => app.master.equipment());
   app.get('/api/master/rooms', anyUser, async () => app.master.rooms());
+  // Which products that own a job are linked (the master check names a step that would type their records again).
+  app.get('/api/links', anyUser, async () => ({ lims: app.links.lims.linked }));
 }

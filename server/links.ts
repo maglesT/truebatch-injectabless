@@ -3,6 +3,7 @@ import type { Sql } from './db.js';
 import type { LinkState, Provider } from '../shared/engine/links.js';
 import type { TrainingRead } from '../shared/engine/training.js';
 import type { Coa, QcResult } from '../shared/engine/lims.js';
+import type { EmRow } from '../shared/engine/em.js';
 
 // Links to the other Medhanta products, the Logbook way (platform PL-08, D-02). Each provider is read live through
 // its report views with TrueBatch's own login, from the URL the platform writes only while the link is on
@@ -26,12 +27,15 @@ const isCut = (e: unknown) => {
 type View = (name: string) => postgres.Helper<string, []>;
 export interface Link {
   provider: Provider;
+  /** Whether the platform linked it (its URL is set); a linked provider may still be down when read. */
+  linked: boolean;
   read<T>(f: (q: Sql, view: View) => Promise<T>): Promise<Read<T>>;
 }
 /** One provider's link: its connection (null when absent) and the schema of its published views. */
 export function link(provider: Provider, q: Sql | null, schema = 'report'): Link {
   return {
     provider,
+    linked: !!q,
     async read(f) {
       if (!q) return { state: 'absent' };
       try { return { state: 'ok', value: await f(q, (name) => q(`${schema}.${name}`)) }; } catch (e) {
@@ -220,7 +224,22 @@ type CoaRow = { coa_id: string; coa_number: string | null; sample_number: string
 const coaOf = (r: CoaRow): Coa => ({ coaId: r.coa_id, coaNumber: r.coa_number, sampleNumber: r.sample_number, lotNumber: r.lot_number, itemKind: r.item_kind,
   itemMasterId: r.item_master_id, itemCode: r.item_code, itemName: r.item_name, purpose: r.purpose, decision: r.decision, decidedAt: r.decided_at,
   decidedBy: r.decided_by, specNumber: r.spec_number, specVersion: r.spec_version, rejected: r.rejected, requestId: r.request_id });
+type EmDbRow = { sample_number: string | null; point_code: string | null; point_name: string | null; room_code: string | null; room_grade: string | null; sampling_kind: string | null; taken_on: string | null; value: string | null; unit: string | null; limit_text: string | null; level: string | null; excursion_status: string | null; deviation_number: string | null; decision: string | null; sampled_at: string | null; batch_number: string | null };
 export const limsClient = (l: Link) => ({
+  linked: l.linked,
+  // EM (owner rule 19 Nov 2026: LIMS owns EM): em_v1 rows of these rooms, or naming this batch, on these plant days
+  // (the app keeps the batch's own: shared/engine/em.ts emOfBatch). sampled_at and batch_number, appended later by
+  // LIMS, are read through to_jsonb (an older LIMS gives none).
+  em: (rooms: string[], batchNo: string, fromDay: string, toDay: string) => l.read(async (q, v) => (await q<EmDbRow[]>`
+    select e.sample_number, e.point_code, e.point_name, e.room_code, e.room_grade, e.sampling_kind, e.taken_on::text, e.value::text, e.unit, e.limit_text,
+      e.level, e.excursion_status, e.deviation_number, e.decision, nullif(to_jsonb(e) ->> 'sampled_at', '') as sampled_at,
+      nullif(to_jsonb(e) ->> 'batch_number', '') as batch_number
+    from ${v('em_v1')} e
+    where e.point_kind = 'ROOM' and (lower(nullif(to_jsonb(e) ->> 'batch_number', '')) = lower(${batchNo})
+      or (lower(e.room_code) = any(${rooms.map((r) => r.toLowerCase())}) and e.taken_on between ${fromDay}::date - 1 and ${toDay}::date + 1))
+    order by e.taken_on, e.sample_number limit 500`).map((r): EmRow => ({ sampleNumber: r.sample_number!, pointCode: r.point_code, pointName: r.point_name,
+      roomCode: r.room_code, grade: r.room_grade, kind: r.sampling_kind, takenOn: r.taken_on, sampledAt: r.sampled_at, batchNumber: r.batch_number, value: r.value,
+      unit: r.unit, limitText: r.limit_text, level: r.level, excursionStatus: r.excursion_status, deviationNumber: r.deviation_number, decision: r.decision }))),
   // The CoAs of a lot or batch number (every decision: the app says why one may not be used).
   coas: (lotNumber: string) => l.read(async (q, v) => (await q<CoaRow[]>`
     select c.coa_id::text, c.coa_number, c.sample_number, c.lot_number, c.item_kind, c.item_master_id::text, c.item_code, c.item_name, c.purpose,

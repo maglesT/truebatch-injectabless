@@ -127,7 +127,7 @@ export function masterRoutes(app: FastifyInstance, sql: Sql) {
     const id = parseId(req.params.id);
     const v = id === null ? undefined : await masterVersion(sql, id);
     if (!v) return reply.code(404).send({ error: 'not_found' });
-    return { problems: masterChecks(v.doc) };
+    return { problems: masterChecks(v.doc, { limsLinked: app.links.lims.linked }) };
   });
 
   reviewRoutes(app, sql);

@@ -9,3 +9,4 @@ export * from './stock.js';
 export * from './plain.js';
 export * from './training.js';
 export * from './lims.js';
+export * from './em.js';

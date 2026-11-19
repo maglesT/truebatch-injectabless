@@ -342,6 +342,33 @@ answering) or **ok**.
   results; the server checks again when it is picked (in-process and release-CoA picks alike). This matters for the
   bulk test, whose six results come from one lab request. No injectables field is a release-CoA result (`qc: true`);
   there is no uniformity-by-weight block here, so Tablets' change of that assay to in-process has nothing to change.
+- **Who owns EM and sterilisation cycles** (owner rule 19 Nov 2026: a product keeps its own version of a job for a
+  customer who buys it alone; when the owning product is linked, it reads the owner's records, so nothing is entered
+  twice; duplicates review items 10 and 24).
+  - *EM: Medhanta LIMS owns the results* (`report.em_v1`; manifest reads `lims: em_v1`; `shared/engine/em.ts`,
+    `server/pull.ts batchEm`). With LIMS linked, QC approval of a batch with an aseptic stage shows read-only the EM
+    samples of the rooms its aseptic stages recorded (a machine's room, or the room) over the time those stages ran
+    (`GET /api/batches/:id/em`). A sample LIMS names with a batch number is that batch's only; one without is the
+    batch's by room and its sampling time (`sampled_at`) or, from an older LIMS, its plant day. QC approval waits while a
+    sample is not decided in LIMS, an excursion (action or alert level, or one LIMS opened) has no deviation number, or
+    LIMS has none of the batch's samples yet; typing an EM review is then refused. The approval keeps the samples QC
+    reviewed (`payload.em`, signed with it); the release screen and the PDF show "EM from LIMS: n samples of …; k
+    excursions: … (DEV-…)". Alone (LIMS not linked), LIMS down, or a batch with no aseptic stage: the EM review is typed
+    as before (LIMS down or not linked: marked "typed by hand"). `em-filling` keeps the shop-floor parts (particles,
+    plate IDs and times). Incubated results are split (masters made before keep `incubated-results`): `incubated-em`
+    (EM plates read; for a plant without LIMS: with LIMS linked the master check warns that the step would type them
+    again, `masterChecks(doc, { limsLinked })`, the designer told by `GET /api/links`) and `incubated-lab` (biological
+    indicator and bioburden: the count is an in-process test, picked from LIMS by the round 40-44 rules).
+  - *Sterilisation cycles: TrueBatch Injectables owns the cycles run for its batches.* The batch records the figures
+    and checks them against the master's validated limits, as before (the F0 or FH as printed, the I20 lethality
+    template where the master works it out), and publishes them as `report.steriliser_cycle_v1` (`db/migrations/0026`;
+    manifest publishes it; packing does not migrate it): one row per round of a `sterilise`, `terminal-sterilise` or
+    `isolator-decon` (VHP) step once signed as performed: `cycle_id` '<batch>/<step key>', batch, product, step,
+    equipment (code, name, type, room), `cycle_type` (steam, dry_heat, sip, vhp), `programme`, `load`,
+    `controller_record_ref` (the printout), started and ended, `result` (fail if any of the step's checks failed),
+    `exposure_min`, `lowest_temp_c`, `lowest_f0`, `max_product_temp_c`, `h2o2_ppm`, `leak_rate`, `units`, `bi_id`,
+    `use_by`, `signed` (performed, checked). The Logbook lists them read-only in the steriliser's history and types only
+    cycles not made for a batch. Freeze-drying and the depyrogenation tunnel stay in the batch record only.
 - **Published** (`db/migrations/0006_report_views.sql`): `batch_fact_v1` and `equipment_use_v1` with Batchwright's
   names and columns, so the Logbook and Deviations read TrueBatch as they read Batchwright, and `deviation_note_v1`
   for Deviations to file notes later. `batch_fact_v1` has one more column at its end (`0007`): `manufactured_on`, the
