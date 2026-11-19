@@ -176,7 +176,8 @@ export function sterileChecks(doc: MasterDoc, ask: Ask, refuse: Refuse): void {
   if (fills && !ids.has('leak-test-100') && !ids.has('seal-check') && !ids.has('headspace-gas')) refuse('stages', 'The master closes and checks the containers (seal check or 100 % container-closure test)', 'TI-29');
   if (fills) need('visual-inspect', 'Every filled unit is inspected (100 % visual inspection)', 'TI-30');
   if (ids.has('lyo-cycle') && (!ids.has('lyo-load') || !ids.has('lyo-unload'))) refuse('stages', 'Freeze-drying has its loading and its stoppering and unloading with the cycle', 'TI-31');
-  if (ids.has('incubated-results') && !doc.stages.some((s) => s.startsAfter && s.steps.some((t) => t.block.id === 'incubated-results'))) {
+  const LATER = ['incubated-results', 'incubated-em', 'incubated-lab'];
+  if (LATER.some((id) => ids.has(id)) && !doc.stages.some((s) => s.startsAfter && s.steps.some((t) => LATER.includes(t.block.id)))) {
     refuse('stages', 'Incubated results (EM, BIs, bioburden) are read in a stage that starts after the step that took the samples', 'TI-26');
   }
 

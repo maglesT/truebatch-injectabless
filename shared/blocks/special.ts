@@ -123,6 +123,34 @@ export const incubatedResults: Block = {
   calcs: [within('countCheck', 'Count', 'count', 'countLimit'), duration('incubation', 'Incubation time', 'incubationStart', 'incubationEnd', 'incubationLimit?')],
 };
 
+// 29a and 29b (owner rule 19 Nov 2026: the product that owns a job keeps it; duplicates review item 10): incubated
+// results split in two. Masters made before keep incubated-results (29) unchanged.
+// 29a. EM plates read after incubation: for a plant WITHOUT Medhanta LIMS. With LIMS linked, LIMS owns the EM results
+// (em_v1): QC reviews them at QC approval and the master check says this step would type them again.
+export const incubatedEm: Block = {
+  id: 'incubated-em', version: 1, name: 'EM plates read (without LIMS)', checker: true,
+  instruction: 'When the incubation is over, read each EM plate or sample and record the count against its limit.',
+  fields: [
+    text('sampleId', 'Sample ID'), { name: 'kind', label: 'Sample', kind: 'choice', options: ['air sample', 'settle plate', 'contact plate', 'glove print'] },
+    time('incubationStart', 'Incubation start'), time('incubationEnd', 'Incubation end'), num('count', 'Count', 'CFU'),
+  ],
+  settings: [limit('countLimit', 'Action limit (from the clean-air table)', false), limit('incubationLimit', 'Incubation time limits')],
+  calcs: [within('countCheck', 'Count', 'count', 'countLimit'), duration('incubation', 'Incubation time', 'incubationStart', 'incubationEnd', 'incubationLimit?')],
+};
+
+// 29b. Biological indicator and bioburden results: QC lab tests of the batch's samples, picked from LIMS's approved
+// in-process report of the step's lab request while LIMS answers (rounds 40 to 44); typed from the QC report otherwise.
+export const incubatedLab: Block = {
+  id: 'incubated-lab', version: 1, name: 'Biological indicator and bioburden results', checker: true,
+  instruction: 'Pick the result of each biological indicator or bioburden sample from LIMS once QC has approved it (typed from the QC report only while LIMS cannot be reached).',
+  fields: [
+    text('sampleId', 'Sample ID'), { name: 'kind', label: 'Sample', kind: 'choice', options: ['biological indicator', 'bioburden'] },
+    { ...num('count', 'Count (CFU; a BI: 0 = no growth)', 'CFU'), qc: 'in_process' },
+  ],
+  settings: [limit('countLimit', 'Limit (no growth for a BI, or the product\'s bioburden limit)', false)],
+  calcs: [within('countCheck', 'Count', 'count', 'countLimit')],
+};
+
 // ---- 4.4 Freeze-drying
 
 // 30. Load the freeze-dryer (vials partly stoppered, or bulk trays of an intermediate).

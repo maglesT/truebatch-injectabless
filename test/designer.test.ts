@@ -252,13 +252,13 @@ describe('master designer', () => {
     expect(list('bfs-aseptic', header('L'))).toEqual([
       'Compounding: line-clearance weigh-api vehicle charge-api dissolve ph-adjust make-up bulk-test filter-pre filter filter-post yield',
       'Aseptic blow-fill-seal (aseptic): line-clearance aseptic-ready interventions em-filling issue-granules ffs-run sterility back-granules unit-reconcile',
-      'Results later (EM plates, bioburden): plates',
+      'Results later (EM plates, bioburden): plates bioburden',
       'Inspection: line-clearance leak-test-100 visual-inspect aql-sample unit-reconcile']);
     expect(list('powder-aseptic', header('units'))).toEqual([
       'Sterile dispensing: line-clearance weigh-api',
       'Containers and closures: line-clearance issue-vials issue-stoppers wash-vials depyrogenate stoppers',
       'Aseptic filling (aseptic): line-clearance aseptic-ready interventions em-filling transfer-in powder-fill issue-seals seal-check sterility back-vials back-stoppers back-seals unit-reconcile',
-      'Results later (EM plates, bioburden): plates',
+      'Results later (EM plates, bioburden): plates bioburden',
       'Inspection: line-clearance visual-inspect aql-sample unit-reconcile']);
     const bfs = skeletonStages('bfs-aseptic', header('L'));
     const step = (key: string) => bfs[1]!.steps.find((t) => t.key === key)!;

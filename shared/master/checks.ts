@@ -40,7 +40,9 @@ const DECIMAL = /^\d+(\.\d+)?$/;
 const SAMPLE = { assay: { value: '100.0', unit: '%' }, water: { value: '0', unit: '%' }, lod: { value: '0', unit: '%' } };
 const HERE = { stage: 0, sub: 1, step: 0, round: 1 };
 
-export function masterChecks(doc: MasterDoc): Problem[] {
+/** What the master check knows of the installation: whether Medhanta LIMS is linked (it then owns the EM results). */
+export interface CheckContext { limsLinked?: boolean }
+export function masterChecks(doc: MasterDoc, ctx: CheckContext = {}): Problem[] {
   const out: Problem[] = [];
   const error = (path: string, message: string, rule?: string) => out.push({ level: 'error', path, message, ...(rule ? { rule } : {}) });
   const warn = (path: string, message: string) => out.push({ level: 'warning', path, message });
@@ -49,6 +51,11 @@ export function masterChecks(doc: MasterDoc): Problem[] {
   // A packing master (it has a pack) has its own checks instead of the formula, calculation and sterile checks.
   if (doc.pack) out.push(...packingChecks(doc));
   else formulaChecks(doc, out, error);
+  // Owner rule 19 Nov 2026: the product that owns a job keeps it. With LIMS linked, LIMS owns the EM results: QC reviews
+  // them from LIMS at QC approval, so a step typing the EM plate counts would enter them twice.
+  if (ctx.limsLinked) doc.stages.forEach((s, i) => s.steps.forEach((t, j) => {
+    if (t.block.id === 'incubated-em') warn(`stages[${i}].steps[${j}]`, 'LIMS is linked: the EM plates are read in LIMS and QC reviews them from LIMS at QC approval. Remove this step (it would type the counts again); it is for a plant without LIMS.');
+  }));
 
   twice(doc.stages.map((s) => s.key), 'stages');
   // Engine change 5: each time limit names steps of this master (TI-17).

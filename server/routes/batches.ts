@@ -5,7 +5,7 @@ import { audit } from '../audit.js';
 import { parseId, requirePermission, type SessionUser } from '../auth.js';
 import { usableItem } from '../master.js';
 import { dispensingRooms, machineRefusal, roomRefusal } from '../../shared/engine/picks.js';
-import { handProblem, lineOf, MEDIA_FILL, mediaFillTyped, mfgDateProblem, pullBulk, pullCoa, pullInProcess, pullItem, pullLot, pullMediaFill, pullQcResult, pulledWords, usableCoas, usableInProcess, usableResults } from '../pull.js';
+import { batchEm, handProblem, lineOf, MEDIA_FILL, mediaFillTyped, mfgDateProblem, pullBulk, pullCoa, pullInProcess, pullItem, pullLot, pullMediaFill, pullQcResult, pulledWords, usableCoas, usableInProcess, usableResults } from '../pull.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
 import { masterVersion } from './masters.js';
 import { batchRecordDoc, type RecordInput, type Signature } from '../batch-record.js';
@@ -17,7 +17,7 @@ import type { MasterDoc } from '../../shared/master/schema.js';
 import { Dec } from '../../shared/templates/index.js';
 import {
   ACTIONS, BATCH_ACTIONS, CERTIFICATE, DEVIATION_DONE, deviationStatusWords, LINK_OF, MATERIAL_USE, batchRefusal, filedKey, inLotUnit, issuedLots, bulkLeft, returnProblems, returnsOf, usedQuantity, usesOfLot, stepLabel, stepPlace, stepTitle, handFields, isHand, batchView, doneProblems, evaluate, lateItems, openSteps, parseKey, readValue, refusal, review, stepFields, stepNeeds, timers,
-  trainingCheck, coaText, resultText, inProcessText, isPick, keyId, labRequestId, labTests, currentValues, endsTheRounds, requestRound, type Training,
+  trainingCheck, emText, coaText, resultText, inProcessText, isPick, keyId, labRequestId, labTests, currentValues, endsTheRounds, requestRound, type Training,
   type Action, type BatchAction, type BatchEvent, type BulkIssue, type DeviationStatus, type LinkState, type Source, type StageView, type Stored, type StepEvent, type StepKey, type StepView, type Timer, type Value,
 } from '../../shared/engine/index.js';
 
@@ -707,6 +707,16 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
   // LIMS (readers round 2): the approved CoAs of this batch (QC approval), or of a lot typed by hand at a step (`key`,
   // `lot`: its QC report or certificate number), and the results of this batch's approved CoAs in a unit (a QC result
   // field), for the pick lists. Only what may be used is offered; the server checks a pick again when it is recorded.
+  // EM from LIMS (owner rule 19 Nov 2026): the batch's aseptic rooms and window, its EM samples in LIMS and why QC
+  // approval waits, for the release screen (read-only). pulled false: the EM review is typed.
+  app.get<{ Params: { id: string } }>('/api/batches/:id/em', anyUser, async (req, reply) => {
+    const id = parseId(req.params.id);
+    const l = id === null ? null : await loadBatch(sql, id);
+    if (!l) return reply.code(404).send({ error: 'not_found' });
+    if (l.doc.pack) return { link: 'absent', pulled: false, window: { rooms: [], from: null, to: null }, rows: [], problems: [] };
+    return batchEm(app, l.doc, l.events, l.batch.batchNo, l.now, PLANT_TZ);
+  });
+
   app.get<{ Params: { id: string }; Querystring: { key?: string; lot?: string; unit?: string; units?: string; request?: string } }>('/api/batches/:id/lims', anyUser, async (req, reply) => {
     const id = parseId(req.params.id);
     const l = id === null ? null : await loadBatch(sql, id);
@@ -795,7 +805,17 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
           if (no) throw new StepError(no.status, no.error, no.problems);
           if (action === 'release') { const p = bulkOpen(await bulkDeviations(app, l)); if (p.length) throw new StepError(409, 'not_ready', p); }
           if (signer && b.contentHash !== batchHash(l)) throw new StepError(409, 'content_changed', ['The batch record changed since you opened it.']);
-          if (action === 'qc-approve' && !l.doc.pack && !b.emReview) throw new StepError(400, 'invalid', ['emReview: the EM review of the batch is needed for QC approval']);
+          // EM (owner rule 19 Nov 2026: LIMS owns EM): while LIMS answers, QC reviews the batch's EM samples read from LIMS
+          // (kept with the approval and signed with it; typing is refused); approval waits while a sample is undecided or an
+          // excursion has no deviation number. No aseptic room, or LIMS absent or down: the EM review is typed as before.
+          const em = action === 'qc-approve' && !l.doc.pack ? await batchEm(app, l.doc, l.events, l.batch.batchNo, l.now, PLANT_TZ) : null;
+          if (em?.pulled && em.problems.length) throw new StepError(409, 'em_not_ready', em.problems);
+          if (em?.pulled && b.emReview) throw new StepError(400, 'invalid', ['The EM review comes from LIMS: it is not typed while LIMS answers.']);
+          if (em && !em.pulled && !b.emReview) throw new StepError(400, 'invalid', ['emReview: the EM review of the batch is needed for QC approval']);
+          const emPayload = em?.pulled ? { em: { shown: emText(em.rows, em.window), rooms: em.window.rooms, from: em.window.from, to: em.window.to,
+            samples: em.rows.map((r) => ({ sample: r.sampleNumber, point: r.pointName ?? r.pointCode, room: r.roomCode, grade: r.grade, kind: r.kind, takenOn: r.takenOn,
+              value: r.value, unit: r.unit, level: r.level, excursion: r.excursionStatus, deviation: r.deviationNumber })) } }
+            : em && em.link !== 'ok' ? { emSource: { from: 'hand' as const, link: 'lims' as const, state: em.link } } : {};
           // Terminate: what went back to stores unused of each lot the batch used; material_use_v1 gives it back to MMS.
           const issued = action === 'terminate' ? issuedLots(l.doc, openSteps(l.doc, l.events, l.now).steps) : [];
           const wrong = returnProblems(issued, b.returns ?? []);
@@ -806,7 +826,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
           const qc = action === 'qc-approve' ? await pullCoa(app, b.reportNo!, { kind: 'PRODUCT', batchNo: l.batch.batchNo, productCode: l.doc.header.productCode }) : null;
           if (qc?.problems.length) throw new StepError(409, 'not_in_lims', qc.problems);
           const payload = { ...(action === 'terminate' ? { terminated: true } : {}), ...(returns.length ? { returns } : {}), ...(b.reportNo ? { reportNo: (qc?.values.coaNumber as string | undefined) ?? b.reportNo } : {}),
-            ...(qc ? { source: qc.source } : {}), ...(b.emReview ? { emReview: b.emReview } : {}), ...(b.reason ? { reason: b.reason } : {}), ...(b.note ? { note: b.note } : {}) };
+            ...(qc ? { source: qc.source } : {}), ...(b.emReview ? { emReview: b.emReview } : {}), ...emPayload, ...(b.reason ? { reason: b.reason } : {}), ...(b.note ? { note: b.note } : {}) };
           const [ev] = await tx<{ id: number }[]>`
             insert into batch_events (batch_id, kind, payload, person_id) values (${id}, ${rule.event}, ${tx.json(payload)}, ${user.id}) returning id::int`;
           if (signer && rule.meaning) {

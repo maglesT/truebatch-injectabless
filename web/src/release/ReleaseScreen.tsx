@@ -58,6 +58,15 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
   const blocks = useBlocks();
   // LIMS (readers round 2): the approved CoAs of this batch, picked for QC approval while LIMS answers (typing is refused
   // then); null while LIMS is absent or down: the report number is typed.
+  // EM from LIMS (owner rule 19 Nov 2026: LIMS owns EM): the batch's EM samples, read-only, while LIMS answers.
+  const [em, setEm] = useState<BatchEm | null>(null);
+  useEffect(() => {
+    if (product.packing || d?.batch.status !== 'production approved') return;
+    let live = true;
+    void api<BatchEm>('GET', `/api/batches/${id}/em`).then((x) => live && setEm(x), () => live && setEm(null));
+    return () => { live = false; };
+  }, [id, d?.batch.status]);
+  const emPulled = !!em?.pulled;
   const lims = useLims(d?.batch.status === 'production approved' ? `/api/batches/${id}/lims` : null);
   const reload = useCallback(async (background = false) => {
     try {
@@ -94,7 +103,7 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
 
   const sign = async ({ proof }: { proof: string }) => {
     if (!signing) return;
-    const extra = signing.action === 'qc-approve' ? { reportNo: reportNo.trim(), ...(product.packing ? {} : { emReview: emReview.trim() }) } : signing.action === 'reject' ? { reason: rejectWhy.trim() } : {};
+    const extra = signing.action === 'qc-approve' ? { reportNo: reportNo.trim(), ...(product.packing || emPulled ? {} : { emReview: emReview.trim() }) } : signing.action === 'reject' ? { reason: rejectWhy.trim() } : {};
     try {
       await api('POST', `/api/batches/${id}/${signing.action}`, { proof, contentHash: d.batch.contentHash, ...extra });
       setSigning(null);
@@ -188,9 +197,9 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
               )}
             </>) : <label>QC report number<input value={reportNo} onChange={(e) => setReportNo(e.target.value)} maxLength={60} placeholder="e.g. QC-26-0042" /></label>}
             {product.packing ? <p className="why">Your signature means: the finished packed product was tested and complies with its specification, as in the QC report.</p> : <>
-              <label>EM review of the batch (report numbers; the Deviations number of each action-limit excursion, or "no excursion")<input value={emReview} onChange={(e) => setEmReview(e.target.value)} maxLength={500} placeholder="e.g. EM-26-118, EM-26-119: no excursion" /></label>
+              {em?.pulled ? <EmFromLims em={em} /> : <label>EM review of the batch (report numbers; the Deviations number of each action-limit excursion, or "no excursion")<input value={emReview} onChange={(e) => setEmReview(e.target.value)} maxLength={500} placeholder="e.g. EM-26-118, EM-26-119: no excursion" /></label>}
               <p className="why">Your signature means: the release tests meet the specification as in the QC report, including sterility (each sub-batch or load), bacterial endotoxins and the bioburden results; and the environmental monitoring of the batch was reviewed, every action-limit excursion with its deviation.</p></>}
-            <button className="big primary" disabled={!reportNo.trim() || (!product.packing && !emReview.trim())} onClick={() => setSigning({ meaning: 'qc_approved', action: 'qc-approve' })}>Sign: QC approved</button>
+            <button className="big primary" disabled={!reportNo.trim() || (!product.packing && (emPulled ? em!.problems.length > 0 : !emReview.trim()))} onClick={() => setSigning({ meaning: 'qc_approved', action: 'qc-approve' })}>Sign: QC approved</button>
           </div>
         ) : <p className="notice">QC approval comes first: it needs the QC approval permission.</p>)}
         {qaTurn && (can(me, 'qa.release') ? (<>
@@ -211,7 +220,7 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
       {signing && (
         <SignDialog meaning={signing.meaning} what={`Batch ${d.batch.batchNo} · ${doc.header.productName}`} onCancel={() => setSigning(null)} onSign={sign}>
           <div className="summary-box">
-            {signing.action === 'qc-approve' && <p>QC report <b>{reportNo.trim()}</b>{product.packing ? '' : <> · EM review <b>{emReview.trim()}</b></>}</p>}
+            {signing.action === 'qc-approve' && <p>QC report <b>{reportNo.trim()}</b>{product.packing ? '' : emPulled ? <> · EM from LIMS: <b>{em!.rows.length} samples reviewed</b></> : <> · EM review <b>{emReview.trim()}</b></>}</p>}
             {signing.action === 'reject' && <p>Reason: <b>{rejectWhy.trim()}</b></p>}
             {signing.action !== 'qc-approve' && <p>This signature also records your review of the batch's audit trail: {count(r.corrections.length, 'correction')}, {count(r.sentBack.length, 'step')} sent back,
               {' '}{count(r.late.length, 'late timer')}, {count(r.outOfLimits.length, 'value')} out of limits, {count(r.deviations.length, 'deviation')}, {count(r.notApplicable.length, 'step')} not applicable.</p>}
@@ -248,4 +257,25 @@ function Group({ title, empty, children }: { title: string; empty: string; child
     <h3>{title}</h3>
     {children.length ? <ul className="rv-list">{children}</ul> : <p className="muted rv-none">{empty}</p>}
   </>);
+}
+
+/** The batch's EM samples as LIMS has them (GET /api/batches/:id/em), with why QC approval waits. */
+interface BatchEm { link: string; pulled: boolean; window: { rooms: string[]; from: string | null; to: string | null }; problems: string[];
+  rows: { sampleNumber: string; pointCode: string | null; pointName: string | null; roomCode: string | null; grade: string | null; kind: string | null; takenOn: string | null;
+    value: string | null; unit: string | null; limitText: string | null; level: string | null; excursionStatus: string | null; deviationNumber: string | null; decision: string | null }[] }
+function EmFromLims({ em }: { em: BatchEm }) {
+  return (
+    <div className="em-lims">
+      <p className="lbl">Environmental monitoring of {em.window.rooms.join(', ')} from LIMS{em.window.from && em.window.to ? ` (${plainClock(em.window.from)} to ${plainClock(em.window.to)})` : ''}: read-only</p>
+      {em.rows.length > 0 && (
+        <table className="small"><thead><tr><th>Sample</th><th>Point</th><th>Kind</th><th>Taken</th><th>Result</th><th>Level</th><th>Deviation</th></tr></thead>
+          <tbody>{em.rows.map((r) => (
+            <tr key={r.sampleNumber} className={r.level === 'ACTION' || r.level === 'ALERT' ? 'bad' : undefined}>
+              <td>{r.sampleNumber}</td><td>{r.pointName ?? r.pointCode} ({r.roomCode}{r.grade ? `, grade ${r.grade}` : ''})</td><td>{r.kind}</td><td>{r.takenOn}</td>
+              <td>{r.decision ? `${r.value ?? ''} ${r.unit ?? ''}` : 'not decided'}</td><td>{r.level ?? ''}</td><td>{r.deviationNumber ?? ''}</td>
+            </tr>))}</tbody></table>
+      )}
+      {em.problems.length > 0 && <div className="notice bad" role="note"><p><b>QC approval waits:</b></p><ul>{em.problems.map((t) => <li key={t}>{t}</li>)}</ul></div>}
+    </div>
+  );
 }

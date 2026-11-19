@@ -6,6 +6,8 @@ import { CERTIFICATE, PROVIDER_NAME, bulkIssueProblem, bulkLeft, clauses, readVa
 import { LOT_USABLE } from './links.js';
 import { coaRefusal, coaText, fieldRefusal, inProcessFit, inProcessText, isPick, requestFits, resultRefusal, resultText, sameUnit, type Coa, type CoaFor, type QcResult } from '../shared/engine/lims.js';
 import type { LinkState } from '../shared/engine/links.js';
+import { emOfBatch, emProblems, emWindow, type EmRow } from '../shared/engine/em.js';
+import type { StepEvent } from '../shared/engine/state.js';
 import { plantDate } from '../shared/plant-time.js';
 
 // What a link gives a step value at write time (owner 15 Nov 2026, TI-11, TI-12): the value as read now, or a
@@ -286,4 +288,20 @@ export async function pullInProcess(app: FastifyInstance, block: Block, f: Block
     out.sources[name] = source;
   }
   return out;
+}
+
+// ---- EM from LIMS (owner rule 19 Nov 2026: LIMS owns EM; shared/engine/em.ts).
+
+/**
+ * The batch's EM samples in LIMS, and why QC approval waits on them. `pulled: false` when the batch has no aseptic room
+ * (nothing to read: the EM review is typed as before) or LIMS is absent or down (typed, marked so).
+ */
+export async function batchEm(app: FastifyInstance, doc: MasterDoc, events: readonly StepEvent[], batchNo: string, now: Date, tz: string) {
+  const window = emWindow(doc, events, now);
+  if (!window.rooms.length || !window.from || !window.to) return { link: app.links.lims.linked ? 'ok' as LinkState : 'absent' as LinkState, pulled: false, window, rows: [] as EmRow[], problems: [] as string[] };
+  const day = (iso: string) => new Date(iso).toLocaleDateString('en-CA', { timeZone: tz });
+  const r = await app.links.lims.em(window.rooms, batchNo, day(window.from), day(window.to));
+  if (r.state !== 'ok') return { link: r.state, pulled: false, window, rows: [] as EmRow[], problems: [] as string[] };
+  const rows = r.value.filter((x) => emOfBatch(x, batchNo, window, tz));
+  return { link: 'ok' as LinkState, pulled: true, window, rows, problems: emProblems(rows, window) };
 }
