@@ -38,6 +38,9 @@ export const fieldSchema = z.object({
   // with one of the notTypes words is not taken (a QC lab "Analytical balance" is not a dispensing balance).
   types: z.array(z.string().regex(/^[a-z][a-z ]*$/)).optional(),
   notTypes: z.array(z.string().regex(/^[a-z][a-z ]*$/)).optional(),
+  // number: a QC result of this batch (from the QC report). While the LIMS link answers it is picked from the batch's
+  // approved CoA in LIMS (result_v1, its reported figure); absent or down, typed by hand (shared/engine/lims.ts).
+  qc: z.literal(true).optional(),
 }).strict();
 // A packing line: master data's labelling machines, cartoners, tray and blister packers, and packing lines.
 export const PACKING_LINE = ['label', 'carton', 'tray', 'blister', 'packing line'];
@@ -131,6 +134,7 @@ export function blockProblems(b: Block): string[] {
   const settings = new Set(b.settings.map((s) => s.name));
   for (const f of b.fields) {
     if (f.kind === 'number' && !f.unit) p.push(`field ${f.name}: a number needs a unit`);
+    if (f.qc && (f.kind !== 'number' || f.count !== undefined)) p.push(`field ${f.name}: only a single number is a QC result from LIMS`);
     if (f.unit?.startsWith('$') ? !settings.has(f.unit.slice(1)) : f.unit !== undefined && !findUnit(f.unit)) p.push(`field ${f.name}: unknown unit ${f.unit}`);
     if (f.kind === 'choice' && !f.options?.length) p.push(`field ${f.name}: a choice needs options`);
     if (typeof f.count === 'string' && b.settings.find((s) => s.name === String(f.count).slice(1))?.kind !== 'number') p.push(`field ${f.name}: its count ${f.count} is not a number setting`);

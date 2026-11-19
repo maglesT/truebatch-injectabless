@@ -96,7 +96,17 @@ export const dryMix: Block = {
   ],
 };
 
-export const TEST_BLOCKS: Block[] = [granulate, dry, compress, coat, dryMix];
+// A QC result of the batch from the QC report (TrueBatch Tablets' uniformity by weight assay): `qc`, so it is picked
+// from the batch's approved CoA in LIMS while LIMS answers (no injectables block has a release-CoA result in a step).
+export const qcAssay: Block = {
+  id: 'qc-assay', version: 1, name: 'Assay from the QC report', checker: true,
+  instruction: 'Record the assay from the QC report.',
+  fields: [{ name: 'assay', label: 'Assay (% of label claim, QC report)', kind: 'number', unit: '%', qc: true }],
+  settings: [{ name: 'assayLimit', label: 'Assay limits', kind: 'limit' }],
+  calcs: [{ name: 'assayCheck', label: 'Assay against limits', template: 'C1', args: { value: '$assay', limit: '$assayLimit' } }],
+};
+
+export const TEST_BLOCKS: Block[] = [granulate, dry, compress, coat, dryMix, qcAssay];
 
 /** The mock factory: the product's blocks plus the test blocks, found by the same findBlock. */
 export async function withTestBlocks(original: () => Promise<typeof import('../shared/blocks/index.js')>) {

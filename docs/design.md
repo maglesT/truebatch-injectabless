@@ -286,6 +286,20 @@ answering) or **ok**.
   training dates: the dates are Recruitment's, read at the moment of signing. The aseptic operator and visual
   inspector permissions stay as they are (who may do that work at all); the training is per step (trained and in
   date for this step's skill). The same applies in TrueBatch Injectables Packing.
+- **LIMS** (`coa_v1`, `result_v1`, readers round 2, 19 Nov 2026; as TrueBatch Tablets round 40): QC's certificate of
+  analysis (CoA) and its results, read through `LIMS_DATABASE_URL` (`shared/engine/lims.ts`, `server/pull.ts`); both
+  manifests read `lims: ["coa_v1", "result_v1"]`. While the link answers they are PICKED, never typed: (1) QC approval
+  of the batch (or packing batch) takes the CoA number of this batch's approved CoA, kept in the approval's payload
+  (`source`) and signed with it; the release screen and the PDF show "QC report X (LIMS CoA …)"; (2) the "QC report or
+  certificate number" of a lot typed by hand (MMS off or down) is an approved CoA of that lot and the step's material;
+  (3) a QC result field of a step (`qc` on a single number field) takes the `reported` figure of a result of this
+  batch's approved CoA in the field's unit. No injectables block marks a field `qc`: the bulk test (QA hold) is an
+  in-process sample and LIMS has no in-process purpose (only release, retest, stability, investigation, monitoring),
+  and sterility, endotoxin, bioburden and EM results are judged at QC approval, not typed in a step. Fixed rules
+  (`coaRefusal`): only an APPROVED CoA (not one LIMS also rejected), of this batch number (product sample, the batch's
+  product code) or this lot number (material sample, the line's material), of a release sample (a lot: release or
+  retest); anything else is never offered and is refused with its reason. Absent or down: typed by hand as before,
+  marked "typed by hand: LIMS …" (a step value then needs a second-person check and is listed for QA).
 - **Published** (`db/migrations/0006_report_views.sql`): `batch_fact_v1` and `equipment_use_v1` with Batchwright's
   names and columns, so the Logbook and Deviations read TrueBatch as they read Batchwright, and `deviation_note_v1`
   for Deviations to file notes later. `batch_fact_v1` has one more column at its end (`0007`): `manufactured_on`, the
