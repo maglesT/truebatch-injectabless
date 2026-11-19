@@ -43,7 +43,9 @@ export const fieldSchema = z.object({
   // Round 42 (owner: in-process lab tests are picked from LIMS, not typed): 'in_process' is an in-process test done in
   // the QC lab on a sample of THIS step. The step publishes a lab request when it starts (report.lab_request_v1); the
   // field picks a result of an approved in-process report of that request (its reported figure; a list of readings
-  // picks LIMS's individual values, in order, exactly `count` of them). `true` stays the release CoA's result.
+  // picks LIMS's individual values, in order, exactly `count` of them). `true` stays the release CoA's result (no
+  // injectables block uses it; kept as in every edition). Round 44: a result fills only the field LIMS names in
+  // result_v1.ipc_field.
   qc: z.union([z.literal(true), z.literal('in_process')]).optional(),
   // An in-process list (qc 'in_process', count): what LIMS's reported figure of the result is, worked out again from the
   // values picked and compared (rounded as LIMS wrote it): 'mean' of the values, or 'AV' the acceptance value of
