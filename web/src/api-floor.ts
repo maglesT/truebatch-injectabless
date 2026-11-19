@@ -64,7 +64,10 @@ export function useLinked<T>(url: string | null, list: string): T[] {
  * results of them in a unit; null while not read, absent or down (then typed by hand). `again` reads it once more.
  */
 export interface LimsPicks { link: 'ok' | 'absent' | 'down'; coas: { coaNumber: string; shown: string }[];
-  results: { resultId: string; coaNumber: string | null; testName: string | null; reported: string | null; unit: string | null; shown: string }[] }
+  results: { resultId: string; coaNumber: string | null; testName: string | null; reported: string | null; unit: string | null; shown: string;
+    // Round 42 (?request=): an in-process result's individual values (in LIMS's order), what `reported` is, its request.
+    individual?: string[] | null; figure?: string | null; requestId?: string | null; analysisNumber?: string | null; limitText?: string | null; outsideLab?: string | null }[];
+  request?: string }
 export function useLims(url: string | null, again?: unknown): LimsPicks | null {
   const [r, setR] = useState<{ url: string; picks: LimsPicks } | null>(null);
   useEffect(() => {

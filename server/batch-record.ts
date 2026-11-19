@@ -221,7 +221,9 @@ function valueLines(block: Block, v: StepView, who: (id: number | null) => strin
 }
 
 // Where a value came from: pulled through a link (as read), or typed by hand while the link was off or down.
-const sourceText = (s: Source | undefined) => (!s ? '' : s.from === 'hand' ? ` (BY HAND: ${PROVIDER_NAME[s.link]} ${s.state === 'down' ? 'link down' : 'not linked'})` : ` (${plantText(s.shown, true)})`);
+// A LIMS pick says so first (round 42: "from LIMS in-process report IPR…", the report, its analysis and request).
+const sourceText = (s: Source | undefined) => (!s ? '' : s.from === 'hand' ? ` (BY HAND: ${PROVIDER_NAME[s.link]} ${s.state === 'down' ? 'link down' : 'not linked'})`
+  : ` (${s.from === 'lims' ? 'from ' : ''}${plantText(s.shown, true)})`);
 
 // A certificate value from MMS: its basis and report, without the value said again ("· as is, MMS report QC/RM/26/1171").
 function certificateText(s: Source | undefined): string {

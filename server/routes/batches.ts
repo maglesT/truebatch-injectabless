@@ -5,7 +5,7 @@ import { audit } from '../audit.js';
 import { parseId, requirePermission, type SessionUser } from '../auth.js';
 import { usableItem } from '../master.js';
 import { dispensingRooms, machineRefusal, roomRefusal } from '../../shared/engine/picks.js';
-import { handProblem, lineOf, MEDIA_FILL, mediaFillTyped, mfgDateProblem, pullBulk, pullCoa, pullItem, pullLot, pullMediaFill, pullQcResult, pulledWords, usableCoas, usableResults } from '../pull.js';
+import { handProblem, lineOf, MEDIA_FILL, mediaFillTyped, mfgDateProblem, pullBulk, pullCoa, pullInProcess, pullItem, pullLot, pullMediaFill, pullQcResult, pulledWords, usableCoas, usableInProcess, usableResults } from '../pull.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
 import { masterVersion } from './masters.js';
 import { batchRecordDoc, type RecordInput, type Signature } from '../batch-record.js';
@@ -17,7 +17,7 @@ import type { MasterDoc } from '../../shared/master/schema.js';
 import { Dec } from '../../shared/templates/index.js';
 import {
   ACTIONS, BATCH_ACTIONS, CERTIFICATE, DEVIATION_DONE, deviationStatusWords, LINK_OF, MATERIAL_USE, batchRefusal, filedKey, inLotUnit, issuedLots, bulkLeft, returnProblems, returnsOf, usedQuantity, usesOfLot, stepLabel, stepPlace, stepTitle, handFields, isHand, batchView, doneProblems, evaluate, lateItems, openSteps, parseKey, readValue, refusal, review, stepFields, stepNeeds, timers,
-  trainingCheck, coaText, resultText, type Training,
+  trainingCheck, coaText, resultText, inProcessText, keyId, labRequestId, labTests, type Training,
   type Action, type BatchAction, type BatchEvent, type BulkIssue, type DeviationStatus, type LinkState, type Source, type StageView, type Stored, type StepEvent, type StepKey, type StepView, type Timer, type Value,
 } from '../../shared/engine/index.js';
 
@@ -139,6 +139,22 @@ export async function bulkIssues(tx: Tx | Sql, bulk: string, except = '', lock =
     where lower(k.bulk) = ${bulk.toLowerCase()} and b.batch_no <> ${except} and t.units is not null`;
 }
 
+/**
+ * Round 42: the lab request a step instance opens when it starts, kept with its "started" event (insert-only, as every
+ * step event): the stage and step in words and the in-process tests of the step, in the units of this step. Published
+ * by report.lab_request_v1 (db/migrations/0019) with its id '<batch>/<step key>'; null for a step without such a test.
+ */
+export function labRequestOf(doc: MasterDoc, key: StepKey): { stage: string; step: string; tests: ReturnType<typeof labTests> } | null {
+  const stage = doc.stages[key.stage];
+  const st = stage?.steps[key.step];
+  const block = st && findBlock(st.block);
+  if (!stage || !st || !block) return null;
+  const tests = labTests(block.fields, (f) => { const u = f.unit?.startsWith('$') ? st.settings[f.unit.slice(1)] : f.unit; return typeof u === 'string' ? u : ''; });
+  if (!tests.length) return null;
+  const extra = [stage.kind === 'sub-batch' ? `sub-batch ${key.sub}` : '', st.flow.kind === 'repeat-until' ? `round ${key.round}` : ''].filter(Boolean).join(', ');
+  return { stage: stage.name, step: `${stepTitle(doc, st)}${extra ? ` (${extra})` : ''}`, tests };
+}
+
 // What a signer is shown of a step, and its hash: the signature is refused if the step changed since (PL-05).
 const stepContent = (batchId: number, v: StepView) => ({ batch: batchId, step: v.id, values: v.values, results: v.results });
 const stepHash = (batchId: number, v: StepView) => contentHash('batch_step', batchId, stepContent(batchId, v));
@@ -208,7 +224,17 @@ async function readValues(app: FastifyInstance, tx: Tx, doc: MasterDoc, key: Ste
     const setting = f.unit?.startsWith('$') ? step.settings[f.unit.slice(1)] : f.unit;
     // A QC result (readers round 2): picked from this batch's approved CoA in LIMS while it answers (a new pick replaces
     // an earlier one, as a correction); absent or down, typed by hand below, with a second-person check.
-    if (f.qc) {
+    // An in-process result (round 42): picked from an approved in-process report of this step's lab request in LIMS
+    // (a list: its individual values; a staged list may fill the other stage's field too); absent or down, typed below.
+    if (f.qc === 'in_process') {
+      const unitOf = (y: typeof f) => { const u = y.unit?.startsWith('$') ? step.settings[y.unit.slice(1)] : y.unit; return typeof u === 'string' ? u : ''; };
+      const coating = typeof step.settings.coating === 'string' ? step.settings.coating : undefined;
+      const q = await pullInProcess(app, block, f, x, unitOf, { batchNo, productCode: doc.header.productCode, request: labRequestId(batchNo, keyId(key)) }, { ...current.values, ...out }, coating);
+      if (q.problems.length) { problems.push(...q.problems); continue; }
+      if (!isHand(q.source)) { Object.assign(out, q.values); Object.assign(source, q.sources); continue; }
+      source[name] = q.source;
+    }
+    if (f.qc === true) {
       const q = await pullQcResult(app, f, x, typeof setting === 'string' ? setting : '', batchNo, doc.header.productCode);
       if (q.problems.length) { problems.push(...q.problems); continue; }
       source[name] = q.source;
@@ -641,7 +667,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
   // LIMS (readers round 2): the approved CoAs of this batch (QC approval), or of a lot typed by hand at a step (`key`,
   // `lot`: its QC report or certificate number), and the results of this batch's approved CoAs in a unit (a QC result
   // field), for the pick lists. Only what may be used is offered; the server checks a pick again when it is recorded.
-  app.get<{ Params: { id: string }; Querystring: { key?: string; lot?: string; unit?: string; units?: string } }>('/api/batches/:id/lims', anyUser, async (req, reply) => {
+  app.get<{ Params: { id: string }; Querystring: { key?: string; lot?: string; unit?: string; units?: string; request?: string } }>('/api/batches/:id/lims', anyUser, async (req, reply) => {
     const id = parseId(req.params.id);
     const l = id === null ? null : await loadBatch(sql, id);
     if (!l) return reply.code(404).send({ error: 'not_found' });
@@ -653,6 +679,17 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
       return { link: r.link, coas: r.coas.map((c) => ({ coaNumber: c.coaNumber, shown: coaText(c) })), results: [] };
     }
     const want = { kind: 'PRODUCT' as const, batchNo: l.batch.batchNo, productCode: l.doc.header.productCode };
+    // Round 42: `request` (a step key) gives the results of that step's lab request (its in-process fields) in `units`,
+    // with their individual values; each field then checks its own fit (shared/engine/lims.ts inProcessFit).
+    const reqKey = req.query.request ? parseKey(req.query.request) : null;
+    if (req.query.request !== undefined) {
+      if (!reqKey || !l.doc.stages[reqKey.stage]?.steps[reqKey.step]) return reply.code(404).send({ error: 'not_found' });
+      const request = labRequestId(l.batch.batchNo, keyId(reqKey));
+      const units = (req.query.units ?? '').split(',').filter(Boolean).map((u) => decodeURIComponent(u));
+      const r = await usableInProcess(app, { batchNo: want.batchNo, productCode: want.productCode, request }, units);
+      return { link: r.link, request, coas: [], results: r.results.map((x) => ({ resultId: x.resultId, coaNumber: x.coaNumber, testName: x.testName, reported: x.reported, unit: x.unit,
+        individual: x.individual ?? null, figure: x.figure ?? null, requestId: x.requestId ?? null, analysisNumber: x.analysisNumber, limitText: x.limitText, outsideLab: x.outsideLab, shown: inProcessText(x, request) })) };
+    }
     // Round 41: `units` (comma-separated, each URI-encoded) gives the results for every QC field of a step in one read.
     const units = req.query.units !== undefined ? req.query.units.split(',').map((u) => decodeURIComponent(u)) : req.query.unit !== undefined ? [req.query.unit] : null;
     if (units) {
@@ -794,6 +831,8 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
           if (action === 'note') payload.where = stepLabel(l.doc, key);
           // Where the step is, in words, for the uses other products read (equipment_use_v1, material_use_v1: step_name).
           if (action === 'start') payload.where = stepPlace(l.doc, key);
+          // Round 42: a step with in-process QC fields opens its lab request as it starts (report.lab_request_v1).
+          if (action === 'start') { const lab = labRequestOf(l.doc, key); if (lab) payload.labRequest = lab; }
           // A material used: its unit in master data as read at signing (material_use_v1 gives MMS the quantity in it).
           if (action === 'done') { const unit = await stockUnit(app, l.doc, key); if (unit) payload.stockUnit = unit; }
           if (b.reference) {
