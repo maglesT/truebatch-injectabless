@@ -19,6 +19,8 @@ const schema = z.object({
   QUAL_DATABASE_URL: optionalUrl,
   // Recruitment's training_v1: only trained people sign a step that names a training (owner, 17 Nov 2026).
   RECRUITMENT_DATABASE_URL: optionalUrl,
+  // LIMS's coa_v1 and result_v1: QC's CoAs and results, picked where a step or QC approval asks for them.
+  LIMS_DATABASE_URL: optionalUrl,
   // Packing only: TrueBatch Injectables' published views (its released batches), TRUEBATCH_INJECTABLES_DATABASE_URL on
   // the platform (the packing product's own database is TRUEBATCH_INJECTABLES_PACKING_DATABASE_URL).
   INJECTABLES_LINK_URL: optionalUrl,

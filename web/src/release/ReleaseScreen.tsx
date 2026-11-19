@@ -2,12 +2,13 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api, can, MEANING_LABEL, type Me } from '../api.js';
 import { SignDialog } from '../components/SignDialog.js';
 import {
-  blockOf, changed, go, headline, pdfLink, plainClock, plainError, statusText, stepOf, tone, useBlocks, valueText, words,
+  blockOf, changed, go, headline, pdfLink, plainClock, plainError, statusText, stepOf, tone, useBlocks, useLims, valueText, words,
   type BatchDetail, type Block, type FloorEvent, type Source, type TimerRow, type Value,
 } from '../api-floor.js';
 import { fieldLabel as labelOf, PROVIDER_NAME } from '../../../shared/engine/links.js';
 import { stepLabel } from '../../../shared/engine/batch.js';
-import { deviationNumber, deviationStatusWords } from '../../../shared/engine/release.js';
+import { deviationNumber, deviationStatusWords, qcReportText } from '../../../shared/engine/release.js';
+import { plantText } from '../../../shared/plant-time.js';
 import { skillText } from '../../../shared/engine/training.js';
 import { BatchHeader } from '../floor/BatchScreen.js';
 import { ReasonDialog } from '../floor/ReasonDialog.js';
@@ -38,7 +39,7 @@ interface Review {
   notApplicable: FloorEvent[];
   // Demo installations only: the waits ended at once (server/demo.ts).
   demoSkips: FloorEvent[];
-  batchEvents: { id: number; kind: string; payload: { reportNo?: string; emReview?: string; reason?: string; terminated?: boolean }; personName: string; at: string }[];
+  batchEvents: { id: number; kind: string; payload: { reportNo?: string; emReview?: string; reason?: string; terminated?: boolean; source?: Source }; personName: string; at: string }[];
   signatures: { objectType: string; printedName: string; meaning: string; signedAt: string; step: string | null }[];
 }
 type Signing = { meaning: 'qc_approved' | 'released' | 'rejected'; action: 'qc-approve' | 'release' | 'reject' };
@@ -55,6 +56,9 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
   const [signing, setSigning] = useState<Signing | null>(null);
   const [closing, setClosing] = useState<Review['deviations'][number] | null>(null);
   const blocks = useBlocks();
+  // LIMS (readers round 2): the approved CoAs of this batch, picked for QC approval while LIMS answers (typing is refused
+  // then); null while LIMS is absent or down: the report number is typed.
+  const lims = useLims(d?.batch.status === 'production approved' ? `/api/batches/${id}/lims` : null);
   const reload = useCallback(async (background = false) => {
     try {
       const [b, v] = await Promise.all([api<BatchDetail>('GET', `/api/batches/${id}`, undefined, background), api<Review>('GET', `/api/batches/${id}/review`, undefined, background)]);
@@ -168,10 +172,21 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
         {notice && <p className="notice info" role="status">{notice}</p>}
         {r.batchEvents.filter((b) => b.kind !== 'deviation_closed').map((b) => (
           <p key={b.id} className={b.kind === 'rejected' ? 'notice bad' : 'all-good'}><span aria-hidden="true">{b.kind === 'rejected' ? '✕' : '✓'}</span>
-            {b.payload.terminated ? terminatedText(b, plainClock) : <>{MEANING_LABEL[b.kind] ?? b.kind} by {b.personName}, {plainClock(b.at)}{b.payload.reportNo ? ` · QC report ${b.payload.reportNo}` : ''}{b.payload.emReview ? ` · EM review: ${b.payload.emReview}` : ''}{b.payload.reason ? ` · ${b.payload.reason}` : ''}</>}</p>))}
+            {b.payload.terminated ? terminatedText(b, plainClock) : <>{MEANING_LABEL[b.kind] ?? b.kind} by {b.personName}, {plainClock(b.at)}{b.payload.reportNo ? ` · ${plantText(qcReportText(b.payload))}` : ''}{b.payload.emReview ? ` · EM review: ${b.payload.emReview}` : ''}{b.payload.reason ? ` · ${b.payload.reason}` : ''}</>}</p>))}
         {qcTurn && (can(me, 'qc.approve') ? (
           <div className="decide">
-            <label>QC report number<input value={reportNo} onChange={(e) => setReportNo(e.target.value)} maxLength={60} placeholder="e.g. QC-26-0042" /></label>
+            {lims ? (<>
+              <p className="lbl">Certificate of analysis of batch {d.batch.batchNo} in LIMS</p>
+              {lims.coas.length === 0 ? <p className="notice">LIMS has no approved CoA of this batch yet: QC approves the sample in LIMS first.</p> : (
+                <div className="picks" role="group" aria-label="Certificate of analysis">
+                  {lims.coas.map((c) => (
+                    <button key={c.coaNumber} type="button" className={reportNo === c.coaNumber ? 'on' : ''} aria-pressed={reportNo === c.coaNumber} onClick={() => setReportNo(c.coaNumber)}>
+                      <b>{c.coaNumber}</b><small>{plantText(c.shown)}</small>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>) : <label>QC report number<input value={reportNo} onChange={(e) => setReportNo(e.target.value)} maxLength={60} placeholder="e.g. QC-26-0042" /></label>}
             {product.packing ? <p className="why">Your signature means: the finished packed product was tested and complies with its specification, as in the QC report.</p> : <>
               <label>EM review of the batch (report numbers; the Deviations number of each action-limit excursion, or "no excursion")<input value={emReview} onChange={(e) => setEmReview(e.target.value)} maxLength={500} placeholder="e.g. EM-26-118, EM-26-119: no excursion" /></label>
               <p className="why">Your signature means: the release tests meet the specification as in the QC report, including sterility (each sub-batch or load), bacterial endotoxins and the bioburden results; and the environmental monitoring of the batch was reviewed, every action-limit excursion with its deviation.</p></>}

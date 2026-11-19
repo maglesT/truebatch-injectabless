@@ -4,7 +4,7 @@
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces.js';
 import { findBlock, type Block } from '../shared/blocks/index.js';
 import { materialLines, type Step } from '../shared/master/schema.js';
-import { batchText, batchView, deviations, deviationNumber, deviationText, fieldLabel, handFields, lateItems, lineQuantity, notYetText, cutShort, terminatedText, TERMINATED_STATE, openSteps, PROVIDER_NAME, deviationStatusWords, stepTitle, unitName, headline, limitOf, withoutVerdict, statusWords, CERTIFICATE, perPackText, trainingOf, trainingText, trainingTyped, skillText, type DeviationStatus, type EventKind, type Source, type Stored, type StepView, type Value } from '../shared/engine/index.js';
+import { batchText, batchView, deviations, deviationNumber, deviationText, fieldLabel, handFields, lateItems, lineQuantity, notYetText, cutShort, terminatedText, TERMINATED_STATE, openSteps, PROVIDER_NAME, deviationStatusWords, stepTitle, unitName, headline, limitOf, withoutVerdict, statusWords, CERTIFICATE, perPackText, trainingOf, trainingText, trainingTyped, skillText, qcReportText, type DeviationStatus, type EventKind, type Source, type Stored, type StepView, type Value } from '../shared/engine/index.js';
 import type { LoadedBatch } from './routes/batches.js';
 import { pageFrame, plant, runs } from './pdf.js';
 import { plantText } from '../shared/plant-time.js';
@@ -196,7 +196,7 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
   content.push(heading('Release decision'));
   const decisions = batchEvents.filter((b) => b.kind !== 'deviation_closed');
   content.push(decisions.length ? { stack: decisions.map((b) => small(b === ended ? endedText! :
-    `${MEANING[b.kind] ?? b.kind}: ${b.personName}, ${plant(b.at)}${b.payload.reportNo ? ` · QC report ${b.payload.reportNo}` : ''}${b.payload.emReview ? ` · EM review: ${b.payload.emReview}` : ''}${b.payload.reason ? ` · reason: ${b.payload.reason}` : ''}`,
+    `${MEANING[b.kind] ?? b.kind}: ${b.personName}, ${plant(b.at)}${b.payload.reportNo ? ` · ${plantText(qcReportText(b.payload), true)}` : ''}${b.payload.emReview ? ` · EM review: ${b.payload.emReview}` : ''}${b.payload.reason ? ` · reason: ${b.payload.reason}` : ''}`,
     { fontSize: 9, bold: b.kind === 'released' || b.kind === 'rejected', color: b.kind === 'rejected' ? RED : undefined, margin: [0, 0, 0, 2] })) }
     : { text: `No decision yet: the batch is ${statusWords(view.status, !!doc.pack)}.`, italics: true, fontSize: 9 });
   if (view.status !== 'released' && view.status !== 'rejected') content.push(small(`This copy was made while the batch is ${statusWords(view.status, !!doc.pack)}: it is not a released record.`, { color: RED, margin: [0, 4, 0, 0] }));
