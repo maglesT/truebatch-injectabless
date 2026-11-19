@@ -342,6 +342,15 @@ answering) or **ok**.
   results; the server checks again when it is picked (in-process and release-CoA picks alike). This matters for the
   bulk test, whose six results come from one lab request. No injectables field is a release-CoA result (`qc: true`);
   there is no uniformity-by-weight block here, so Tablets' change of that assay to in-process has nothing to change.
+- **LIMS: in-process test codes** (as TrueBatch Tablets round 45, agreed with LIMS: its in-process specification maps
+  each test by a code). Each test of a lab request carries `code` '<block id>.<field name>' (`ipcCodes`), unique within
+  the master: a block in the master more than once adds '@<n>' by its order (stages, then steps), and the master check
+  says so as an `info` line ("LIMS specification must map each occurrence"). `lab_request_v1` is replaced in place
+  (`db/migrations/0027`, same name and columns; requests opened before have code null). LIMS's `result_v1.ipc_code`
+  (read through to_jsonb) names the code back: such a result fills only the field of that code in this step; without it
+  the round 44 rule holds (ipc_field, else the unit). Here: the bulk test's six tests are 'bulk-test.ph' … 'bulk-test.solvent',
+  blend uniformity 'blend-uniformity.results', BI and bioburden 'incubated-lab.count'. A staged list (content
+  uniformity, a test-only block here) is one test with `stages`.
 - **Who owns EM and sterilisation cycles** (owner rule 19 Nov 2026: a product keeps its own version of a job for a
   customer who buys it alone; when the owning product is linked, it reads the owner's records, so nothing is entered
   twice; duplicates review items 10 and 24).
