@@ -359,8 +359,9 @@ answering) or **ok**.
     samples of the rooms its aseptic stages recorded (a machine's room, or the room) over the time those stages ran
     (`GET /api/batches/:id/em`). A sample LIMS names with a batch number is that batch's only; one without is the
     batch's by room and its sampling time (`sampled_at`) or, from an older LIMS, its plant day. QC approval waits while a
-    sample is not decided in LIMS, an excursion (action or alert level, or one LIMS opened) has no deviation number, or
-    LIMS has none of the batch's samples yet; typing an EM review is then refused. The approval keeps the samples QC
+    sample is not decided in LIMS, an action excursion (action level, or one LIMS opened without a level) has no
+    deviation number, or LIMS has none of the batch's samples yet (an alert is listed but does not hold approval: in
+    LIMS it is a trend watch with no investigation and no deviation number; TI260016 demo, 19 Nov 2026); typing an EM review is then refused. The approval keeps the samples QC
     reviewed (`payload.em`, signed with it); the release screen and the PDF show "EM from LIMS: n samples of …; k
     excursions: … (DEV-…)". Alone (LIMS not linked), LIMS down, or a batch with no aseptic stage: the EM review is typed
     as before (LIMS down or not linked: marked "typed by hand"). `em-filling` keeps the shop-floor parts (particles,
