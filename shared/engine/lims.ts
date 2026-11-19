@@ -45,11 +45,23 @@ export function coaRefusal(c: Coa, want: CoaFor): string | null {
 }
 
 const NUMBER = /^-?\d+(\.\d+)?$/;
+/**
+ * Round 41: the same unit written two ways is one unit. A LIMS result and a step field may write a unit differently
+ * (a pH result carries no unit in LIMS; "mL" and "ml"; "mPa·s", "mPa.s" and "mPa s"; spaces). Only spelling is
+ * forgiven: the letters of the unit must still be the same (a percentage of a different kind, mg against %, never match).
+ */
+export function sameUnit(a: string | null | undefined, b: string | null | undefined): boolean {
+  const norm = (u: string | null | undefined) => {
+    const x = (u ?? '').trim().replace(/[\s·.⋅]/g, '').toLowerCase();
+    return x === 'ph' ? '' : x;
+  };
+  return norm(a) === norm(b);
+}
 /** Why this result may not fill a field in `unit`; null when it may (its CoA is checked by coaRefusal). */
 export function resultRefusal(r: QcResult, unit: string): string | null {
   const what = `${r.testName ?? 'The result'} of CoA ${r.coaNumber ?? '—'}`;
   if (!r.reported || !NUMBER.test(r.reported.trim())) return `${what} has no reported figure in LIMS.`;
-  if ((r.unit ?? '') !== unit) return `${what} is in ${r.unit || 'no unit'}, not in ${unit}.`;
+  if (!sameUnit(r.unit, unit)) return `${what} is in ${r.unit || 'no unit'}, not in ${unit}.`;
   return null;
 }
 
