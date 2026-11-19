@@ -57,6 +57,12 @@ describe('the EM rules (shared/engine/em.ts)', () => {
     expect(emProblems([row({ value: '1', level: 'ACTION', excursionStatus: 'OPEN', deviationNumber: 'DEV-2026-0060' })], w)).toEqual([]);
     expect(emText([row(), row({ sampleNumber: 'EM26002', value: '1', level: 'ACTION', deviationNumber: 'DEV-2026-0060' })], w))
       .toBe('EM from LIMS: 2 samples of RM-301; 1 excursion: EM26002 action 1 CFU (DEV-2026-0060)');
+    // An alert is a trend watch in LIMS (no investigation, no deviation number): listed, it does not hold approval.
+    const alert = row({ sampleNumber: 'EM26003', value: '4', level: 'ALERT', excursionStatus: 'OPEN' });
+    expect(emProblems([row(), alert], w)).toEqual([]);
+    expect(emText([alert], w)).toBe('EM from LIMS: 1 sample of RM-301; 1 excursion: EM26003 alert 4 CFU');
+    // An excursion LIMS opened without a level still needs its deviation number.
+    expect(emProblems([row({ level: null, excursionStatus: 'OPEN' })], w)).toEqual(['EM sample EM26001 (Filling needle zone, RM-301): the excursion has no deviation number in LIMS.']);
   });
 
   it('the incubated results split: EM plates (without LIMS) and BI and bioburden (picked from LIMS as an in-process test)', () => {

@@ -6,8 +6,9 @@
  * Which samples are the batch's: a sample LIMS names with a batch number belongs to that batch only; one without a
  * batch number belongs to the batch when it was taken in one of its aseptic rooms within the aseptic window (at its
  * sampling time when LIMS gives one, else on one of the window's plant days).
- * Approval waits while a sample is not decided in LIMS, or an excursion (an action or alert level, or an excursion LIMS
- * opened) has no deviation number there.
+ * Approval waits while a sample is not decided in LIMS, or an action excursion (an action level, or an excursion LIMS
+ * opened without an alert level) has no deviation number there. An alert is a trend watch in LIMS with no investigation
+ * and no deviation number (TI260016 demo, 19 Nov 2026): it is listed, it does not hold approval.
  */
 import type { MasterDoc } from '../master/schema.js';
 import type { StepEvent } from './state.js';
@@ -52,6 +53,8 @@ export function emOfBatch(r: EmRow, batchNo: string, w: EmWindow, tz: string): b
 
 const where = (r: EmRow) => [r.pointName ?? r.pointCode, r.roomCode].filter(Boolean).join(', ');
 const excursion = (r: EmRow) => r.level === 'ACTION' || r.level === 'ALERT' || (!!r.excursionStatus && r.excursionStatus !== 'NONE');
+/** An excursion LIMS investigates (a deviation number): any but an alert. */
+const needsDeviation = (r: EmRow) => excursion(r) && r.level !== 'ALERT';
 
 /** Why QC approval waits on the batch's EM in LIMS, in plain words (none: it may be signed). */
 export function emProblems(rows: readonly EmRow[], w: EmWindow): string[] {
@@ -59,7 +62,7 @@ export function emProblems(rows: readonly EmRow[], w: EmWindow): string[] {
   const out: string[] = [];
   for (const r of rows) {
     if (!r.decision) out.push(`EM sample ${r.sampleNumber} (${where(r)}) is not decided in LIMS yet.`);
-    else if (excursion(r) && !r.deviationNumber) out.push(`EM sample ${r.sampleNumber} (${where(r)}): the ${(r.level ?? 'excursion').toLowerCase()} excursion has no deviation number in LIMS.`);
+    else if (needsDeviation(r) && !r.deviationNumber) out.push(`EM sample ${r.sampleNumber} (${where(r)}): the ${r.level ? `${r.level.toLowerCase()} ` : ''}excursion has no deviation number in LIMS.`);
   }
   return out;
 }
@@ -68,5 +71,5 @@ export function emProblems(rows: readonly EmRow[], w: EmWindow): string[] {
 export function emText(rows: readonly EmRow[], w: EmWindow): string {
   const ex = rows.filter(excursion);
   return `EM from LIMS: ${rows.length} sample${rows.length === 1 ? '' : 's'} of ${w.rooms.join(', ')}; `
-    + (ex.length ? `${ex.length} excursion${ex.length === 1 ? '' : 's'}: ${ex.map((r) => `${r.sampleNumber} ${(r.level ?? '').toLowerCase()} ${r.value ?? ''}${r.unit ? ` ${r.unit}` : ''} (${r.deviationNumber})`).join(', ')}` : 'no excursion');
+    + (ex.length ? `${ex.length} excursion${ex.length === 1 ? '' : 's'}: ${ex.map((r) => `${r.sampleNumber} ${(r.level ?? '').toLowerCase()} ${r.value ?? ''}${r.unit ? ` ${r.unit}` : ''}${r.deviationNumber ? ` (${r.deviationNumber})` : ''}`).join(', ')}` : 'no excursion');
 }
