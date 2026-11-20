@@ -153,6 +153,12 @@ describe('the sterility assurance summary at release', () => {
     const cap = { ...iso, code: 'EQS-CAP-01', name: 'Vial capping machine', type: 'Capping machine' };
     expect(summaryOf(row({ capper: cap }, { capper: { from: 'hand', link: 'logbook', state: 'down' } }), latestBlock('seal-check')).said[0])
       .toBe('Capping machine: EQS-CAP-01 · Vial capping machine (Logbook down at use: its status answered by hand)');
+    // Display backlog 12: the line's media fill with its outcome and next date in words, not the protocol number only.
+    const aps = { from: 'qual', asOf: null, shown: 'Qualification media fill PRT-2026-0058 of RM-207: pass, next 2027-05-18' };
+    expect(summaryOf(row({ isolator: iso, apsReport: 'PRT-2026-0058', apsDue: '2027-05-18' }, { apsReport: aps }), latestBlock('aseptic-ready')).said[1])
+      .toBe('Line media fill PRT-2026-0058 of RM-207: pass, next 18 May 2027 (Qualification)');
+    expect(summaryOf(row({ apsReport: 'APS-7', apsDue: '2027-05-18' }, { apsReport: { from: 'hand', link: 'qual', state: 'down' } }), latestBlock('aseptic-ready')).said[0])
+      .toBe('Line media fill APS-7 (typed by hand), next due 18 May 2027');
   });
 
   it('a short duration reads in minutes or seconds, not as a long raw figure (17 Nov 2026 run, F23)', async () => {

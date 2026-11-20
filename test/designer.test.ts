@@ -153,6 +153,10 @@ describe('master designer', () => {
     // The author picks RM-219 for the bag line: no warning for it.
     const picked = { ...doc, stages: doc.stages.map((st) => (st.key === 'filling' ? { ...st, roomTypes: ['RM-219'] } : st)) };
     expect(placeChecks(picked, md).filter((p) => p.path === 'stages[1].roomTypes')).toEqual([]);
+    // Display backlog 13: stages sharing an area of several rooms get one warning that names them all.
+    const two = { ...doc, stages: [...doc.stages, { ...doc.stages[1]!, key: 'filling-2', name: 'Second fill' }] };
+    expect(placeChecks(two, md).filter((p) => p.path.endsWith('.roomTypes')).map((p) => p.message)[1]).toBe(
+      'Form-fill-seal, Second fill: pick the line\'s room. The area Aseptic filling has 3 rooms (RM-207, RM-208, RM-219): choose the one each stage runs in, in its stage settings, in place of the area');
   });
 
   it('run 3 H6: the formula adds a weighing for each excipient no step weighs yet, after the drug substance\'s, as a copy of it', () => {

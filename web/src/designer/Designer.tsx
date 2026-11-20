@@ -112,7 +112,7 @@ export function Designer({ me, versionId, onBack, onOpen }: { me: Me; versionId:
             {tab === 'formula' && doc.pack && <PackMaterials doc={doc} md={md} onChange={change} />}
             {tab === 'formula' && !doc.pack && <FormulaTable doc={doc} onChange={change} md={md} masters={others} selected={place.line} onSelect={(line) => setPlace({ tab: 'formula', line })} problems={problems ?? []} onAnswer={onAnswer} />}
             {tab === 'formula' && !doc.pack && <Containers doc={doc} md={md} onChange={change} />}
-            {tab === 'process' && <Process doc={doc} onChange={change} md={md} place={place} onPlace={setPlace} editable={!!editable} />}
+            {tab === 'process' && <Process doc={doc} onChange={change} md={md} place={place} onPlace={setPlace} editable={!!editable} onFormula={() => setTab('formula')} />}
           </fieldset>
           {tab === 'preview' && <Preview doc={doc} />}
           {tab === 'review' && <Review me={me} version={v} doc={doc} blocked={blocked} onChanged={load} onOpen={onOpen} onGo={go} />}

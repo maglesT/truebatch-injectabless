@@ -146,7 +146,7 @@ table.register td, table.register th { padding: 10px 10px; }
 .stat.bad b { color: var(--bad); }
 .greeting { color: var(--muted); margin: -10px 0 18px; }
 /* Detail lists */
-.summary { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; max-height: 40vh; overflow: auto; }
+.summary { display: grid; grid-template-columns: fit-content(45%) minmax(0, 1fr); gap: 6px 14px; margin: 0; max-height: 40vh; overflow: auto; }
 .summary dt { color: var(--muted); }
 .summary dd { margin: 0; }
 .summary ul { margin: 0; padding-left: 18px; }

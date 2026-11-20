@@ -142,15 +142,18 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   const [training, setTraining] = useState<TrainingRead | null>(null);
   const [trained, setTrained] = useState(false);
   const [askTraining, setAskTraining] = useState(0);
+  // Read as soon as the person may sign (display backlog 25), so Done and Checked say it before the dialog opens.
+  const maySign = signing || row.actions.includes('done' as never) || (row.state === 'done_awaiting_check' && row.actions.includes('check' as never));
   useEffect(() => {
     setTraining(null);
     setTrained(false);
-    if (!signing || !st.training) return;
+    if (!maySign || !st.training) return;
     let live = true;
     void api<TrainingRead>('GET', `${base}/training`).then((t) => live && setTraining(t), () => live && setTraining({ skill: st.training!, link: 'down', ok: false }));
     return () => { live = false; };
-  }, [signing, st.training, base, askTraining]);
+  }, [maySign, signing, st.training, base, askTraining]);
   const trainingBlocked = !!st.training && (!training || (training.link === 'ok' ? !training.ok : !trained));
+  const untrained = st.training && training?.link === 'ok' && !training.ok ? training.message ?? null : null;
 
   useEffect(() => {
     let live = true;
@@ -249,7 +252,8 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
     const src = row.source[f.name];
     // Pulled through a link: shown, never typed over. Certificate values come only with an MMS lot. A pick from LIMS
     // may be picked again (another result or CoA, as a correction).
-    const pulled = (src && src.from !== 'hand' && src.from !== 'lims' && !LINK_OF[f.kind]) || (lotPulled && CERTIFICATE[f.name] !== undefined);
+    const pulled = (src && src.from !== 'hand' && src.from !== 'lims' && !LINK_OF[f.kind]) || (lotPulled && CERTIFICATE[f.name] !== undefined)
+      || (f.kind === 'bulk' && v !== undefined && !!src && src.from !== 'hand');
     if (pulled && v === undefined) return null;
     if (!pulled && (can('record') || (v === undefined && row.state === 'open') || (f.count && v !== undefined))) {
       return (
@@ -292,7 +296,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
       </div>
       {notice && <p className={`notice ${notice.tone}`} role="alert">{notice.text}</p>}
       {!d.batch.terminated && <FillingPanel d={d} stage={row.key.stage} now={now} here={row.id} />}
-      {needs && !me.permissions.includes(needs) && <p className="notice" role="note">{needsText(needs)}</p>}
+      {needs && !me.permissions.includes(needs) && ['waiting', 'open', 'in_progress'].includes(row.state) && <p className="notice" role="note">{needsText(needs)}</p>}
       <div className="alerts">
         <Alerts d={d} blocks={blocks} now={now} only={row.id} />
         {row.blocked && !d.batch.terminated && <div className="fl-alert info"><span className="tag">Not open yet</span><span>{row.blocked}</span><span /></div>}
@@ -364,15 +368,15 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
         {row.state === 'waiting' && !d.batch.terminated && <p className="why">{row.blocked ?? 'This step opens when the step before it is finished.'}</p>}
         {can('start') && <button className="big primary" disabled={busy} onClick={() => void run(() => post('start'))}>{row.key.round > 1 ? `Start round ${row.key.round}` : 'Start'}</button>}
         {can('done') && (<>
-          <p className="why">{row.problems.length ? row.problems.map(words).join(' ') : repeatUntil && stopFailed ? `${block.calcs.find((c) => c.name === stop)?.label} has not passed: sign this round, then repeat.` : row.needsResign ? 'Check the values and results, then sign again.' : 'Sign when every value is recorded.'}</p>
-          <button className="big primary" disabled={busy || row.problems.length > 0} onClick={() => setDialog({ kind: repeatUntil && stopFailed ? 'repeat' : 'done' })}>
+          <p className="why">{untrained ?? (row.problems.length ? row.problems.map(words).join(' ') : repeatUntil && stopFailed ? `${block.calcs.find((c) => c.name === stop)?.label} has not passed: sign this round, then repeat.` : row.needsResign ? 'Check the values and results, then sign again.' : 'Sign when every value is recorded.')}</p>
+          <button className="big primary" disabled={busy || row.problems.length > 0 || !!untrained} onClick={() => setDialog({ kind: repeatUntil && stopFailed ? 'repeat' : 'done' })}>
             {repeatUntil && stopFailed ? (st.everyMinutes ? 'Done: next check later' : `Done, repeat (round ${row.key.round + 1})`) : row.needsResign ? 'Sign again: done' : 'Done'}
           </button>
         </>)}
         {checking && can('check') && (<>
-          <p className="why">Check the values against the batch, the lot and the machine. You were not involved in this step.</p>
+          <p className="why">{untrained ?? 'Check the values against the batch, the lot and the machine. You were not involved in this step.'}</p>
           <button className="big soft-bad" disabled={busy} onClick={() => setDialog({ kind: 'send-back' })}>Send back</button>
-          <button className="big ok" disabled={busy} onClick={() => setDialog({ kind: 'check' })}>Checked</button>
+          <button className="big ok" disabled={busy || !!untrained} onClick={() => setDialog({ kind: 'check' })}>Checked</button>
         </>)}
         {/* A QA hold: QA releases it (signed) before the next step can start. */}
         {can('release-hold') && (<>
@@ -380,7 +384,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
           <button className="big ok" disabled={busy} onClick={() => setDialog({ kind: 'release-hold' })}>QA: release the hold</button>
         </>)}
         {next && next.actions.includes('start') && row.id !== next.id && <button className="big primary" onClick={() => go(stepLink(d.batch.id, next.id))}>Repeat: round {next.key.round} →</button>}
-        {['done', 'checked', 'not_applicable'].includes(row.state) && !next && <p className="why">This step is finished.</p>}
+        {['done', 'checked', 'not_applicable'].includes(row.state) && !next && !can('release-hold') && <p className="why">This step is finished.</p>}
         <span className="spacer" />
         {can('not-applicable') && <button className="big" disabled={busy} onClick={() => setDialog({ kind: 'na' })}>Not applicable</button>}
         {can('note') && <button className={noteNeeded ? 'big attn' : 'big'} disabled={busy} onClick={() => setDialog({ kind: 'note' })}>Add deviation note</button>}

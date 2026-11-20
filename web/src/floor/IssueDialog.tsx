@@ -1,5 +1,5 @@
 import { batchText } from '../../../shared/engine/values.js';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../api.js';
 import { SignDialog } from '../components/SignDialog.js';
 import { getVersion, type MasterRow, type Version } from '../api-designer.js';
@@ -37,6 +37,9 @@ export function IssueDialog({ row, onCancel }: { row: MasterRow; onCancel: () =>
   // While the Logbook is linked, only the lines it has (shared/engine/picks.ts).
   const logbook = useLogbookItems(atIssue.some((f) => f.kind === 'machine'));
   const offer = inLogbook(lines, logbook);
+  // The notice under the units (what is left of the batch) is scrolled into sight once a batch is picked (display backlog 30).
+  const left = useRef<HTMLParagraphElement>(null);
+  useEffect(() => { left.current?.scrollIntoView?.({ block: 'nearest' }); }, [values.bulk, bulk]);
   if (!doc) return null;
   // The label questions of a value the server found typed by hand ("… is not recorded").
   const asked = handFields(block?.fields ?? [], Object.fromEntries((block?.fields ?? []).map((f) => [f.name, { from: 'hand', link: 'mms', state: 'absent' } as Source])))
@@ -61,14 +64,14 @@ export function IssueDialog({ row, onCancel }: { row: MasterRow; onCancel: () =>
   };
   return (<>
     <div className="overlay" role="dialog" aria-modal="true" aria-label="Issue a batch">
-      <form className="card dialog fl" onSubmit={(e) => { e.preventDefault(); setSigning(true); }}>
+      <form className="card dialog wide fl" onSubmit={(e) => { e.preventDefault(); setSigning(true); }}>
         <h2>Issue a batch</h2>
         <p>{doc.header.productCode} · {doc.header.productName}, version {row.versionNo}: {doc.pack ? `${Number(doc.header.batchSize).toLocaleString('en-IN')} filled units, packed from ${doc.pack.bulkCode}` : batchText(doc)}. The batch number is given by the server.</p>
         {fields.map((f) => (
           <FieldInput key={f.name === 'units' ? `units-${picked?.batchNo ?? ''}` : f.name} f={f} unit={f.unit ?? ''} saved={f.name === 'units' && offered ? { value: offered, unit: f.unit ?? 'units' } : undefined} picks={f.kind === 'machine' ? offer.offered : []} note={[f.kind === 'machine' && machines.length && !lines.length ? emptyNote(doc.stages[0]!, f, machines, rooms) : null, f.kind === 'machine' ? offer.note : null]} onChange={set(f.name)}
             options={f.kind === 'bulk' ? (bulk?.batches ?? []).map((x) => x.batchNo) : []} />
         ))}
-        {picked?.goodQuantity && <p className="notice">Left to issue of {picked.batchNo}: {Number(offered).toLocaleString('en-IN')} units ({Number(picked.goodQuantity).toLocaleString('en-IN')} good units in TrueBatch Injectables{Number(picked.issued ?? 0) > 0 ? `, ${Number(picked.issued).toLocaleString('en-IN')} already issued to other packing batches` : ''}). Issue all of it, or type less for a part issue.</p>}
+        {picked?.goodQuantity && <p ref={left} className="notice">Left to issue of {picked.batchNo}: {Number(offered).toLocaleString('en-IN')} units ({Number(picked.goodQuantity).toLocaleString('en-IN')} good units in TrueBatch Injectables{Number(picked.issued ?? 0) > 0 ? `, ${Number(picked.issued).toLocaleString('en-IN')} already issued to other packing batches` : ''}). Issue all of it, or type less for a part issue.</p>}
         {doc.pack && bulk && bulk.link !== 'ok' && <p className="notice warn">TrueBatch Injectables is not linked or not answering: type the batch from the labels of its trays or cases; a second person checks it.</p>}
         {problems.length > 0 && <div className="notice bad" role="alert">{problems.map((p, i) => <p key={i}>{p}</p>)}</div>}
         <div className="actions">

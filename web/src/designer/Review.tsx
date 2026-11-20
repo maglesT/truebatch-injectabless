@@ -45,8 +45,11 @@ export function Review({ me, version, doc, blocked, onChanged, onGo }: {
     try { await reviewAction(version.id, action, body); await done(); }
     catch (e) { setError(e instanceof ApiError ? (e.problems[0] ?? e.message) : String(e)); }
   };
+  // The person who passed the check this round is not offered "Return to the author": QA approves or returns it.
+  const round = data.events.slice(data.events.map((e) => e.kind).lastIndexOf('submitted') + 1);
+  const iPassed = round.some((e) => e.kind === 'passed' && e.person === me.id);
   const shown: ReviewAction[] = (['submit', 'pass', 'return', 'approve', 'make-effective'] as const).filter((a) =>
-    data.actions.includes(a) || (a === 'submit' && version.state === 'draft' && can(me, 'master.author'))
+    (data.actions.includes(a) && !(a === 'return' && iPassed)) || (a === 'submit' && version.state === 'draft' && can(me, 'master.author'))
     // QA who typed the change control by hand sees why another person makes the version effective.
     || (a === 'make-effective' && version.state === 'approved' && can(me, 'master.approve')));
   const sections: DiffSection[] = view === 'changes' && data.previous ? diffMasters(data.previous.doc, doc, units)

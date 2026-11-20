@@ -224,7 +224,9 @@ describe('a packing material lot is not issued beyond what MMS shows available',
     // A packing material's quantity per pack (17 Nov 2026 run, F6): a count used less than once per pack, by the packs.
     expect(perPackText({ perPack: '0.1', unit: 'units', kind: 'carton' }, 'nos')).toBe('1 carton per 10 packs');
     expect(perPackText({ perPack: '0.002', unit: 'units', kind: 'shipper' })).toBe('1 shipper per 500 packs');
-    expect(perPackText({ perPack: '10', unit: 'units', kind: 'label' }, 'nos')).toBe('10 nos per pack');
+    expect(perPackText({ perPack: '10', unit: 'units', kind: 'label' }, 'nos')).toBe('10 labels per pack');
+    expect(perPackText({ perPack: '1', unit: 'units', kind: 'tray' }, 'nos')).toBe('1 tray per pack');
+    expect(perPackText({ perPack: '1', unit: 'units', kind: 'other' })).toBe('1 unit per pack');
     expect(perPackText({ perPack: '0.3', unit: 'units', kind: 'other' }, 'nos')).toBe('0.3 nos per pack');
     expect(perPackText({ perPack: '0.120', unit: 'm', kind: 'lidding foil' })).toBe('0.120 m per pack');
     expect(unitName('kg', 'kg')).toBe('kg');

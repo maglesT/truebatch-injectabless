@@ -72,6 +72,8 @@ export function perPackText(m: { perPack: string; unit: string; kind: string }, 
   const n = Number(m.perPack);
   const packs = n > 0 && n < 1 ? Math.round(1 / n) : 0;
   if (m.unit === 'units' && packs > 1 && Math.abs(packs * n - 1) < 1e-9) return `1${m.kind === 'other' ? '' : ` ${m.kind}`} per ${packs} packs`;
+  // A whole count reads in the material's own word (display round, 20 Nov 2026): "1 tray per pack", "10 labels per pack".
+  if (m.unit === 'units' && Number.isInteger(n) && n > 0) { const w = m.kind === 'other' ? 'unit' : m.kind; return `${n} ${n === 1 ? w : `${w}s`} per pack`; }
   return `${m.perPack} ${unitName(m.unit, stockUnit)} per pack`;
 }
 const stockUnitOf = (v: StepView) => v.events.filter((e) => typeof e.payload.stockUnit === 'string').at(-1)?.payload.stockUnit as string | undefined;

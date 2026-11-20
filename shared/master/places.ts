@@ -37,10 +37,15 @@ export function placeChecks(doc: MasterDoc, md: PlaceData): Problem[] {
   }));
   // Run 3, H2: the master names the line's own room. An area with several rooms (the vial, syringe and bag filling rooms
   // are all "Aseptic filling") would let the line clearance take another line's room: the author picks the room.
-  doc.stages.forEach((s, si) => s.roomTypes.forEach((a) => {
+  // One warning per area, naming its stages (display backlog 13: a new master's aseptic stages share one area).
+  const byArea = new Map<string, number[]>();
+  doc.stages.forEach((s, si) => s.roomTypes.forEach((a) => byArea.set(a, [...(byArea.get(a) ?? []), si])));
+  for (const [a, stages] of byArea) {
     const of = rooms.filter((r) => r.area === a).map((r) => r.code);
-    if (of.length > 1 && !rooms.some((r) => r.code === a)) out.push({ level: 'warning', path: `stages[${si}].roomTypes`, rule: 'TI-11',
-      message: `${s.name}: pick the line's room. The area ${a} has ${of.length} rooms (${of.join(', ')}): choose the one this stage runs in, in the stage settings, in place of the area` });
-  }));
+    if (of.length < 2 || rooms.some((r) => r.code === a)) continue;
+    const names = stages.map((si) => doc.stages[si]!.name);
+    out.push({ level: 'warning', path: `stages[${stages[0]}].roomTypes`, rule: 'TI-11',
+      message: `${names.join(', ')}: pick the line's room. The area ${a} has ${of.length} rooms (${of.join(', ')}): ${names.length > 1 ? 'choose the one each stage runs in, in its stage settings' : 'choose the one this stage runs in, in the stage settings'}, in place of the area` });
+  }
   return out;
 }
