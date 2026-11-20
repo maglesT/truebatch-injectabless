@@ -306,10 +306,11 @@ describe('a packing batch from the filled units of a released batch', () => {
     const toReview = (await as('qa1', 'GET', '/api/batches/to-review')).json() as { id: number; waiting: string }[];
     expect(toReview.find((x) => x.id === id)).toMatchObject({ waiting: 'QA' });
     // Whole-suite run, S24: the bulk batch's deviation still open in the Deviations system is shown in the review and
-    // blocks release until it is closed there (a closed one, or another batch's, does not).
+    // blocks release until it is closed there (a closed or cancelled one, or another batch's, does not).
     await t.owner.unsafe(`insert into ${TB}.deviation_v1 (number, status, batch, batch_norm, title, closed_at) values
       ('DEV-2026-0045', 'closure', 'TI260001', 'ti260001', 'Room refused at line clearance', null),
       ('DEV-2026-0044', 'closed', 'TI260001', 'ti260001', 'Closed before', now()),
+      ('DEV-2026-0049', 'cancelled', 'TI260001', 'ti260001', 'Not a deviation after all', null),
       ('DEV-2026-0046', 'investigation', 'TI260003', 'ti260003', 'Another bulk batch', null)`);
     const review = async () => ((await as('qa1', 'GET', `/api/batches/${id}/review`)).json() as { bulkOpen: unknown }).bulkOpen;
     expect(await review()).toEqual({ bulk: 'TI260001', open: [{ number: 'DEV-2026-0045', status: 'closure', title: 'Room refused at line clearance', closedAt: null }] });
