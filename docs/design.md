@@ -232,7 +232,8 @@ answering) or **ok**.
 - **Absent or down: by hand.** The value is typed from the label or certificate, the step needs a second-person check,
   the value is stored with source `hand` (and whether the link was absent or down), and QA's review lists it.
 - **Deviations** (`deviation_v1`): a note's reference must exist; while the link answers its status is Deviations'
-  (closed or rejected there counts as closed) and QA cannot close it by hand. By hand: a QA person other than the one
+  (closed, rejected or cancelled there counts as closed; *cancelled* is Deviations' "Cancelled by QA: not a
+  deviation", shown as "cancelled: not a deviation", owner 20 Nov 2026) and QA cannot close it by hand. By hand: a QA person other than the one
   who typed the number closes it.
   **The number Deviations gives a note** (gap 6, owner 17 Nov 2026): a note written without a number is filed by
   Deviations' automatic filing as a deviation whose `source_ref` is `<product>:note:<note id>`
