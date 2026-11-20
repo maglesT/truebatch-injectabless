@@ -5,7 +5,7 @@ import { placeChecks } from '../shared/master/places.js';
 import { masterSchema } from '../shared/master/schema.js';
 import { describeMaster } from '../web/src/designer/describe.js';
 import { verdictless } from '../web/src/designer/example.js';
-import { grouped, ownProducts } from '../web/src/designer/model.js';
+import { grouped, ownProducts, productNote } from '../web/src/designer/model.js';
 import { sentence, sentenceText } from '../web/src/designer/sentences.js';
 import { skeletonList, skeletonStages } from '../web/src/designer/skeletons.js';
 import { tablet } from './engine-fixture.js';
@@ -87,6 +87,10 @@ describe('designer findings of the TrueBatch Tablets 17 Nov 2026 run', () => {
     const all = [p('FG-ONDA2', 'bulk'), p('PK-ONDA2-V10', 'pack'), p('FG-CEFT1', null), p('FG-HEP5')];
     expect(ownProducts(all, 'bulk').map((x) => x.code)).toEqual(['FG-ONDA2', 'FG-CEFT1', 'FG-HEP5']);
     expect(ownProducts(all, 'pack').map((x) => x.code)).toEqual(['PK-ONDA2-V10', 'FG-CEFT1', 'FG-HEP5']);
+    // Display backlog item 9: one with no kind comes after those with the kind, marked.
+    expect(ownProducts([all[2]!, ...all], 'bulk').map((x) => x.code)).toEqual(['FG-ONDA2', 'FG-CEFT1', 'FG-CEFT1', 'FG-HEP5']);
+    expect(productNote({ strength: '2 mg/mL', dosageForm: 'Injection', kind: null })).toBe('2 mg/mL · Injection · kind not set in master data');
+    expect(productNote({ strength: '2 mg/mL', dosageForm: 'Injection', kind: 'bulk' })).toBe('2 mg/mL · Injection');
   });
 
   it('no internal codes of rules, templates, failure cases or library checks in what the master check says; the rule stays', () => {

@@ -36,7 +36,8 @@ export function IssueDialog({ row, onCancel }: { row: MasterRow; onCancel: () =>
 
   // While the Logbook is linked, only the lines it has (shared/engine/picks.ts).
   const logbook = useLogbookItems(atIssue.some((f) => f.kind === 'machine'));
-  const offer = inLogbook(lines, logbook);
+  const offer = inLogbook(lines, logbook?.items ?? null);
+  const linePicks = offer.offered.map((p) => ({ ...p, notFit: logbook?.notFit[p.itemId] }));
   // The notice under the units (what is left of the batch) is scrolled into sight once a batch is picked (display backlog 30).
   const left = useRef<HTMLParagraphElement>(null);
   useEffect(() => { left.current?.scrollIntoView?.({ block: 'nearest' }); }, [values.bulk, bulk]);
