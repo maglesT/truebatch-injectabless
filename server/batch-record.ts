@@ -112,7 +112,7 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
   if (!doc.pack) content.push(heading('Formula'));
   if (!doc.pack) content.push(table([150, 90, 55, 80, '*'], ['Material', 'Role', `mg per ${h.batchUnit === 'units' ? 'unit' : 'mL'}`, 'Batch quantity', 'Lots and dispensed quantities'], doc.formula.map((l) => {
     const q = lineQuantity(doc, [], { stage: 0, sub: 1, step: 0, round: 1 }, l, false, {});
-    const weighed = steps.filter((v) => Object.values(stepOf(v).settings).some((s) => typeof s === 'object' && 'formula' in s && s.formula === l.key && findBlock(stepOf(v).block)?.gmp === 'weighing'));
+    const weighed = steps.filter((v) => Object.values(stepOf(v).settings).some((s) => typeof s === 'object' && 'formula' in s && s.formula === l.key && (findBlock(stepOf(v).block)?.gmp === 'weighing' || stepOf(v).block.id === 'device-assembly')));
     return [small(`${l.code} · ${l.name}`), small(ROLE[l.role] ?? l.role), small(l.mg ?? 'q.s.'), small(endOf(q)),
       small(weighed.map((v) => {
         const net = v.results.net;

@@ -390,6 +390,21 @@ answering) or **ok**.
     `exposure_min`, `lowest_temp_c`, `lowest_f0`, `max_product_temp_c`, `h2o2_ppm`, `leak_rate`, `units`, `bi_id`,
     `use_by`, `signed` (performed, checked). The Logbook lists them read-only in the steriliser's history and types only
     cycles not made for a batch. Freeze-drying and the depyrogenation tunnel stay in the batch record only.
+  - *Readings for CPV* (Tablets round 46, `db/migrations/0031`): `report.reading_v1`, one row per recorded number of a
+    step signed done, as the record holds it now (a correction replaces it, `corrected` says so): `reading_id`
+    ('<batch>/<stage.sub-batch.step.round>/<field>/<reading_no>'), batch, product, `stage`, `step`, `step_name`,
+    `sub_batch`, `round`, `block`, `parameter` (the field's label; a "check a value" step: what it checks), `field`,
+    `reading_no` (a list: one row each), `value`, `unit`, `low_limit`, `high_limit`, `limit_unit`, `limit_of` ('each'
+    for a C1 on the value, 'mean' for a T7 on the list), `recorded_at`, `corrected`, `read_at`, `data_as_of`. Every
+    number field of the injectables blocks feeds it (`shared/engine/readings.ts`; kept in the database as
+    `reading_parameters`, not published, compared by a test; a block with several versions once, as its latest has it).
+    Packing does not migrate it. Read by Operations (CPV).
+  - *Device assembly* (Tablets round 46, block `device-assembly`, for prefilled syringes into autoinjectors or safety
+    devices): a yield step with one component lot (MMS, or by hand), the assembly line, the units fed and the devices
+    out; a function test (at least the master's number tested, none failing, works and complete, the activation force
+    when limits are set); an AQL inspection (critical, major, minor); yield and accountability of the units fed and of
+    the component. The component used (issued − returned, its `net`) is published in `material_use_v1` (`0030`) as a
+    weighing's net, so MMS takes it off the lot. One lot per step (one step per component).
 - **Published** (`db/migrations/0006_report_views.sql`): `batch_fact_v1` and `equipment_use_v1` with Batchwright's
   names and columns, so the Logbook and Deviations read TrueBatch as they read Batchwright, and `deviation_note_v1`
   for Deviations to file notes later. `batch_fact_v1` has one more column at its end (`0007`): `manufactured_on`, the
