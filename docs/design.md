@@ -32,6 +32,17 @@ adding anything, look how TrueBatch Tablets does it and copy that.
   "aseptic operator" permission (no training dates here); a media fill as a TrueBatch batch comes later.
 
 ## Engine change 1: the liquid batch header (built 16 November 2026)
+- **A note without a number is decided here** (owner decision 20 Nov 2026; replaces Deviations filing every such note
+  on its own, Deviations D-51, D-53 to D-55, D-59). A deviation note written without a number is an *exception* of
+  the batch record. A person holding `truebatch_injectables.exception.decide` (Packing: `truebatch_injectables_packing.exception.decide`;
+  granted per employee in the platform's permission register, no role gives it) chooses once: **Close here**, with a
+  reason and an e-signature (meaning *Exception closed here*; batch event `exception_closed`), or **Send to
+  Deviations** (batch event `exception_sent`, no signature; offered only while the Deviations link is not absent).
+  `deviation_note_v1` has two new last columns (0029; Packing 0113): `decision` (`open`, `closed`, `sent`; null for a
+  note written with a number) and `sent_at`; the Deviations system files only notes with `sent_at`, keyed by
+  `source_ref` as before, and the number then flows back as above. QA's release and rejection wait until every such
+  note is closed here or sent and filed in Deviations; closed-here notes show with who, when and why on the step, the
+  batch screen, QA's review and the PDF. Production approval does not wait for the decision.
 - The header is the product, the batch size and its unit: **litres or kg** (the formula is per mL; a batch in kg turns
   into its volume by the density) or **units** (a dry powder filled as it is; the formula is per unit). Then the
   density (g/mL; needed for kg, and for the batch mass of a batch in litres), the **nominal fill** per container and
