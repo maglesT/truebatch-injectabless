@@ -22,7 +22,7 @@ export function CheckPanel({ doc, state, problems, invalid, onGo, onAnswer }: { 
         {problems && (errors || open || warnings || later ? <span className={errors || open ? 'count bad' : 'count'}>{errors + open + warnings + later}</span> : null)}
       </div>
       {invalid ? <p className="cp-invalid">The master is checked once every entry is complete. {invalid}</p>
-        : problems && !problems.length ? <p className="all-good small">✓ No problems. The master can be sent for review.</p>
+        : problems && !problems.length ? <p className="all-good small">✓ No problems.{!state || state === 'draft' ? ' The master can be sent for review.' : ''}</p>
         : problems && (
           <>
             {later ? <p className="muted small" role="note">ℹ️ Approved before {later === 1 ? 'this check' : 'these checks'} existed; a new version will need: {[...new Set(problems.filter(blocking).map((p) => placeLabel(doc, p.path)))].join(', ')} (ℹ️ below).{warnings ? ` · ${warnings} ⚠️ to look at` : ''}</p>

@@ -1,4 +1,5 @@
 import { notYetText, stepLabel } from '../../../shared/engine/batch.js';
+import { plantText } from '../../../shared/plant-time.js';
 import { blockOf, stepOf, tone, valueText, words, type BatchDetail, type Block, type StepRow } from '../api-floor.js';
 
 // What QA reads before releasing a sterile batch (plan 4d), in one place: every cycle, filter test, clean-air result,
@@ -36,7 +37,14 @@ export function summaryOf(s: StepRow, block: Block | undefined): { bad: boolean;
     const src = s.source?.[f.name];
     return `${f.label}: ${valueText(s.values[f.name])}${!src ? '' : src.from === 'hand' ? ` (Logbook ${src.state === 'down' ? 'down' : 'not linked'} at use: its status answered by hand)` : ` (Logbook at use: ${src.shown})`}`;
   });
-  return { bad, said: [...machines, ...said(s, block, checks)] };
+  return { bad, said: [...machines, ...mediaFill(s), ...said(s, block, checks)] };
+}
+/** The aseptic set-up's line media fill in words: its report, outcome and next date as Qualification gave them, or typed. */
+function mediaFill(s: StepRow): string[] {
+  if (s.values.apsReport === undefined) return [];
+  const src = s.source?.apsReport;
+  if (src && src.from !== 'hand') return [`Line media fill ${plantText(src.shown).replace(/^Qualification media fill /, '')} (Qualification)`];
+  return [`Line media fill ${valueText(s.values.apsReport)} (typed by hand)${s.values.apsDue !== undefined ? `, next due ${valueText(s.values.apsDue)}` : ''}`];
 }
 function said(s: StepRow, block: Block | undefined, checks: [string, StepRow['results'][string]][]): string[] {
   return checks.length ? checks.map(([k, r]) => `${block?.calcs.find((c) => c.name === k)?.label ?? k}: ${shortTime(words(r.ok ? (k === s.notYet ? notYetText(r.check!.shown) : r.check!.shown) : ''))}`)

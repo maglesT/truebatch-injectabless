@@ -17,7 +17,7 @@ import { skillText } from '../../../shared/engine/training.js';
 type Settings = Step['settings'];
 const FLOWS = [['none', 'Once'], ['repeat-until', 'Repeat until a check passes'], ['optional-with-reason', 'Optional (skipped with a reason)'], ['qa-hold', 'QA hold (QA releases before the next step)']] as const;
 
-export function StepSettings({ doc, si, ti, onChange }: { doc: MasterDoc; si: number; ti: number; onChange: (t: Step) => void }) {
+export function StepSettings({ doc, si, ti, onChange, onFormula }: { doc: MasterDoc; si: number; ti: number; onChange: (t: Step) => void; onFormula?: () => void }) {
   const step = doc.stages[si]!.steps[ti]!;
   const block = findBlock(step.block);
   if (!block) return <p className="error">No block {step.block.id} version {step.block.version} in the library.</p>;
@@ -37,7 +37,7 @@ export function StepSettings({ doc, si, ti, onChange }: { doc: MasterDoc; si: nu
   // A setting used in two sentences is one input: the first sentence holds it, later ones name it.
   const seen = new Set<string>();
   const first = (p: Part) => typeof p !== 'object' || !('setting' in p) || (!seen.has(p.setting) && !!seen.add(p.setting));
-  const slot = (name: string) => <Slot doc={doc} si={si} ti={ti} block={block} settings={step.settings} name={name} onChange={(v) => setting(name, v)} />;
+  const slot = (name: string) => <Slot doc={doc} si={si} ti={ti} block={block} settings={step.settings} name={name} onChange={(v) => setting(name, v)} onFormula={onFormula} />;
   return (
     <div className="step-settings">
       <h2>{block.name}</h2>
@@ -168,8 +168,8 @@ function PartView({ block, part, slot, first }: { block: Block; part: Part; slot
 }
 
 /** One setting as a pick list or input, by its kind. */
-function Slot({ doc, si, ti, block, settings, name, onChange }: {
-  doc: MasterDoc; si: number; ti: number; block: Block; settings: Settings; name: string; onChange: (v: SettingValue | undefined) => void;
+function Slot({ doc, si, ti, block, settings, name, onChange, onFormula }: {
+  doc: MasterDoc; si: number; ti: number; block: Block; settings: Settings; name: string; onChange: (v: SettingValue | undefined) => void; onFormula?: () => void;
 }) {
   const s = block.settings.find((x) => x.name === name)!;
   const v = settings[name];
@@ -195,7 +195,7 @@ function Slot({ doc, si, ti, block, settings, name, onChange }: {
     const lines = container ? doc.containers ?? [] : materialLines(doc).filter((l) => !doc.containers?.some((c) => c.key === l.key));
     return <span className="loose-material"><select className={cls} aria-label={s.label} value={typeof v === 'object' && 'formula' in v ? v.formula : ''} onChange={(e) => onChange(e.target.value ? { formula: e.target.value } : undefined)}>
       <option value="">(choose a material)</option>{lines.map((l) => <option key={l.key} value={l.key}>{l.code} {l.name}</option>)}</select>
-      {container && !lines.length && <span className="muted small"> Add the containers and closures from master data on the Formula screen first.</span>}</span>;
+      {container && !lines.length && <span className="muted small"> Add the containers and closures from master data on the {onFormula ? <button type="button" className="link dark" style={{ minHeight: 0, padding: 0 }} onClick={onFormula}>Formula screen</button> : 'Formula screen'} first.</span>}</span>;
   }
   if (s.kind === 'limit') {
     const field = block.fields.find((f) => f.kind === 'number' && f.unit && !f.unit.startsWith('$') && kindOfUnit(f.unit) === kind);

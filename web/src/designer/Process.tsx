@@ -46,8 +46,8 @@ const KIND_LABEL: Record<Stage['kind'], string> = { normal: 'Stage', preparation
 // Rows that select an item are not buttons, so a read-only (disabled) form can still be browsed.
 const pickable = (onPick: () => void) => ({ role: 'button', tabIndex: 0, onClick: onPick, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(); } } });
 
-export function Process({ doc, onChange, md, place, onPlace, editable }: {
-  doc: MasterDoc; onChange: (d: MasterDoc | ((d: MasterDoc) => MasterDoc)) => void; md: MasterData; place: Place; onPlace: (p: Place) => void; editable: boolean;
+export function Process({ doc, onChange, md, place, onPlace, editable, onFormula }: {
+  doc: MasterDoc; onChange: (d: MasterDoc | ((d: MasterDoc) => MasterDoc)) => void; md: MasterData; place: Place; onPlace: (p: Place) => void; editable: boolean; onFormula?: () => void;
 }) {
   const [library, setLibrary] = useState(false);
   const [q, setQ] = useState('');
@@ -167,7 +167,7 @@ export function Process({ doc, onChange, md, place, onPlace, editable }: {
       )}
       <div className="card col settings-col">
         {stage && ti !== undefined ? (
-          <StepSettings key={`${si}/${stage.steps[ti]!.key}`} doc={doc} si={si} ti={ti} onChange={(t) => setSteps(stage.steps.map((x, k) => (k === ti ? t : x)))} />
+          <StepSettings key={`${si}/${stage.steps[ti]!.key}`} doc={doc} si={si} ti={ti} onChange={(t) => setSteps(stage.steps.map((x, k) => (k === ti ? t : x)))} onFormula={onFormula} />
         ) : stage ? (
           <StageForm doc={doc} si={si} stage={stage} onChange={putStage} roles={roles} machineTypes={machineTypes} areas={areas} roomText={roomText} />
         ) : null}

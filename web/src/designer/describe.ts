@@ -99,11 +99,11 @@ export function describeMaster(doc: MasterDoc, units?: Units, { items = false } 
     { key: 'header', title: 'Pack', lines: [
       { key: 'product', text: `Pack product ${h.productCode}, ${h.productName}.` },
       { key: 'bulk', text: `Packs the filled units of ${p.bulkCode}, ${p.bulkName} (a released TrueBatch Injectables batch).` },
-      { key: 'batch', text: `Standard packing batch ${grouped(h.batchSize)} filled units.` },
+      { key: 'batch', text: `Standard packing batch ${Number(h.batchSize).toLocaleString('en-IN')} filled units.` },
       // The injection header a packing master does not use, shown when it has it.
       ...(h.batchUnit !== 'units' || h.densityGPerMl || h.fillVolumeMl || h.fillExcessMl ? [{ key: 'liquid', text: `Also set in the header: batch ${batchText(doc)}.` }] : []),
       ...sterile,
-      { key: 'pack', text: `${p.type[0]!.toUpperCase()}${p.type.slice(1)} of ${p.unitsPerPack} units; ${p.packsPerCarton} packs per carton.` },
+      { key: 'pack', text: `${p.type[0]!.toUpperCase()}${p.type.slice(1)} of ${p.unitsPerPack} ${p.unitsPerPack === 1 ? 'filled unit' : 'filled units'}; ${p.packsPerCarton} ${p.packsPerCarton === 1 ? 'pack' : 'packs'} per outer carton (shipper).` },
       { key: 'expiry', text: `Approved shelf life ${p.shelfLifeMonths} months; expiry ${p.expiryRule === 'same month' ? 'month of manufacture + shelf life' : 'month of manufacture + shelf life − 1'}.` },
       { key: 'market', text: `For ${p.destination}${p.mrp ? `; MRP Rs. ${p.mrp} per pack` : ''}.` },
       // The GTIN is shown even without serialisation: it is part of the master.

@@ -15,8 +15,8 @@ export const NEW_PACK: Pack = { bulkItemId: '', bulkCode: '', bulkName: '', type
 function ProductPick({ label, itemId, code, name, products, onPick }: { label: string; itemId: string; code: string; name: string; products: Product[]; onPick: (p: Product) => void }) {
   const [picking, setPicking] = useState(!itemId);
   if (itemId && !picking) return <dl className="fields pulled"><div><dt>{label}</dt><dd>{code} · {name} <button type="button" className="link dark" onClick={() => setPicking(true)}>Change</button></dd></div></dl>;
-  return <Picker label={label} items={products.map((p) => ({ id: p.itemId, code: p.code, name: p.name, note: [p.strength, p.dosageForm].filter(Boolean).join(' · '), off: p.active ? undefined : 'inactive' }))}
-    onPick={(i) => { onPick(products.find((p) => p.itemId === i.id)!); setPicking(false); }} />;
+  return <><span className="field-label">{label}</span><Picker label={label} items={products.map((p) => ({ id: p.itemId, code: p.code, name: p.name, note: [p.strength, p.dosageForm].filter(Boolean).join(' · '), off: p.active ? undefined : 'inactive' }))}
+    onPick={(i) => { onPick(products.find((p) => p.itemId === i.id)!); setPicking(false); }} /></>;
 }
 const whole = (v: string) => (/^\d{1,5}$/.test(v) ? Number(v) : 0);
 
@@ -28,11 +28,9 @@ export function PackFields({ header, pack, products, onChange }: { header: Heade
   const opt = <K extends 'mrp' | 'gtin'>(k: K, v: string) => onChange(header, v ? { ...pack, [k]: v } : (({ [k]: _, ...p }) => p as Pack)(pack));
   return (
     <div className="header-fields">
-      <span className="field-label">Pack product</span>
       <ProductPick label="Pack product" itemId={header.productItemId} code={header.productCode} name={header.productName} products={ownProducts(products, 'pack')}
         onPick={(p) => setH({ productItemId: p.itemId, productCode: p.code, productName: p.name })} />
-      <span className="field-label">Filled units packed (TrueBatch Injectables product)</span>
-      <ProductPick label="Product packed" itemId={pack.bulkItemId} code={pack.bulkCode} name={pack.bulkName} products={ownProducts(products, 'bulk')}
+      <ProductPick label="Filled units packed (TrueBatch Injectables product)" itemId={pack.bulkItemId} code={pack.bulkCode} name={pack.bulkName} products={ownProducts(products, 'bulk')}
         onPick={(p) => set({ bulkItemId: p.itemId, bulkCode: p.code, bulkName: p.name })} />
       <div className="form-grid">
         <label>Pack type<select aria-label="Pack type" value={pack.type} onChange={(e) => set({ type: e.target.value as Pack['type'] })}>{PACK_TYPES.map((t) => <option key={t}>{t}</option>)}</select></label>
@@ -40,11 +38,11 @@ export function PackFields({ header, pack, products, onChange }: { header: Heade
         <label>Packs per outer carton<Decimal label="Packs per carton" value={String(pack.packsPerCarton)} onChange={(v) => set({ packsPerCarton: whole(v) })} width={5} /></label>
         <label>Standard packing batch (filled units)<Decimal label="Standard packing batch (filled units)" value={header.batchSize} onChange={(v) => setH({ batchSize: v, batchUnit: 'units' })} width={9} /></label>
         <label>Approved shelf life (months)<Decimal label="Approved shelf life (months)" value={String(pack.shelfLifeMonths)} onChange={(v) => set({ shelfLifeMonths: whole(v) })} width={4} /></label>
-        <label>Expiry<select aria-label="Expiry rule" value={pack.expiryRule} onChange={(e) => set({ expiryRule: e.target.value as Pack['expiryRule'] })}>
-          <option value="month before">month of manufacture + shelf life − 1</option><option value="same month">month of manufacture + shelf life</option></select></label>
+        <label>Expiry month<select aria-label="Expiry rule" value={pack.expiryRule} onChange={(e) => set({ expiryRule: e.target.value as Pack['expiryRule'] })}>
+          <option value="month before">manufacture + shelf life − 1</option><option value="same month">manufacture + shelf life</option></select></label>
         <label>Destination<select aria-label="Destination" value={pack.destination} onChange={(e) => set({ destination: e.target.value as Pack['destination'] })}>{DESTINATIONS.map((d) => <option key={d}>{d}</option>)}</select></label>
         <label>MRP per pack (Rs.)<Decimal label="MRP per pack" placeholder="no MRP" value={pack.mrp} onChange={(v) => opt('mrp', v)} /></label>
-        <label className="check"><input type="checkbox" checked={pack.serialisation} onChange={(e) => set({ serialisation: e.target.checked })} /> Check serialisation (the customer's serialisation system)</label>
+        <label className="check" style={{ gridColumn: '1 / -1' }}><input type="checkbox" checked={pack.serialisation} onChange={(e) => set({ serialisation: e.target.checked })} /> Check serialisation (the customer's serialisation system)</label>
         {pack.serialisation && <label>Pack GTIN (14 digits)<input aria-label="Pack GTIN" value={pack.gtin ?? ''} maxLength={14} onChange={(e) => opt('gtin', e.target.value.trim())} /></label>}
       </div>
     </div>
