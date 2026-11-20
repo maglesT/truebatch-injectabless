@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { MasterData, Product } from '../api-designer.js';
 import { DESTINATIONS, PACK_MATERIAL_KINDS, PACK_TYPES, type MasterDoc, type Pack, type PackMaterial } from '../../../shared/master/schema.js';
-import { newKey, ownProducts } from './model.js';
+import { newKey, ownProducts, productNote } from './model.js';
 import { withMaterialSteps, withMaterialUnit } from './skeletons.js';
 import { unitName } from '../../../shared/engine/stock.js';
 import { Decimal, Order, Picker } from './ui.js';

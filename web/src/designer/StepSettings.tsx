@@ -185,7 +185,7 @@ function Slot({ doc, si, ti, block, settings, name, onChange, onFormula }: {
     // A text setting that is a field's unit is picked from the unit list.
     if (block.fields.some((f) => f.unit === `$${name}`)) {
       return <select className={cls} aria-label={s.label} value={typeof v === 'string' ? v : '?'} onChange={(e) => onChange(e.target.value === '?' ? undefined : e.target.value)}>
-        <option value="?">(choose a unit)</option>{unitsOf().map((u) => <option key={u.symbol} value={u.symbol}>{unitLabel(u.symbol)}</option>)}</select>;
+        <option value="?">(choose a unit)</option>{(s.options ?? unitsOf().map((u) => u.symbol)).map((u) => <option key={u} value={u}>{unitLabel(u)}</option>)}</select>;
     }
     return <input className={cls} aria-label={s.label} value={typeof v === 'string' ? v : ''} onChange={(e) => onChange(e.target.value || undefined)} />;
   }
@@ -202,6 +202,9 @@ function Slot({ doc, si, ti, block, settings, name, onChange, onFormula }: {
     const unitSetting = block.fields.find((f) => f.unit?.startsWith('$'))?.unit?.slice(1);
     const def = kind === 'fraction' ? '%' : field?.unit ?? (unitSetting && typeof settings[unitSetting] === 'string' ? settings[unitSetting] as string : '');
     const k = kind ?? (unitSetting ? kindOfUnit(settings[unitSetting] as string) : undefined);
+    // A limit in a unit the step sets (the roll force unit): its unit list waits for that unit, not every unit.
+    const unitFirst = !kind && unitSetting && typeof settings[unitSetting] !== 'string' ? block.settings.find((x) => x.name === unitSetting) : undefined;
+    if (unitFirst) return <span className="muted">within limits; choose the {unitFirst.label.replace(/ \(.*\)$/, '').toLowerCase()} first</span>;
     return <LimitEdit label={s.label} value={typeof v === 'object' && 'unit' in v ? v : undefined} kind={k} unit={def} onChange={onChange} missing={missing} />;
   }
   return <QuantitySource doc={doc} si={si} ti={ti} label={s.label} kind={kind} value={v} onChange={onChange} missing={missing} notBatch={s.notBatch} />;
