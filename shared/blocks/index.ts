@@ -14,6 +14,7 @@ import { stageYield } from './stage-yield.js';
 import { subBatchCombine } from './sub-batch-combine.js';
 import { weigh } from './weigh.js';
 import { containerIssue, containerIssue2, containerIssue3, containerReturn, containerReturn2 } from './container-issue.js';
+import { deviceAssembly } from './device-assembly.js';
 import { bulkIssue } from './bulk-issue.js';
 import { cartonCheck } from './carton-check.js';
 import { codingCheck } from './coding-check.js';
@@ -40,6 +41,8 @@ export const BLOCKS: readonly Block[] = [
   ...Object.values(common),
   ...Object.values(special),
   containerIssue, containerIssue2, containerIssue3, containerReturn, containerReturn2,
+  // Round 46 (Tablets, any edition): assembling devices (autoinjectors, safety syringes) from a component lot.
+  deviceAssembly,
   // TrueBatch Injectables Packing, in the order of a packing record (forming and leak test: a blister pack only).
   bulkIssue, packMaterialIssue, packClearance, lineSetup, visionChallenge, serialReceived, codingCheck, formingCheck, leakTest, onlineInspection,
   cartonCheck, serialSample, finishedGoods, printedReconciliation, serialReconciliation, destruction, packClearanceAfter,

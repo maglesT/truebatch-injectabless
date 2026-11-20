@@ -10,7 +10,10 @@ import type { Stored, Value } from './values.js';
 import type { StepView } from './batch.js';
 
 // The blocks whose material the other products read as used (material_use_v1 of both products).
-export const MATERIAL_USE = ['weigh', 'lubricate', 'pack-material-issue', 'container-issue'];
+// Round 46: a device assembly's component (issued less returned, its "net"), as a weighing's net (db/migrations/0030).
+export const MATERIAL_USE = ['weigh', 'lubricate', 'device-assembly', 'pack-material-issue', 'container-issue'];
+// The blocks whose quantity used is their "net" result.
+const NET_USE = ['weigh', 'lubricate', 'device-assembly'];
 
 type Q = { value: string; unit: string };
 const isQ = (v: Value | undefined): v is Q => typeof v === 'object' && !Array.isArray(v) && 'value' in v && 'unit' in v;
@@ -18,14 +21,14 @@ const material = (st: Step) => { const m = st.settings.material; return typeof m
 const done = (v: StepView) => v.events.some((e) => e.kind === 'done');
 
 /**
- * The quantity a step takes from its lot: the net weight of a weighing (when worked out); or the count or quantity
+ * The quantity a step takes from its lot: the net weight of a weighing (when worked out), a device assembly's components used (issued less returned); or the count or quantity
  * issued less what went back to stores unused: of containers or closures, their count back (container-return, of the
  * same material, once signed done; version 1 of the issue: its own "returned at the end"), never below 0; of a packing
  * material, what its reconciliation returned to stores uncoded, once that reconciliation is signed done (destroyed and
  * batch-coded material is used, not returned). `steps`: the batch's steps, for the step that counts back.
  */
 export function usedQuantity(doc: MasterDoc, st: Step, values: Record<string, Value>, results: Record<string, Stored>, steps: readonly StepView[]): Q | null {
-  if (st.block.id === 'weigh' || st.block.id === 'lubricate') {
+  if (NET_USE.includes(st.block.id)) {
     const net = results.net;
     return net?.ok ? { value: net.value, unit: net.unit } : null;
   }
