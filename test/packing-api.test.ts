@@ -51,7 +51,8 @@ beforeAll(async () => {
     { ...item('prd-1', 'PRD-001', 'Examplocin 1 g injection (filled vials)'), strength: '1 g', dosageForm: 'injection' });
   for (const m of packing().pack!.materials) t.master.materials_.push({ ...item(m.materialItemId, m.code, m.name), category: 'packing', unit: m.unit === 'units' ? 'nos' : m.unit });
   t.master.equipment_.push({ ...item('ln-1', 'LL-01', 'Labelling line 1'), kind: 'equipment', type: 'labelling line', room: 'PK-01' },
-    { ...item('ln-2', 'LL-02', 'Labelling line 2'), kind: 'equipment', type: 'labelling line', room: 'PK-02' });
+    { ...item('ln-2', 'LL-02', 'Labelling line 2'), kind: 'equipment', type: 'labelling line', room: 'PK-02' },
+    { ...item('ct-1', 'CT-01', 'Cartoner 1'), kind: 'equipment', type: 'Cartoner', room: 'PK-01' });
   const people = {
     author: P('master.author', 'view'), issuer: P('batch.issue'), op1: P('batch.operate'), chk1: P('batch.check'), sup1: P('batch.supervise'), qc1: P('qc.approve'), qa1: P('qa.release'),
   };
@@ -97,7 +98,7 @@ describe('TrueBatch Injectables Packing: its own product on the platform', () =>
     expect([m.product, m.database]).toEqual(['truebatch_injectables_packing', 'truebatch_injectables_packing']);
     for (const p of m.permissions) expect(p.code).toMatch(/^truebatch_injectables_packing(\.[a-z0-9_]+)+$/);
     expect(m.reads.truebatch_injectables).toEqual(['batch_fact_v1']);
-    expect(m.publishes).toEqual(['packing_batch_v1', 'equipment_use_v1', 'material_use_v1', 'deviation_note_v1', 'lab_request_v1']);
+    expect(m.publishes).toEqual(['packing_batch_v1', 'equipment_use_v1', 'material_use_v1', 'deviation_note_v1', 'lab_request_v1', 'master_lab_field_v1']);
   });
 
   it('PL-06 the packing app login keeps the step events and signatures insert-only', async () => {
@@ -111,7 +112,7 @@ describe('TrueBatch Injectables Packing: its own product on the platform', () =>
 
   it('PL-06 packing publishes only its own views: no batch_fact_v1 (0022 skipped, 0112 drops the stray view)', async () => {
     const views = await t.owner.unsafe(`select viewname from pg_views where schemaname = $1 order by viewname`, [`${t.schema}_report`]);
-    expect(views.map((v) => v.viewname)).toEqual(['deviation_note_v1', 'equipment_use_v1', 'lab_request_v1', 'material_use_v1', 'packing_batch_v1']);
+    expect(views.map((v) => v.viewname)).toEqual(['deviation_note_v1', 'equipment_use_v1', 'lab_request_v1', 'master_lab_field_v1', 'material_use_v1', 'packing_batch_v1']);
   });
 });
 
@@ -253,7 +254,8 @@ describe('a packing batch from the filled units of a released batch', () => {
     const issued: Record<string, string> = { label: '10500', tray: '1000', carton: '1000', leaflet: '1000' };
     for (const [i, k] of Object.keys(issued).entries()) await step(`0.1.${i + 1}.1`, { lot: `${k.toUpperCase()}-1`, ...handLabels('lot', 'lot'), issued: issued[k], matches: 'yes' });
     await step('1.1.0.1', { ...line, ...yes('noPrevious', 'coderCleared', 'rejectsEmpty', 'clean'), cleanedOn: '2026-11-15 07:00', cleanedBy: 'CLEANER ONE' });
-    await step('1.1.1.1', yes('components', 'changeParts', 'coderSet', 'specimens'));
+    // A9 (fix round 21 Nov 2026): the line is several machines: the cartoner is recorded at line set-up.
+    await step('1.1.1.1', { machine2: 'ct-1', ...handLabels('machine2', 'machine'), ...yes('components', 'changeParts', 'coderSet', 'specimens') });
     const coding = await step('1.1.2.1', { printedBatch: 'TI260001', printedMfg: 'NOV.2026', printedExpiry: 'OCT.2028', printedMrp: 'Rs. 125.00', ...yes('legible', 'packingDone') });
     expect(coding.results.expiryCheck).toMatchObject({ check: { pass: true } });
     await step('1.1.3.1', yes('appearance', 'complete', 'samplesKept', 'packingDone'));
@@ -353,7 +355,9 @@ describe('a packing batch from the filled units of a released batch', () => {
     // named only in the line clearance, it was used by the stage: the Logbook reads "(Labelling and cartoning)".
     expect(await lineUse()).toEqual({ ended: true });
     const eq = await t.owner.unsafe(`select equipment_code, equipment_type, room_code, step, step_name, ended_at is not null as ended from ${t.schema}_report.equipment_use_v1 where batch_number = $1`, [batchNo]);
-    expect(eq).toEqual([{ equipment_code: 'LL-01', equipment_type: 'labelling line', room_code: 'PK-01', step: 'packing/clearance', step_name: 'Labelling and cartoning', ended: true }]);
+    expect(eq.filter((x) => x.equipment_code === 'LL-01')).toEqual([{ equipment_code: 'LL-01', equipment_type: 'labelling line', room_code: 'PK-01', step: 'packing/clearance', step_name: 'Labelling and cartoning', ended: true }]);
+    // A9: the cartoner recorded at line set-up is in use by the batch too.
+    expect(eq.filter((x) => x.equipment_code === 'CT-01')).toMatchObject([{ equipment_type: 'Cartoner', room_code: 'PK-01', ended: true }]);
     const used = await t.owner.unsafe(`select lot_number, material_code, material_master_id, quantity::text, unit, step, status
       from ${t.schema}_report.material_use_v1 where batch_number = $1 order by step`, [batchNo]);
     // A count in master data's unit (nos). A printed material: issued less returned to stores uncoded (cartons 1000 − 10,
@@ -410,7 +414,7 @@ describe('a packing batch from the filled units of a released batch', () => {
   });
 
   it('gap 10, suite B2: the filled units issued are what is left of the batch\'s good units (batch_fact_v1.good_quantity) less what other packing batches were issued, net of what a terminated one gave back (QA enters it); a part issue may be typed, more is refused; without the column or the link: typed, as before', async () => {
-    for (const n of [3, 4, 5, 6, 7]) t.master.equipment_.push({ ...item(`ln-${n}`, `LL-0${n}`, `Labelling line ${n}`), kind: 'equipment', type: 'labelling line', room: 'PK-01' });
+    for (const n of [3, 4, 5, 6, 7, 8]) t.master.equipment_.push({ ...item(`ln-${n}`, `LL-0${n}`, `Labelling line ${n}`), kind: 'equipment', type: 'labelling line', room: 'PK-01' });
     // The stand-in view so far had no good_quantity: every batch above was issued with its units typed.
     await t.owner.unsafe(`alter table ${TB}.batch_fact_v1 add column good_quantity numeric`);
     try {
@@ -463,6 +467,14 @@ describe('a packing batch from the filled units of a released batch', () => {
       const typed = await issue({ line: 'ln-6', bulk: 'TI260004', units: '100' });
       expect(typed.statusCode, typed.body).toBe(200);
       expect((await get((typed.json() as { id: number }).id)).steps[0]!.source.units).toBeUndefined();
+      // A6 (fix round 21 Nov 2026): a bulk batch larger than the packing master's batch (10000 units): not typed, the
+      // issue is the master's batch, not all of the bulk; the rest stays for the next packing batch.
+      await t.owner.unsafe(`insert into ${TB}.batch_fact_v1 (batch_number, product_code, record_kind, status, issued_at, released, manufactured_on, good_quantity)
+        values ('TI260007', 'PRD-001', 'PROCESSING', 'RELEASED', '2026-11-09 06:00+00', true, '2026-11-09', 25000)`);
+      const plan = await issue({ line: 'ln-8', bulk: 'TI260007' });
+      expect(plan.statusCode, plan.body).toBe(200);
+      expect((await get((plan.json() as { id: number }).id)).steps[0]!.values.units).toEqual({ value: '10000', unit: 'units' });
+      expect(await picks()).toContainEqual(['TI260007', '25000', '10000', '15000']);
       // The link down: the batch and its units typed from the labels, a second person checks them; nothing is compared.
       await t.owner.unsafe(`revoke select on ${TB}.batch_fact_v1 from ${PACKING_APP_ROLE}`);
       try {
@@ -473,7 +485,7 @@ describe('a packing batch from the filled units of a released batch', () => {
         await t.owner.unsafe(`grant select on ${TB}.batch_fact_v1 to ${PACKING_APP_ROLE}`);
       }
     } finally {
-      await t.owner.unsafe(`delete from ${TB}.batch_fact_v1 where batch_number = 'TI260006'`);
+      await t.owner.unsafe(`delete from ${TB}.batch_fact_v1 where batch_number in ('TI260006', 'TI260007')`);
       await t.owner.unsafe(`alter table ${TB}.batch_fact_v1 drop column good_quantity`);
     }
   });

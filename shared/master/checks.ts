@@ -7,7 +7,7 @@ import { findBlock, type Block } from '../blocks/index.js';
 import { refsIn } from '../blocks/format.js';
 import { Dec, c1WithinLimits, findUnit, t10Compensating, t11SaltFactor, t2Total, t8BatchScaling, type Q } from '../templates/index.js';
 import { decimalsOf } from '../templates/core.js';
-import { evaluate, headerValue, HEADER_WORDS, lineQuantity } from '../engine/values.js';
+import { evaluate, headerValue, HEADER_WORDS, limitInReadingUnit, lineQuantity } from '../engine/values.js';
 import { kindOf, kindOfUnit, neededKind, what as kindWords } from './kinds.js';
 import { materialLines, PER_UNIT_HEADERS, type Answer, type FormulaLine, type Limit, type MasterDoc, type SettingValue } from './schema.js';
 import { isBalance } from '../engine/picks.js';
@@ -107,6 +107,11 @@ export function masterChecks(doc: MasterDoc, ctx: CheckContext = {}): Problem[] 
       const p = `${path}.steps[${ti}]`;
       const block = findBlock(st.block);
       if (!block) return void error(`${p}.block`, `No block ${st.block.id} version ${st.block.version}`);
+      // A2 (fix round 21 Nov 2026): a lab test 2 or 3 is set in full (what, unit, limits) or not at all.
+      if (block.id === 'lab-tests') for (const n of [2, 3]) {
+        const set = ['what', 'unit', 'limit'].filter((x) => st.settings[`${x}${n}`] !== undefined);
+        if (set.length && set.length < 3) error(`${p}.settings.${['what', 'unit', 'limit'].find((x) => !set.includes(x))}${n}`, `Lab test ${n}: set what is tested, its unit and its limits, or none of them`);
+      }
       if (block.packing && !doc.pack) error(p, `${block.name} is a packing step: an injectables master cannot use it`);
       if (!st.checker && (block.gmp || st.critical)) error(p, `${block.gmp ? `A ${block.gmp.replace('line-clearance', 'line clearance')} step` : 'A critical step'} needs a second-person check`, 'TI-08');
       if (st.critical && st.flow.kind === 'optional-with-reason') error(`${p}.flow`, 'A critical step cannot be optional');
@@ -150,6 +155,14 @@ export function masterChecks(doc: MasterDoc, ctx: CheckContext = {}): Problem[] 
         const lim = c.template === 'C1' && typeof a.limit === 'string' ? block.settings.find((x) => x.name === a.limit!.toString().slice(1) && x.optional) : undefined;
         const f = typeof a.value === 'string' ? block.fields.find((x) => x.name === (a.value as string).slice(1)) : undefined;
         if (lim && f && findUnit(f.unit ?? '')?.kind === 'temperature' && st.settings[lim.name] === undefined) warn(`${p}.settings.${lim.name}`, `${f.label} is recorded but not checked: set the ${lim.label.toLowerCase()}`);
+      }
+      // A11 (fix round 21 Nov 2026): a reading recorded in the step's unit checked against a limit written in another
+      // unit of the same kind (the leak test vacuum in mbar against a limit in kPa): the floor shows the limit in both,
+      // but one unit is clearer. A warning: a version made before this still issues.
+      for (const bs of block.settings.filter((x) => x.kind === 'limit')) {
+        const both = limitInReadingUnit(block, st, bs.name);
+        const lim = st.settings[bs.name] as Limit | undefined;
+        if (both && lim) warn(`${p}.settings.${bs.name}`, `${bs.label} is written in ${lim.unit} but ${both.label} is recorded in ${both.reading}: write the limits in ${both.reading} (${limitWords(both.limit)}), or record in ${lim.unit}`);
       }
       // A stage's yield on an earlier stage's output while this stage adds formula materials (as TrueBatch Tablets, 17 Nov
       // 2026; here e.g. an API or excipient charged into a vehicle made in an earlier stage): the base leaves out what the
@@ -313,6 +326,8 @@ function askOf(doc: MasterDoc, out: Problem[], path: string, key: string, messag
   out.push({ level: 'warning', path, message, question: { key, options, needsReason, ...(ok ? { answer: a } : {}) } });
   return ok ? a.choice : undefined;
 }
+
+const limitWords = (l: Limit) => (l.low && l.high ? `${l.low} to ${l.high} ${l.unit}` : l.high ? `not more than ${l.high} ${l.unit}` : `at least ${l.low} ${l.unit}`);
 
 function calculationChecks(doc: MasterDoc, out: Problem[]): void {
   const ask = (path: string, key: string, message: string, options: string[], needsReason = false) => askOf(doc, out, path, key, message, options, needsReason);

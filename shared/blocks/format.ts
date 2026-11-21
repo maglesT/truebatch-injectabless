@@ -20,6 +20,9 @@ export const FIELD_KINDS = ['number', 'text', 'yes-no', 'choice', 'timer', 'lot'
 export const fieldSchema = z.object({
   name,
   label: z.string().min(1),
+  // Fix round 21 Nov 2026 (A2): the text setting whose value the master gives as this field's label (what a lab test
+  // is: "Assay of ondansetron"); the label above while the master leaves it empty.
+  labelFrom: name.optional(),
   kind: z.enum(FIELD_KINDS),
   // number: the unit from the unit list, or "$setting" when the master step names it.
   unit: z.string().optional(),
@@ -38,6 +41,9 @@ export const fieldSchema = z.object({
   // with one of the notTypes words is not taken (a QC lab "Analytical balance" is not a dispensing balance).
   types: z.array(z.string().regex(/^[a-z][a-z ]*$/)).optional(),
   notTypes: z.array(z.string().regex(/^[a-z][a-z ]*$/)).optional(),
+  // machine (fix round 21 Nov 2026, A8): a capability the machine must have, named in master data's type or name (any
+  // of these words, without case): an isolator filler is "Vial filling machine (isolator)".
+  capability: z.array(z.string().regex(/^[a-z][a-z -]*$/)).optional(),
   // number: a QC result of this batch (from the QC report). While the LIMS link answers it is picked from the batch's
   // approved CoA in LIMS (result_v1, its reported figure); absent or down, typed by hand (shared/engine/lims.ts).
   // Round 42 (owner: in-process lab tests are picked from LIMS, not typed): 'in_process' is an in-process test done in
@@ -119,6 +125,10 @@ export const blockSchema = z.object({
 }).strict();
 
 export type BlockField = z.infer<typeof fieldSchema>;
+/** A2: the block's fields with the labels the master step gives them (labelFrom). */
+export function labelled(fields: readonly BlockField[], settings: Readonly<Record<string, unknown>>): BlockField[] {
+  return fields.map((f) => { const v = f.labelFrom ? settings[f.labelFrom] : undefined; return typeof v === 'string' && v.trim() ? { ...f, label: v.trim() } : f; });
+}
 export type BlockSetting = z.infer<typeof settingSchema>;
 export type Block = z.infer<typeof blockSchema>;
 
@@ -156,7 +166,10 @@ export function blockProblems(b: Block): string[] {
     if (f.figure === 'AV' && !b.settings.some((s) => s.name === 'coating')) p.push(`field ${f.name}: the acceptance value needs the coating setting`);
     if (f.nextStage) {
       const next = b.fields.find((x) => x.name === f.nextStage);
-      if (!next || next.qc !== 'in_process' || next.count === undefined || f.count === undefined || f.qc !== 'in_process' || next.nextStage) {
+      // A3 (fix round 21 Nov 2026): a chain of stages (dissolution 6, 6, 12), never back to an earlier one.
+      const seen = new Set([f.name]);
+      for (let x = next; x?.nextStage; x = b.fields.find((y) => y.name === x!.nextStage)) { if (seen.has(x.name)) { p.push(`field ${f.name}: the stages go round in a circle`); break; } seen.add(x.name); }
+      if (!next || next.qc !== 'in_process' || next.count === undefined || f.count === undefined || f.qc !== 'in_process') {
         p.push(`field ${f.name}: the next stage is another in-process list of readings`);
       }
     }
@@ -164,6 +177,7 @@ export function blockProblems(b: Block): string[] {
     if (f.kind === 'choice' && !f.options?.length) p.push(`field ${f.name}: a choice needs options`);
     if (typeof f.count === 'string' && b.settings.find((s) => s.name === String(f.count).slice(1))?.kind !== 'number') p.push(`field ${f.name}: its count ${f.count} is not a number setting`);
   }
+  for (const f of b.fields) if (f.labelFrom && b.settings.find((s) => s.name === f.labelFrom)?.kind !== 'text') p.push(`field ${f.name}: its label comes from a text setting`);
   for (const s of b.settings) if (s.options && (s.kind !== 'text' || !s.options.length)) p.push(`setting ${s.name}: only a text setting has a list`);
   for (const s of b.settings) if (s.notBatch && s.kind !== 'quantity') p.push(`setting ${s.name}: only a quantity setting is marked not a batch quantity`);
   const known = new Set([...b.fields.map((f) => f.name), ...b.settings.map((s) => s.name), ...PACK_FACTS.map((x) => `pack.${x}`), ...BATCH_FACTS.map((x) => `batch.${x}`)]);

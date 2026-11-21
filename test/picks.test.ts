@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { findBlock } from '../shared/blocks/index.js';
-import { dispensingRooms, emptyNote, machineRefusal, roomRefusal, untypedNote } from '../shared/engine/picks.js';
+import { balanceCapacity, dispensingRooms, emptyNote, machineRefusal, roomRefusal, untypedNote } from '../shared/engine/picks.js';
 import { latestBlock } from '../shared/blocks/index.js';
 import { skeletonList, skeletonStages } from '../web/src/designer/skeletons.js';
 
@@ -111,5 +111,30 @@ describe('machine pickers on the demo master-data types', () => {
     expect([vfm, sfm].filter((m) => !machineRefusal(stage, filler, m, rooms)).map((m) => m.code)).toEqual(['EQS-VFM-01']);
     expect(machineRefusal(stage, capper, cap, rooms)).toBeNull();
     expect(emptyNote(stage, isolator, [rabs], rooms)).toMatch(/^No isolator, rabs or blow-fill-seal machine can be used here: EQS-RAB-01 stands in RM-208 \(Aseptic filling\), not in a room this stage allows/);
+  });
+});
+
+describe('A8 pickers: a machine with a capability and a balance for the quantity weighed (fix round 21 Nov 2026)', () => {
+  const stage = { key: 's', name: 'S', kind: 'normal' as const, roomTypes: [], machineTypes: [], role: '', uses: [], steps: [] };
+  it('a field that needs a capability takes only machines whose type or name names it', () => {
+    const f = { name: 'machine', label: 'Isolator filler', kind: 'machine' as const, types: ['filling'], capability: ['isolator', 'rabs'] };
+    const fillers = [{ code: 'EQS-FIL-01', type: 'Vial filling machine', name: 'Vial filling machine 120 vpm' }, { code: 'EQS-FIL-02', type: 'Vial filling machine', name: 'Vial filling machine (isolator)' },
+      { code: 'EQS-FIL-03', type: 'Syringe filling machine', name: 'Syringe filler in RABS' }];
+    expect(fillers.filter((m) => !machineRefusal(stage, f, m, [])).map((m) => m.code)).toEqual(['EQS-FIL-02', 'EQS-FIL-03']);
+    expect(machineRefusal(stage, f, fillers[0]!, [])).toBe('EQS-FIL-01 is not a isolator machine (master data: Vial filling machine, Vial filling machine 120 vpm)');
+  });
+  it('a balance is offered when the quantity is within its capacity and at least 0.5 % of it; a name without a capacity is not checked', () => {
+    const f = findBlock({ id: 'weigh', version: 1 })!.fields.find((x) => x.name === 'balance')!;
+    const bal = [{ code: 'IN-BAL-03', type: 'Balance', name: 'Platform balance 300 kg' }, { code: 'IN-BAL-04', type: 'Balance', name: 'Precision balance 6 kg' },
+      { code: 'IN-BAL-05', type: 'Balance', name: 'IPC balance (fill weight)' }];
+    expect(balanceCapacity(bal[0]!)).toBe(300);
+    expect(balanceCapacity({ code: 'x', name: 'Analytical balance 220 g' })).toBeCloseTo(0.22);
+    const offered = (value: string, unit: string) => bal.filter((m) => !machineRefusal(stage, f, m, [], [], { value, unit })).map((m) => m.code);
+    expect(offered('0.04', 'kg')).toEqual(['IN-BAL-04', 'IN-BAL-05']);
+    expect(offered('12.000', 'kg')).toEqual(['IN-BAL-03', 'IN-BAL-05']);
+    expect(offered('3.26', 'kg')).toEqual(['IN-BAL-03', 'IN-BAL-04', 'IN-BAL-05']);
+    expect(machineRefusal(stage, f, bal[0]!, [], [], { value: '0.04', unit: 'kg' })).toBe('IN-BAL-03 (300 kg) is too large for 0.04 kg: a balance weighs at least 0.5 % of its capacity (1.5 kg); use a smaller balance');
+    expect(machineRefusal(stage, f, bal[1]!, [], [], { value: '12', unit: 'kg' })).toBe('IN-BAL-04 weighs at most 6 kg: 12 kg is too much for it');
+    expect(machineRefusal(stage, f, bal[0]!, [])).toBeNull();
   });
 });

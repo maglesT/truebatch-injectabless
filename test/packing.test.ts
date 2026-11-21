@@ -3,6 +3,7 @@ import { findBlock } from '../shared/blocks/index.js';
 import { blocking, masterChecks } from '../shared/master/checks.js';
 import { masterSchema, type MasterDoc } from '../shared/master/schema.js';
 import { askedFields, batchRefusal, batchView, doneProblems, evaluate, openSteps, stepLabel, stepTitle, type BatchEvent, type StepEvent } from '../shared/engine/index.js';
+import { limitInReadingUnit } from '../shared/engine/values.js';
 import { c8PrintedData, c9SerialCodes, expiryMonth, gs1, printedMonth, t27Expiry } from '../shared/templates/index.js';
 import { at, ev, small } from './engine-fixture.js';
 import { code, GTIN, packing } from './packing-fixture.js';
@@ -248,6 +249,20 @@ describe('the packing blocks', () => {
     const leak = (leaking: string) => results(d, [issued(d)], l.key, { vacuum: { value: '500', unit: 'mbar' }, tested: { value: '20', unit: 'units' }, leaking: { value: leaking, unit: 'units' }, packingDone: 'no' }).plan;
     expect(leak('0')).toMatchObject({ ok: true, value: '20', check: { pass: true, shown: expect.stringContaining('Sample 20 of 10000 (level S-2)') } });
     expect(leak('1')).toMatchObject({ check: { pass: false } });
+  });
+
+  it('A11 the leak test limit in kPa with the vacuum recorded in mbar: the master warns, the floor sees the limit in mbar too, the check converts', () => {
+    const d = packing({ type: 'blister', unitsPerPack: 1 });
+    const l = where(d, 'leak-test');
+    expect(l.st.settings.vacuumUnit).toBe('mbar');
+    expect(limitInReadingUnit(findBlock(l.st.block)!, l.st, 'vacuumLimit')).toBeNull();
+    l.st.settings.vacuumLimit = { low: '60', high: '80', unit: 'kPa' };
+    expect(limitInReadingUnit(findBlock(l.st.block)!, l.st, 'vacuumLimit')).toEqual({ reading: 'mbar', label: 'Vacuum', limit: { low: '600', high: '800', unit: 'mbar' } });
+    expect(masterChecks(d).filter((p) => p.path.endsWith('.vacuumLimit')).map((p) => [p.level, p.message]))
+      .toEqual([['warning', 'Vacuum limits is written in kPa but Vacuum is recorded in mbar: write the limits in mbar (600 to 800 mbar), or record in kPa']]);
+    const vac = (v: string) => results(d, [issued(d)], l.key, { vacuum: { value: v, unit: 'mbar' }, tested: { value: '20', unit: 'units' }, leaking: { value: '0', unit: 'units' }, packingDone: 'no' }).vacuumCheck;
+    expect(vac('700')).toMatchObject({ check: { pass: true } });
+    expect(vac('70')).toMatchObject({ check: { pass: false } });
   });
 
   it('TI-P6 a printed material is reconciled to zero: issued = used + destroyed + returned, and a gap needs a deviation note and its number before release', () => {

@@ -48,7 +48,9 @@ export function IssueDialog({ row, onCancel }: { row: MasterRow; onCancel: () =>
   // The date of manufacture comes with the batch while TrueBatch Injectables answers, and so do the units issued when
   // it gives them (pull, don't type): what is left of its good units, offered; less may be typed (a part issue).
   const picked = bulk?.link === 'ok' ? bulk.batches.find((x) => x.batchNo === String(values.bulk ?? '').trim()) : undefined;
-  const offered = picked?.goodQuantity ? picked.left ?? picked.goodQuantity : undefined;
+  // Fix round 21 Nov 2026 (A6): offered is the packing master's batch (or what is left of the bulk when less), not all of it.
+  const leftQty = picked?.goodQuantity ? picked.left ?? picked.goodQuantity : undefined;
+  const offered = leftQty === undefined ? undefined : Number(leftQty) > Number(doc.header.batchSize) ? doc.header.batchSize : leftQty;
   const fields = [...atIssue.filter((f) => f.name !== 'mfgDate' || (bulk && bulk.link !== 'ok')), ...asked];
   const sent = Object.fromEntries(Object.entries(values).filter(([k]) => fields.some((f) => f.name === k)));
   // Another batch: the units typed for the previous one go.
@@ -69,10 +71,10 @@ export function IssueDialog({ row, onCancel }: { row: MasterRow; onCancel: () =>
         <h2>Issue a batch</h2>
         <p>{doc.header.productCode} · {doc.header.productName}, version {row.versionNo}: {doc.pack ? `${Number(doc.header.batchSize).toLocaleString('en-IN')} filled units, packed from ${doc.pack.bulkCode}` : batchText(doc)}. The batch number is given by the server.</p>
         {fields.map((f) => (
-          <FieldInput key={f.name === 'units' ? `units-${picked?.batchNo ?? ''}` : f.name} f={f} unit={f.unit ?? ''} saved={f.name === 'units' && offered ? { value: offered, unit: f.unit ?? 'units' } : undefined} picks={f.kind === 'machine' ? offer.offered : []} note={[f.kind === 'machine' && machines.length && !lines.length ? emptyNote(doc.stages[0]!, f, machines, rooms) : null, f.kind === 'machine' ? offer.note : null]} onChange={set(f.name)}
+          <FieldInput key={f.name === 'units' ? `units-${picked?.batchNo ?? ''}` : f.name} f={f} unit={f.unit ?? ''} saved={f.name === 'units' && offered ? { value: offered, unit: f.unit ?? 'units' } : undefined} picks={f.kind === 'machine' ? linePicks : []} note={[f.kind === 'machine' && machines.length && !lines.length ? emptyNote(doc.stages[0]!, f, machines, rooms) : null, f.kind === 'machine' ? offer.note : null]} onChange={set(f.name)}
             options={f.kind === 'bulk' ? (bulk?.batches ?? []).map((x) => x.batchNo) : []} />
         ))}
-        {picked?.goodQuantity && <p ref={left} className="notice">Left to issue of {picked.batchNo}: {Number(offered).toLocaleString('en-IN')} units ({Number(picked.goodQuantity).toLocaleString('en-IN')} good units in TrueBatch Injectables{Number(picked.issued ?? 0) > 0 ? `, ${Number(picked.issued).toLocaleString('en-IN')} already issued to other packing batches` : ''}). Issue all of it, or type less for a part issue.</p>}
+        {picked?.goodQuantity && <p ref={left} className="notice">Left to issue of {picked.batchNo}: {Number(leftQty).toLocaleString('en-IN')} units ({Number(picked.goodQuantity).toLocaleString('en-IN')} good units in TrueBatch Injectables{Number(picked.issued ?? 0) > 0 ? `, ${Number(picked.issued).toLocaleString('en-IN')} already issued to other packing batches` : ''}). {offered === leftQty ? 'Shown: all that is left.' : `Shown: the packing batch of the master, ${Number(offered).toLocaleString('en-IN')} units.`} Type the units actually issued.</p>}
         {doc.pack && bulk && bulk.link !== 'ok' && <p className="notice warn">TrueBatch Injectables is not linked or not answering: type the batch from the labels of its trays or cases; a second person checks it.</p>}
         {problems.length > 0 && <div className="notice bad" role="alert">{problems.map((p, i) => <p key={i}>{p}</p>)}</div>}
         <div className="actions">

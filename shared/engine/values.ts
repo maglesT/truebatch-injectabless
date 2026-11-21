@@ -2,7 +2,7 @@
  * Recorded values and the results of the block's calculations. Every GMP number comes from the templates library:
  * this file only picks the inputs (fields, settings, earlier steps, formula lines) and calls the templates.
  */
-import { Dec, findUnit, type Outcome, type Q, type ResultValue } from '../templates/index.js';
+import { convert, Dec, findUnit, type Outcome, type Q, type ResultValue } from '../templates/index.js';
 import { findBlock, type Block, type BlockField } from '../blocks/index.js';
 import type { FormulaLine, HEADER_VALUES, Limit, MasterDoc, Pack, SettingValue, Step } from '../master/schema.js';
 import { callTemplate } from './templates.js';
@@ -49,6 +49,12 @@ export interface Current {
 export function currentValues(events: readonly StepEvent[]): Current {
   const c: Current = { values: {}, results: {}, replaced: [], uses: [], source: {} };
   for (const e of events) {
+    // A7: undone: every value is replaced by nothing (kept in the record as undone, with the reason); recorded again after.
+    if (e.kind === 'undone') {
+      for (const [k, v] of Object.entries(c.values)) c.replaced.push({ field: k, was: v, now: 'undone', reason: e.payload.reason ?? '', person: e.person, at: e.at });
+      Object.assign(c, { values: {}, results: {}, uses: [], source: {} });
+      continue;
+    }
     if (e.kind !== 'value' && e.kind !== 'corrected' && !e.payload.results) continue;
     for (const [k, v] of Object.entries(e.payload.values ?? {})) {
       const was = c.values[k];
@@ -342,6 +348,57 @@ export function evaluate(doc: MasterDoc, events: readonly StepEvent[], key: Step
     if (r.ok) asResults[c.name] = { ok: true, value: new Dec(r.value), unit: r.unit };
   }
   return results;
+}
+
+/** A quantity written with a unit of the unit list ("20 mg", "10 mEq"), as the master checks read it. */
+function quantityOf(text: string | undefined): { value: string; unit: string } | undefined {
+  const m = /^[+-]?(\d+(\.\d*)?|\.\d+)\s*(\S.*)?$/.exec(text?.trim() ?? '');
+  const u = m && findUnit(m[3] ?? '');
+  return m && u ? { value: m[1]!, unit: u.symbol } : undefined;
+}
+
+/**
+ * Fix round 21 Nov 2026 (A8): the quantity a weighing step weighs, for the balance's range: its target as worked out
+ * (`results`, once a value is recorded: adjusted with the lot), else the formula line's batch quantity before any
+ * adjustment, or a target typed in the master. Undefined for a step without a target.
+ */
+export function weighTarget(doc: MasterDoc, key: StepKey, results: Readonly<Record<string, Stored>> = {}): { value: string; unit: string } | undefined {
+  const st = doc.stages[key.stage]?.steps[key.step];
+  const v = st?.settings.target;
+  if (!st || !v || !findBlock(st.block)?.settings.some((s) => s.name === 'target' && s.kind === 'quantity')) return undefined;
+  const r = results.target;
+  if (r?.ok) return { value: r.value, unit: r.unit };
+  if (typeof v === 'string') { const q = quantityOf(v); return q; }
+  const line = typeof v === 'object' && 'formula' in v ? doc.formula.find((l) => l.key === v.formula) : undefined;
+  const q = line ? lineQuantity(doc, [], key, line, false, {}) : undefined;
+  return q?.ok ? { value: q.value, unit: q.unit } : undefined;
+}
+
+/**
+ * Fix round 21 Nov 2026 (A11, leak test: limit in kPa, reading in mbar): the limit setting a block checks a reading
+ * against (C1, "$field" against "$limit"), when the reading's unit is named by the step (unit "$setting") and the
+ * limit is written in another unit of the same kind: the limit in the reading's unit, for the floor to show beside it
+ * ("60 to 80 kPa, that is 600 to 800 mbar") and the master check to warn about. Null when the units are the same.
+ */
+export function limitInReadingUnit(block: Block, st: Step, limitName: string): { reading: string; limit: Limit; label: string } | null {
+  const lim = st.settings[limitName];
+  if (!lim || typeof lim !== 'object' || !('unit' in lim)) return null;
+  for (const c of block.calcs) {
+    const a = c.args as { value?: unknown; limit?: unknown };
+    if (c.template !== 'C1' || typeof a.limit !== 'string' || a.limit.replace(/^\$|\?$/g, '') !== limitName || typeof a.value !== 'string') continue;
+    const f = block.fields.find((x) => x.name === a.value!.toString().replace(/^\$|\?$/g, ''));
+    const named = f?.unit?.startsWith('$') ? st.settings[f.unit.slice(1)] : undefined;
+    const reading = typeof named === 'string' ? findUnit(named) : undefined;
+    const written = findUnit(lim.unit);
+    if (!f || !reading || !written || reading.symbol === written.symbol || reading.kind !== written.kind) continue;
+    const to = (x?: string) => (x === undefined ? undefined : convert(new Dec(x), written, reading).toDecimalPlaces(6).toString());
+    const out: Limit = { unit: reading.symbol };
+    for (const k of ['low', 'high', 'alertLow', 'alertHigh'] as const) { const v = to(lim[k]); if (v !== undefined) out[k] = v; }
+    if (lim.lowStrict) out.lowStrict = true;
+    if (lim.highStrict) out.highStrict = true;
+    return { reading: reading.symbol, limit: out, label: f.label };
+  }
+  return null;
 }
 
 /** Demo only: the timer id of a block's minimum duration (a mixing time) in one step instance (batch.ts timers). */

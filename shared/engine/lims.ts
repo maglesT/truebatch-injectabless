@@ -113,9 +113,13 @@ export function answersField(r: Pick<QcResult, 'ipcField' | 'individual' | 'ipcC
   if (r.ipcCode) return codes[f.name] === r.ipcCode;
   if (!r.ipcField || r.ipcField === f.name) return true;
   const other = fields.find((x) => x.name === r.ipcField);
-  const staged = !!other && (f.nextStage === other.name || other.nextStage === f.name);
-  const a = countOf(f), b = countOf(other);
-  return staged && a !== undefined && b !== undefined && r.individual?.length === a + b;
+  // A3: a staged list of any number of stages: both in one chain, the result holding the values from its first stage on.
+  const ip = fields.filter((x) => x.qc === 'in_process');
+  const root = ip.find((x) => !ip.some((y) => y.nextStage === x.name) && stagesOf(x, ip).includes(f) && (!other || stagesOf(x, ip).includes(other)));
+  const chain = root ? stagesOf(root, ip) : [];
+  if (!other || chain.length < 2 || countOf(f) === undefined || countOf(other) === undefined) return false;
+  const sums = chain.map((_, j) => chain.slice(0, j + 1).reduce((a, x) => a + (countOf(x) ?? 0), 0));
+  return sums.slice(1).includes(r.individual?.length ?? -1);
 }
 /** Why this result may not fill field `f` (it answers another field), in plain words; null when it may. */
 export function fieldRefusal(r: Pick<QcResult, 'ipcField' | 'individual' | 'testName' | 'coaNumber' | 'ipcCode'>, f: BlockField, fields: readonly BlockField[], codes: Readonly<Record<string, string>> = {}): string | null {
@@ -254,34 +258,46 @@ export function inProcessFit(r: Pick<QcResult, 'testName' | 'coaNumber' | 'unit'
   if (!vals.length) return no(`${what} has no individual values in LIMS: ${f.label} takes ${count} values.`);
   if (!vals.every((v) => NUMBER.test(v))) return no(`${what} has a value that is not a number in LIMS.`);
   if (f.figure && r.figure && r.figure !== f.figure) return no(`${what} reports the ${FIGURE[r.figure] ?? r.figure}, not the ${FIGURE[f.figure]}: it is not ${f.label}.`);
-  const next = f.nextStage ? fields.find((x) => x.name === f.nextStage) : undefined;
-  const prev = fields.find((x) => x.nextStage === f.name);
-  const nextCount = countOf(next);
+  // Fix round 21 Nov 2026 (A3): a staged list of any number of stages (dissolution: 6, 6 more, 12 more). The stages
+  // from the first; this field is stage i. A result holds the values from the first stage to stage j (all in order), or
+  // only those of stages i to j once the earlier stages are recorded; never padded or cut.
+  const ip = fields.filter((x) => x.qc === 'in_process');
+  let root = f;
+  for (let x = ip.find((y) => y.nextStage === root.name); x && x !== f; x = ip.find((y) => y.nextStage === root.name)) root = x;
+  const chain = stagesOf(root, ip);
+  const i = chain.indexOf(f);
+  const counts = chain.map((x) => countOf(x) ?? 0);
+  const before = (k: number) => counts.slice(0, k).reduce((a, n) => a + n, 0);
   const take: Record<string, string | string[]> = {};
   const m = vals.length;
-  // The values LIMS's reported figure is of: all of the result's, or with the first stage's recorded ones.
+  const had = chain.slice(0, i).map((x) => { const v = recorded[x.name]; return Array.isArray(v) ? v.map((y) => String((y as { value?: unknown })?.value ?? y)) : null; });
+  const lower = (x: BlockField) => x.label.toLowerCase();
+  const split = (from: number, to: number, list: readonly string[]) => { let at = 0; for (let k = from; k <= to; k++) { take[chain[k]!.name] = list.slice(at, at + counts[k]!); at += counts[k]!; } };
+  // The values LIMS's reported figure is of: all of the result's, or with the earlier stages' recorded ones.
   let all = vals;
-  if (!prev) {
-    if (m === count) take[f.name] = vals;
-    else if (next && nextCount && m === count + nextCount) { take[f.name] = vals.slice(0, count); take[next.name] = vals.slice(count); }
-    else return no(`${what} has ${m} values in LIMS; ${f.label} takes exactly ${count}${next && nextCount ? ` (or ${count + nextCount} with ${next.label.toLowerCase()})` : ''}. Values are never added or left out: ask QC to check the result in LIMS.`);
+  const cumulative = chain.map((_, j) => j).filter((j) => j >= i && m === before(j + 1)).at(0);
+  const own = i > 0 ? chain.map((_, j) => j).filter((j) => j >= i && m === before(j + 1) - before(i)).at(0) : undefined;
+  if (cumulative !== undefined) {
+    const p = before(i);
+    const first = vals.slice(0, p);
+    const hadAll = had.every((h) => h !== null) ? had.flat() as string[] : null;
+    const prevLabel = chain.slice(0, i).map(lower).join(' and ');
+    if (i > 0 && had.some((h) => h !== null) && (!hadAll || hadAll.length !== p || hadAll.some((v, k) => !NUMBER.test(v) || !new Dec(v).eq(first[k]!)))) {
+      return no(`The first ${p} values of ${what} (${first.join(', ')}) are not the ${p} recorded for ${prevLabel} (${(hadAll ?? had.flat().filter(Boolean)).join(', ')}): ask QC to check the result in LIMS.`);
+    }
+    if (i > 0 && !hadAll) split(0, i - 1, first);
+    split(i, cumulative, vals.slice(p));
+  } else if (own !== undefined) {
+    // A result of the later stages only: its figure is of all stages, so the earlier stages are recorded first.
+    const missing = chain.slice(0, i).find((_, k) => had[k] === null);
+    if (missing) return no(`Pick ${lower(missing)} first: ${what} has only the ${m} values of the next stage.`);
+    split(i, own, vals);
+    all = [...(had.flat() as string[]), ...vals];
+  } else if (i === 0) {
+    const alt = chain.slice(1).map((_, j) => `${before(j + 2)} with ${chain.slice(1, j + 2).map(lower).join(' and ')}`);
+    return no(`${what} has ${m} values in LIMS; ${f.label} takes exactly ${count}${alt.length ? ` (or ${alt.join(', or ')})` : ''}. Values are never added or left out: ask QC to check the result in LIMS.`);
   } else {
-    const p = countOf(prev) ?? 0;
-    const had = recorded[prev.name];
-    const hadVals = Array.isArray(had) ? had.map((x) => String((x as { value?: unknown })?.value ?? x)) : null;
-    if (m === count) {
-      // A result of the next stage only: its figure is of both stages, so the first stage is recorded first.
-      if (!hadVals) return no(`Pick ${prev.label.toLowerCase()} first: ${what} has only the ${m} values of the next stage.`);
-      take[f.name] = vals;
-      all = [...hadVals, ...vals];
-    } else if (m === p + count) {
-      const first = vals.slice(0, p);
-      if (hadVals && (hadVals.length !== p || hadVals.some((v, i) => !NUMBER.test(v) || !new Dec(v).eq(first[i]!)))) {
-        return no(`The first ${p} values of ${what} (${first.join(', ')}) are not the ${p} recorded for ${prev.label.toLowerCase()} (${hadVals.join(', ')}): ask QC to check the result in LIMS.`);
-      }
-      if (!hadVals) take[prev.name] = first;
-      take[f.name] = vals.slice(p);
-    } else return no(`${what} has ${m} values in LIMS; ${f.label} takes exactly ${count} (or ${p + count} with the first ${p} of ${prev.label.toLowerCase()}). Values are never added or left out: ask QC to check the result in LIMS.`);
+    return no(`${what} has ${m} values in LIMS; ${f.label} takes exactly ${count} (or ${before(i) + counts[i]!} with the first ${before(i)} of ${chain.slice(0, i).map(lower).join(' and ')}). Values are never added or left out: ask QC to check the result in LIMS.`);
   }
   // LIMS's reported figure of all its values must agree with the step's own, rounded as LIMS wrote it.
   if (f.figure && r.figure === f.figure && r.reported && NUMBER.test(r.reported.trim())) {
@@ -292,4 +308,25 @@ export function inProcessFit(r: Pick<QcResult, 'testName' | 'coaNumber' | 'unit'
     if (!mine.eq(lims)) return no(`LIMS reports the ${FIGURE[f.figure]} of ${what} as ${lims}; TrueBatch works it out from the same ${all.length} values as ${mine.toFixed(writtenDecimals(lims))}: ask QC to check the result in LIMS.`);
   }
   return { take };
+}
+
+/**
+ * Fix round 21 Nov 2026 (A12, for LIMS: an in-process specification is written from the master, before any batch
+ * raises a request): the in-process lab tests of every block, as a master step's lab request lists them (labTests):
+ * the code without its '@<n>' (ipcCodes adds it when the block is in the master more than once), the label (or the text
+ * setting the master names it with), the unit (fixed, or the setting that names it) and the number of values (a staged
+ * list: all its stages). db/migrations/0035 keeps the same list as the view lab_field_parameters (not published) for
+ * report.master_lab_field_v1; a test compares the two, so a new in-process field needs a migration replacing it.
+ */
+export interface LabFieldParameter { block: string; blockName: string; field: string; code: string; label: string; labelSetting: string | null; unit: string | null; unitSetting: string | null; individual: number | null }
+export function labFieldParameters(blocks: readonly { id: string; name: string; fields: readonly BlockField[] }[]): LabFieldParameter[] {
+  return blocks.flatMap((b) => {
+    const codes = ipcCodes({ stages: [{ steps: [{ block: { id: b.id } }] }] }, 0, 0, b.fields);
+    return labTests(b.fields, (f) => f.unit ?? '', codes).map((t) => {
+      const f = b.fields.find((x) => x.name === t.name)!;
+      const set = f.unit?.startsWith('$');
+      return { block: b.id, blockName: b.name, field: t.name, code: t.code, label: t.label, labelSetting: f.labelFrom ?? null,
+        unit: set ? null : t.unit, unitSetting: set ? f.unit!.slice(1) : null, individual: t.individual };
+    });
+  });
 }

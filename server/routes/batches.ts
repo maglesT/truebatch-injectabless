@@ -4,20 +4,21 @@ import type { Sql, Tx } from '../db.js';
 import { audit } from '../audit.js';
 import { parseId, requirePermission, type SessionUser } from '../auth.js';
 import { usableItem } from '../master.js';
-import { dispensingRooms, machineRefusal, roomRefusal } from '../../shared/engine/picks.js';
+import { dispensingRooms, isBalance, machineRefusal, roomRefusal } from '../../shared/engine/picks.js';
+import { weighTarget } from '../../shared/engine/values.js';
 import { batchEm, handProblem, lineOf, MEDIA_FILL, mediaFillTyped, mfgDateProblem, pullBulk, pullCoa, pullInProcess, pullItem, pullLot, pullMediaFill, pullQcResult, pulledWords, usableCoas, usableInProcess, usableResults } from '../pull.js';
 import { SignError, authenticateSigner, contentHash, sign, signBody } from '../signatures.js';
 import { masterVersion } from './masters.js';
 import { batchRecordDoc, type RecordInput, type Signature } from '../batch-record.js';
 import type { DeviationRead } from '../links.js';
 import { render, sendPdf } from '../pdf.js';
-import { findBlock } from '../../shared/blocks/index.js';
+import { findBlock, labelled } from '../../shared/blocks/index.js';
 import { blocking, masterChecks } from '../../shared/master/checks.js';
 import type { MasterDoc } from '../../shared/master/schema.js';
 import { Dec } from '../../shared/templates/index.js';
 import {
   ACTIONS, BATCH_ACTIONS, NOTE_ACTIONS, NOTE_EVENTS, CERTIFICATE, DEVIATION_DONE, deviationStatusWords, LINK_OF, MATERIAL_USE, batchRefusal, filedKey, inLotUnit, issuedLots, bulkLeft, returnProblems, returnsOf, usedQuantity, usesOfLot, stepLabel, stepPlace, stepTitle, handFields, isHand, batchView, doneProblems, evaluate, lateItems, openSteps, parseKey, readValue, refusal, review, stepFields, stepNeeds, timers,
-  trainingCheck, emText, coaText, resultText, inProcessText, isPick, keyId, labRequestId, labTests, ipcCodes, currentValues, endsTheRounds, requestRound, type Training,
+  trainingCheck, emText, undoRefusal, coaText, resultText, inProcessText, isPick, keyId, labRequestId, labTests, ipcCodes, currentValues, endsTheRounds, requestRound, type Training,
   type Action, type BatchAction, type BatchEvent, type BulkIssue, type DeviationStatus, type LinkState, type Source, type StageView, type Stored, type StepEvent, type StepKey, type StepView, type Timer, type Value,
 } from '../../shared/engine/index.js';
 
@@ -150,7 +151,8 @@ export function labRequestOf(doc: MasterDoc, key: StepKey): { stage: string; ste
   const st = stage?.steps[key.step];
   const block = st && findBlock(st.block);
   if (!stage || !st || !block) return null;
-  const tests = labTests(block.fields, (f) => { const u = f.unit?.startsWith('$') ? st.settings[f.unit.slice(1)] : f.unit; return typeof u === 'string' ? u : ''; },
+  // A2: the lab request names each test as the master does (labelFrom: "Assay of ondansetron").
+  const tests = labTests(labelled(block.fields, st.settings), (f) => { const u = f.unit?.startsWith('$') ? st.settings[f.unit.slice(1)] : f.unit; return typeof u === 'string' ? u : ''; },
     ipcCodes(doc, key.stage, key.step, block.fields));
   if (!tests.length) return null;
   const extra = [stage.kind === 'sub-batch' ? `sub-batch ${key.sub}` : '', st.flow.kind === 'repeat-until' ? `round ${key.round}` : ''].filter(Boolean).join(', ');
@@ -223,7 +225,8 @@ async function readValues(app: FastifyInstance, tx: Tx, doc: MasterDoc, key: Ste
       const rooms = await app.master.rooms();
       const item = f.kind === 'machine' ? usableItem(await app.master.equipment(), String(x), 'machine') : usableItem(rooms, String(x), 'room');
       const type = 'type' in item ? item.type : item.area;
-      const no = 'type' in item ? machineRefusal(stage, f, item, rooms, dispensingRooms(doc, rooms)) : roomRefusal(stage, item);
+      // A8: a balance within its range for the quantity this step weighs.
+      const no = 'type' in item ? machineRefusal(stage, f, item, rooms, dispensingRooms(doc, rooms), isBalance(f) ? weighTarget(doc, key, current.results) : undefined) : roomRefusal(stage, item);
       if (no) { problems.push(no); continue; }
       // The area of the room it stands in, so a later stage that runs in that area keeps it in use by the batch (equipment_use_v1).
       const room = 'room' in item ? item.room : item.code;
@@ -335,6 +338,7 @@ const BODIES: Record<Action, z.ZodTypeAny> = {
   'not-applicable': signBody.extend({ reason }),
   'release-hold': signBody,
   note: z.object({ text: reason, reference: z.string().trim().min(1).max(60).optional() }),
+  undo: signBody.extend({ reason }),
 };
 const BATCH_BODIES: Record<BatchAction, z.ZodTypeAny> = {
   'production-approve': signBody,
@@ -346,6 +350,8 @@ const BATCH_BODIES: Record<BatchAction, z.ZodTypeAny> = {
   reject: signBody.extend({ reason }),
   // Per lot the batch used: how much went back to stores unused (stock.ts issuedLots, returnProblems).
   terminate: signBody.extend({ reason, returns: z.array(z.object({ lot: z.string().max(60), value: z.string().trim().regex(/^\d+(\.\d+)?$/, 'a quantity, 0 or more'), unit: z.string().max(20) })).max(200).optional() }),
+  // Fix round 21 Nov 2026 (A5): production abandons a batch before any step is recorded.
+  abandon: signBody.extend({ reason }),
   'close-deviation': z.object({ note: z.number().int().positive(), reason }),
   // Owner decision 20 Nov 2026: a note without a number, closed here (reason, e-signature) or sent to Deviations.
   'close-exception': signBody.extend({ note: z.number().int().positive(), reason }),
@@ -389,7 +395,7 @@ async function issueValues(app: FastifyInstance, tx: Tx, doc: MasterDoc, raw: Re
   }
   return { ...typed, results };
 }
-const context = (doc: MasterDoc, v: StepView, user: SessionUser) => ({ state: v.state, events: v.events, flow: flowOf(doc, v.key), user,
+const context = (doc: MasterDoc, v: StepView, user: SessionUser, all: readonly StepEvent[] = v.events) => ({ state: v.state, events: v.events, flow: flowOf(doc, v.key), user, undo: undoRefusal(doc, all, v.key),
   needs: stepNeeds(doc.stages[v.key.stage], findBlock(doc.stages[v.key.stage]!.steps[v.key.step]!.block)) });
 
 /** "My work": what in this batch waits for the person, and where the batch stands. Null when nothing does. */
@@ -624,7 +630,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
           ...current, events: events.slice(-LAST_EVENTS), contentHash: stepHash(l.batch.id, s),
           // The label questions of what was entered by hand (shared/engine/links.ts).
           handFields: handFields(findBlock(l.doc.stages[s.key.stage]!.steps[s.key.step]!.block)?.fields ?? [], s.source),
-          actions: decided ? [] : NAMES.filter((a) => !refusal(a, context(l.doc, s, req.user!))),
+          actions: decided ? [] : NAMES.filter((a) => !refusal(a, context(l.doc, s, req.user!, l.events))),
           problems: s.state === 'in_progress' ? doneProblems(l.doc, s, l.now) : [],
         };
       }),
@@ -826,15 +832,16 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
               value: r.value, unit: r.unit, level: r.level, excursion: r.excursionStatus, deviation: r.deviationNumber })) } }
             : em && em.link !== 'ok' ? { emSource: { from: 'hand' as const, link: 'lims' as const, state: em.link } } : {};
           // Terminate: what went back to stores unused of each lot the batch used; material_use_v1 gives it back to MMS.
-          const issued = action === 'terminate' ? issuedLots(l.doc, openSteps(l.doc, l.events, l.now).steps) : [];
-          const wrong = returnProblems(issued, b.returns ?? []);
+          const issued = action === 'terminate' || action === 'abandon' ? issuedLots(l.doc, openSteps(l.doc, l.events, l.now).steps) : [];
+          // Abandoned: nothing was used, so all of it went back (packing: the bulk tablets issued at issue).
+          const wrong = action === 'abandon' ? [] : returnProblems(issued, b.returns ?? []);
           if (wrong.length) throw new StepError(400, 'invalid_values', wrong);
-          const returns = issued.map((x) => ({ ...x, value: b.returns!.find((r) => r.lot.toLowerCase() === x.lot.toLowerCase() && r.unit === x.unit)!.value }));
+          const returns = action === 'abandon' ? issued.map((x) => ({ ...x })) : issued.map((x) => ({ ...x, value: b.returns!.find((r) => r.lot.toLowerCase() === x.lot.toLowerCase() && r.unit === x.unit)!.value }));
           // QC approval (readers round 2): while LIMS answers, the report number is an approved CoA of this batch there
           // (picked, kept with its LIMS reference); absent or down, typed by hand and marked so for QA.
           const qc = action === 'qc-approve' ? await pullCoa(app, b.reportNo!, { kind: 'PRODUCT', batchNo: l.batch.batchNo, productCode: l.doc.header.productCode }) : null;
           if (qc?.problems.length) throw new StepError(409, 'not_in_lims', qc.problems);
-          const payload = { ...(action === 'terminate' ? { terminated: true } : {}), ...(returns.length ? { returns } : {}), ...(b.reportNo ? { reportNo: (qc?.values.coaNumber as string | undefined) ?? b.reportNo } : {}),
+          const payload = { ...(action === 'terminate' || action === 'abandon' ? { terminated: true } : {}), ...(action === 'abandon' ? { abandoned: true } : {}), ...(returns.length ? { returns } : {}), ...(b.reportNo ? { reportNo: (qc?.values.coaNumber as string | undefined) ?? b.reportNo } : {}),
             ...(qc ? { source: qc.source } : {}), ...(b.emReview ? { emReview: b.emReview } : {}), ...emPayload, ...(b.reason ? { reason: b.reason } : {}), ...(b.note ? { note: b.note } : {}) };
           const [ev] = await tx<{ id: number }[]>`
             insert into batch_events (batch_id, kind, payload, person_id) values (${id}, ${rule.event}, ${tx.json(payload)}, ${user.id}) returning id::int`;
@@ -878,7 +885,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
             throw new StepError(409, 'batch_closed', [decided ? `The batch is ${decided.payload.terminated ? 'terminated' : decided.kind}.` : 'Production has approved the batch record.']);
           }
           // 3. allowed?
-          const no = refusal(action, context(l.doc, v, user));
+          const no = refusal(action, context(l.doc, v, user, l.events));
           if (no) throw new StepError(no.status, no.error, [no.message]);
           if (action === 'done') { const p = doneProblems(l.doc, v, l.now); if (p.length) throw new StepError(409, 'not_ready', p); }
           if (signer && b.contentHash !== stepHash(id, v)) throw new StepError(409, 'content_changed', ['The step changed since you opened it.']);
