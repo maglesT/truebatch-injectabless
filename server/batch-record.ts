@@ -78,6 +78,8 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
   const ended = batchEvents.find((b) => b.payload.terminated);
   const endedText = ended && terminatedText(ended, plant);
   // What a terminated batch never did is not "yet" to come (owner 16 Nov 2026).
+  // 4,854 units: Indian grouping on a number, any other text as it is.
+  const grouped = (v: unknown) => (typeof v === 'string' || typeof v === 'number') && /^\d+$/.test(String(v)) ? `${Number(v).toLocaleString('en-IN')} units` : valueText(v as Value);
   const notYet = (what: string) => (ended ? `not ${what} (terminated)` : `not ${what} yet`);
   const facts = doc.pack ? steps.find((v) => v.id === '0.1.0.1') : undefined;
   const content: Content[] = [
@@ -85,8 +87,8 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
     { text: runs(`${h.productCode} · ${h.productName}`), fontSize: 11, margin: [0, 2, 0, 8] },
     { table: { widths: [90, '*', 90, '*', 90, '*'], body: [
       [th('Product'), small(`${h.productCode} · ${h.productName}`), th('Batch no.'), small(r.batch.batchNo, { bold: true }), th('Status'), small(statusWords(view.status, !!doc.pack, true), { bold: true })],
-      doc.pack ? [th('Pack'), small(`${doc.pack.type}, ${doc.pack.unitsPerPack} units per pack, ${doc.pack.packsPerCarton} packs per carton; ${doc.pack.destination}${doc.pack.mrp ? `, MRP Rs. ${doc.pack.mrp}` : ''}`),
-        th('Filled units'), small(`${doc.pack.bulkCode} · batch ${valueText(facts?.values.bulk)} · ${valueText(facts?.values.units)} issued · line ${valueText(facts?.values.line)}${facts?.results.expiry?.ok ? ` · ${facts.results.expiry.shown}` : ''}`),
+      doc.pack ? [th('Pack'), small(`${doc.pack.type}, ${doc.pack.unitsPerPack} ${doc.pack.unitsPerPack === 1 ? 'filled unit' : 'filled units'} per pack, ${doc.pack.packsPerCarton} ${doc.pack.packsPerCarton === 1 ? 'pack' : 'packs'} per carton; ${doc.pack.destination}${doc.pack.mrp ? `, MRP Rs. ${doc.pack.mrp}` : ''}`),
+        th('Filled units'), small(`${doc.pack.bulkCode} · batch ${valueText(facts?.values.bulk)} · ${grouped(facts?.values.units)} issued · line ${valueText(facts?.values.line)}${facts?.results.expiry?.ok ? ` · ${facts.results.expiry.shown}` : ''}`),
         th('Master version'), small(`version ${r.versionNo}`)]
         : [th('Batch'), small(batchText(doc)), th('Formula'), small(`mg per ${h.batchUnit === 'units' ? 'unit' : 'mL'}`), th('Master version'), small(`version ${r.versionNo}`)],
       [th('Issued'), small(`${r.issuedByName}, ${plant(r.batch.issuedAt)}`), th('Times'), small('plant time (IST)'), th('Changed values'), small('marked CHANGED; the original is struck through, with the reason', { color: RED })],

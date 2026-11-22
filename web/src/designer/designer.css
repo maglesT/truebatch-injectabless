@@ -68,7 +68,7 @@ p.cp-answer .link { margin-left: 8px; }
 }
 
 /* Forms */
-.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 14px; align-items: end; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px 14px; align-items: end; }
 .field-label { display: block; color: var(--muted); font-size: 0.9rem; font-weight: 500; margin-bottom: 5px; }
 .header-fields { display: grid; gap: 16px; }
 .calc-note { font-size: 0.9rem; align-self: center; }
@@ -182,8 +182,9 @@ td.num { display: table-cell; max-width: none; }
 .designer-page input[type='radio'], .overlay input[type='radio'] { accent-color: var(--brand); width: 18px; height: 18px; }
 
 /* Inputs fit their grid cells; sentence inputs stay small */
-.form-grid > label > select, .form-grid > label > input, .ex-values input, .step-settings textarea { width: 100%; min-width: 0; }
+.form-grid > label > select, .form-grid > label:not(.check) > input, .ex-values input, .step-settings textarea { width: 100%; min-width: 0; }
 .form-grid > label, .ex-values label { min-width: 0; }
+.form-grid > label.check > input { width: auto; flex: none; }
 .ex-values label { overflow-wrap: anywhere; }
 .card > *, .step-settings > * { min-width: 0; }
 .slot input.dec, .limit input.dec, .quantity input.dec { padding: 3px 7px; min-height: 0; }

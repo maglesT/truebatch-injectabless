@@ -473,7 +473,7 @@ function ResultCard({ label, r, mdUnit, big, stop, terminated }: { label: string
 function Summary({ row, block, mdUnit }: { row: StepRow; block: Block; mdUnit: string | null }) {
   return (
     <dl className="summary summary-box">
-      {block.fields.filter((f) => row.values[f.name] !== undefined).map((f) => <div key={f.name} style={{ display: 'contents' }}><dt>{f.label}</dt><dd>{valueText(row.values[f.name], mdUnit)}</dd></div>)}
+      {block.fields.filter((f) => row.values[f.name] !== undefined && row.values[f.name] !== null && row.values[f.name] !== '').map((f) => <div key={f.name} style={{ display: 'contents' }}><dt>{f.label}</dt><dd>{valueText(row.values[f.name], mdUnit)}</dd></div>)}
       {block.calcs.filter((c) => row.results[c.name]?.ok).map((c) => {
         const r = row.results[c.name]!;
         return <div key={c.name} style={{ display: 'contents' }}><dt>{c.label}</dt><dd>{headline(r) ?? ''} {c.name === row.notYet ? '(not yet: the rounds go on)' : tone(r) === 'bad' ? '(out of limits)' : tone(r) === 'ok' ? '(within limits)' : ''}</dd></div>;

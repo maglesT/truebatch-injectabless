@@ -18,6 +18,8 @@ export function ToReview({ me }: { me: Me }) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     let live = true;
+    // Only QC and QA have anything to review; others get the "no permission" line without a refused request.
+    if (!can(me, 'qc.approve') && !can(me, 'qa.release')) { setRows([]); return; }
     const load = (background: boolean) => api<ReviewItem[]>('GET', '/api/batches/to-review', undefined, background)
       .then((r) => { if (live) { setRows(r); setError(''); } }, (e) => live && setError(plainError(e)));
     void load(false);

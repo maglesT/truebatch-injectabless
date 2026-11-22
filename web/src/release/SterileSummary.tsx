@@ -47,7 +47,12 @@ function mediaFill(s: StepRow): string[] {
   return [`Line media fill ${valueText(s.values.apsReport)} (typed by hand)${s.values.apsDue !== undefined ? `, next due ${valueText(s.values.apsDue)}` : ''}`];
 }
 function said(s: StepRow, block: Block | undefined, checks: [string, StepRow['results'][string]][]): string[] {
-  return checks.length ? checks.map(([k, r]) => `${block?.calcs.find((c) => c.name === k)?.label ?? k}: ${shortTime(words(r.ok ? (k === s.notYet ? notYetText(r.check!.shown) : r.check!.shown) : ''))}`)
+  return checks.length ? checks.map(([k, r]) => {
+      const label = block?.calcs.find((c) => c.name === k)?.label ?? k;
+      const shown = shortTime(words(r.ok ? (k === s.notYet ? notYetText(r.check!.shown) : r.check!.shown) : ''));
+      // The worked line often starts with the check's own name: say it once.
+      return shown.startsWith(`${label}: `) ? shown : `${label}: ${shown}`;
+    })
     : (block?.fields ?? []).filter((f) => f.kind !== 'machine' && s.values[f.name] !== undefined).slice(0, 4).map((f) => `${f.label}: ${valueText(s.values[f.name])}`);
 }
 
