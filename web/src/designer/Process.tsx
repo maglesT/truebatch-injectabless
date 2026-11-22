@@ -32,6 +32,8 @@ function TimeLimits({ doc, onChange }: { doc: MasterDoc; onChange: (d: MasterDoc
           <label>From{point(i, l, 'from')}</label>
           <label>To{point(i, l, 'to')}</label>
           <label>At most (hours)<input type="number" min={0.1} step="any" aria-label={`Time limit ${i + 1} hours`} value={l.hours} onChange={(e) => set(i, { ...l, hours: Number(e.target.value) || 1 })} /></label>
+          <label>Validated maximum (hours, if known)<input type="number" min={0.1} step="any" aria-label={`Time limit ${i + 1} validated maximum`} value={l.validatedMaxHours ?? ''}
+            onChange={(e) => { const { validatedMaxHours: _, ...rest } = l; set(i, Number(e.target.value) > 0 ? { ...rest, validatedMaxHours: Number(e.target.value) } : rest); }} /></label>
           <button type="button" className="link" onClick={() => put(list.filter((_, j) => j !== i))}>Remove</button>
         </div>
       ))}
@@ -215,6 +217,8 @@ function StageForm({ doc, si, stage, onChange, roles, machineTypes, areas, roomT
             <label>Intermediate<input aria-label="Intermediate name" value={stage.produces.name} placeholder="e.g. dried granules" onChange={(e) => onChange({ ...stage, produces: { ...stage.produces!, name: e.target.value } })} /></label>
             <label>Hold time (hours)<input type="number" min={1} step="any" value={stage.produces.holdHours ?? ''}
               onChange={(e) => { const { holdHours: _, ...p } = stage.produces!; const h = Number(e.target.value); onChange({ ...stage, produces: e.target.value && h > 0 ? { ...p, holdHours: h } : p }); }} /></label>
+            <label>Validated maximum hold (hours, if known)<input type="number" min={1} step="any" aria-label="Validated maximum hold" value={stage.produces.validatedMaxHours ?? ''}
+              onChange={(e) => { const { validatedMaxHours: _, ...p } = stage.produces!; const h = Number(e.target.value); onChange({ ...stage, produces: h > 0 ? { ...p, validatedMaxHours: h } : p }); }} /></label>
           </div>
         )}
       </fieldset>

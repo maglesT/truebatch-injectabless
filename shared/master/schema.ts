@@ -76,7 +76,8 @@ export const stageSchema = z.object({
   roomTypes: z.array(text()).max(20).default([]),
   machineTypes: z.array(text()).max(50).default([]),
   role: text().default(''),
-  produces: z.object({ name: text().min(1), holdHours: z.number().positive().max(100_000).optional() }).strict().optional(),
+  // validatedMaxHours (template round, check 49): the longest hold the validation (or the stability study) supports; the shorter of it and the hold time applies.
+  produces: z.object({ name: text().min(1), holdHours: z.number().positive().max(100_000).optional(), validatedMaxHours: z.number().positive().max(100_000).optional() }).strict().optional(),
   // Stages whose intermediate this stage uses (preparations must be closed first; their hold time ends here).
   uses: z.array(keySchema).max(20).default([]),
   // Engine change 3: results that come days later (EM plates, BIs, bioburden). A preparation stage that starts after
@@ -160,7 +161,7 @@ export const headerSchema = z.object({
 // start of compounding → filtration, sterilisation → filling, total aseptic time …). Run on the hold-time timer.
 // A draft may leave a step empty (the master check asks for it).
 const pointSchema = z.object({ step: z.string().regex(/^([a-z0-9-]+\/[a-z0-9-]+)?$/, 'stage/step'), at: z.enum(['start', 'end']) }).strict();
-export const timeLimitSchema = z.object({ key: keySchema, name: text(), from: pointSchema, to: pointSchema, hours: z.number().positive().max(100_000) }).strict();
+export const timeLimitSchema = z.object({ key: keySchema, name: text(), from: pointSchema, to: pointSchema, hours: z.number().positive().max(100_000), validatedMaxHours: z.number().positive().max(100_000).optional() }).strict();
 
 // The author's answer to a calculation warning (checks.ts), keyed by the warning and its item. `about` is the warning
 // as answered: when the warning reads differently (the item changed), it needs a new answer.

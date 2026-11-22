@@ -168,6 +168,8 @@ const pointOf = (doc: MasterDoc, ref: string) => {
  * timer (kind 'hold': the same display, due soon, late and deviation note). A start is the step's first start, an end
  * its first time done (any copy or round), as a hold time runs from the first copy done.
  */
+/** The shorter of a hold time and the validated maximum (check 49: where a source gives two, the shorter applies). */
+const shorter = (a: number | undefined, b: number | undefined) => (a === undefined ? b : b === undefined ? a : Math.min(a, b));
 function limitTimers(doc: MasterDoc, events: readonly StepEvent[], now: Date): Timer[] {
   const out: Timer[] = [];
   for (const l of doc.timeLimits ?? []) {
@@ -179,11 +181,12 @@ function limitTimers(doc: MasterDoc, events: readonly StepEvent[], now: Date): T
     if (!from) continue;
     const id = `limit:${l.key}`;
     const skip = skipOf(events, id);
-    const at = skip?.at ?? plus(from, l.hours * 60);
+    const hours = shorter(l.hours, l.validatedMaxHours) ?? l.hours;
+    const at = skip?.at ?? plus(from, hours * 60);
     const reached = at1(b, l.to.at === 'end');
     const state = reached ? (reached > at && !skip ? 'late' : null) : skip ? 'due' : phase(from, at, now);
     const words = (p: { st: Step }, end: boolean) => `${end ? 'the end' : 'the start'} of “${stepTitle(doc, p.st)}”`;
-    if (state) out.push({ id, kind: 'hold', key: { stage: b.si, sub: 1, step: b.ti, round: 1 }, label: `${l.name} (at most ${l.hours} h, from ${words(a, l.from.at === 'end')} to ${words(b, l.to.at === 'end')})`, from, at, state, ...skipped(skip) });
+    if (state) out.push({ id, kind: 'hold', key: { stage: b.si, sub: 1, step: b.ti, round: 1 }, label: `${l.name} (at most ${hours} h, from ${words(a, l.from.at === 'end')} to ${words(b, l.to.at === 'end')})`, from, at, state, ...skipped(skip) });
   }
   return out;
 }
@@ -195,7 +198,7 @@ export function holdTimers(doc: MasterDoc, events: readonly StepEvent[], now: Da
     for (const u of s.uses) {
       const pi = doc.stages.findIndex((p) => p.key === u);
       const p = doc.stages[pi];
-      const hours = p?.produces?.holdHours;
+      const hours = shorter(p?.produces?.holdHours, p?.produces?.validatedMaxHours);
       if (!p?.produces || !hours) continue;
       const from = earliest(events.filter((e) => e.stage === pi && e.step === p.steps.length - 1), 'done');
       if (!from) continue;

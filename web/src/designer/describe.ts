@@ -42,7 +42,7 @@ function stageText(doc: MasterDoc, s: Stage): string {
     `Machine types: ${s.machineTypes.join(', ') || 'any'}. Rooms: ${s.roomTypes.join(', ') || 'any'}.`,
     uses.length ? `Uses ${uses.join(' and ')}.` : '',
     s.startsAfter ? `Results that come later: starts after ${s.startsAfter.replace('/', ' › ')} is done, runs beside the next stages and closes before production signs.` : '',
-    s.produces ? `Produces ${s.produces.name}, to be used within ${holdText(s.produces.holdHours)}.` : 'Produces no intermediate.'].filter(Boolean).join(' ');
+    s.produces ? `Produces ${s.produces.name}, to be used within ${holdText(s.produces.holdHours)}${s.produces.validatedMaxHours ? ` (validated for at most ${holdText(s.produces.validatedMaxHours)}; the shorter applies)` : ''}.` : 'Produces no intermediate.'].filter(Boolean).join(' ');
 }
 
 /** Master data's units of the materials, by item id: a unit is named as master data names it when the same (nos for units). */
@@ -128,7 +128,7 @@ export function describeMaster(doc: MasterDoc, units?: Units, { items = false } 
       text: `${c.name} (${c.code}), issued by count from its MMS lots.` })) }] : []),
     // Engine change 5: the time limits (TI-17), only when there are some.
     ...(doc.timeLimits?.length ? [{ key: 'time-limits', title: 'Time limits', lines: doc.timeLimits.map((l) => ({ key: l.key,
-      text: `${l.name}: at most ${l.hours} h from the ${l.from.at} of ${l.from.step.replace('/', ' › ')} to the ${l.to.at} of ${l.to.step.replace('/', ' › ')}; an overrun needs a deviation note.` })) }] : []),
+      text: `${l.name}: at most ${l.hours} h${l.validatedMaxHours ? ` (validated for at most ${l.validatedMaxHours} h; the shorter applies)` : ''} from the ${l.from.at} of ${l.from.step.replace('/', ' › ')} to the ${l.to.at} of ${l.to.step.replace('/', ' › ')}; an overrun needs a deviation note.` })) }] : []),
     ...doc.stages.map((s, i) => ({ key: `stage:${s.key}`, title: `Stage ${i + 1}: ${s.name}`, lines: [
       { key: 'about', text: stageText(doc, s) },
       ...s.steps.map((t, j) => ({ key: t.key, text: stepText(doc, t, j, units) })),

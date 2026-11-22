@@ -68,6 +68,7 @@ export function masterChecks(doc: MasterDoc, ctx: CheckContext = {}): Problem[] 
       else if (!doc.stages.find((s) => s.key === sk)?.steps.some((t) => t.key === tk)) error(`timeLimits[${i}]`, `${l.name || 'A time limit'}: ${p.step} is not a step of this master`, 'TI-17');
     }
     if (!l.name.trim()) error(`timeLimits[${i}]`, 'A time limit needs its name', 'TI-17');
+    if (l.validatedMaxHours && l.hours > l.validatedMaxHours) error(`timeLimits[${i}]`, `${l.name || 'A time limit'}: ${l.hours} h is longer than its validated maximum (${l.validatedMaxHours} h): use the validated maximum, or the shorter where two are given`);
     if (l.from.step === l.to.step && l.from.at === l.to.at) error(`timeLimits[${i}]`, `${l.name}: it starts and ends at the same point`, 'TI-17');
   });
   // TI-11: a master that weighs names the rooms its materials are weighed in (its balances are offered there).
@@ -78,6 +79,10 @@ export function masterChecks(doc: MasterDoc, ctx: CheckContext = {}): Problem[] 
     twice(s.steps.map((t) => t.key), `${path}.steps`);
     if (s.kind === 'sub-batch' && !s.count) error(path, 'A sub-batch stage needs the number of sub-batches');
     if (s.produces && !s.produces.holdHours) error(`${path}.produces`, `The intermediate ${s.produces.name} has no hold time`, 'TI-01');
+    // Library check 49 ⛔: a hold longer than the validated maximum (the shorter of the two sources applies).
+    if (s.produces?.holdHours && s.produces.validatedMaxHours && s.produces.holdHours > s.produces.validatedMaxHours) {
+      error(`${path}.produces`, `The hold time of ${s.produces.name} (${s.produces.holdHours} h) is longer than its validated maximum (${s.produces.validatedMaxHours} h): use the validated maximum, or the shorter where two are given`);
+    }
     // Everything the plain view would show as "(not set)" is reported here (the plain view's sentences, describe.ts).
     if (!s.role.trim()) warn(path, `Stage ${s.name} names no responsible role`);
     if (!doc.pack && s.kind !== 'preparation' && !s.steps.some((t) => findBlock(t.block)?.gmp === 'yield')) error(path, `Stage ${s.name} has no yield step`);
