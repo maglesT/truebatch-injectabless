@@ -5,6 +5,7 @@ import { MyWork } from './floor/MyWork.js';
 import { BatchScreen } from './floor/BatchScreen.js';
 import { go, useRoute } from './api-floor.js';
 import { Masters } from './designer/Masters.js';
+import { AllBatches } from './floor/AllBatches.js';
 import { ToReview } from './release/ToReview.js';
 import { ReleaseScreen } from './release/ReleaseScreen.js';
 import { product } from './product.js';
@@ -64,12 +65,13 @@ export function App() {
       <header className="bar">
         <span className="brand"><img className="brand-mark" src="/truebatch-mark.svg" alt="TrueBatch" /><span><b>{product.name}</b><small>by Medhanta</small></span></span>
         <nav>
-          <button className={page === 'home' && !route.batch && !release ? 'tab on' : 'tab'} onClick={() => { setPage('home'); go('#/'); }}>My work</button>
+          <button className={page === 'home' && !route.batch && !release && !route.all ? 'tab on' : 'tab'} onClick={() => { setPage('home'); go('#/'); }}>My work</button>
           {['qc.approve', 'qa.release'].some((c) => can(me, c)) && (
             <button className={release ? 'tab on' : 'tab'} onClick={() => { setPage('home'); go('#/release'); }}>To review</button>
           )}
+          <button className={route.all ? 'tab on' : 'tab'} onClick={() => { setPage('home'); go('#/batches'); }}>All batches</button>
           {['master.author', 'master.check', 'master.approve', 'batch.issue', 'view'].some((c) => can(me, c)) && (
-            <button className={page === 'masters' && !release ? 'tab on' : 'tab'} onClick={() => { setPage('masters'); go('#/'); }}>{product.masters}</button>
+            <button className={page === 'masters' && !release && !route.all ? 'tab on' : 'tab'} onClick={() => { setPage('masters'); go('#/'); }}>{product.masters}</button>
           )}
         </nav>
         <span className="who">
@@ -78,7 +80,7 @@ export function App() {
         </span>
       </header>
       <main className="page">
-        {release ? (release === 'list' ? <ToReview me={me} /> : <ReleaseScreen me={me} id={release} />) : (<>
+        {route.all ? <AllBatches /> : release ? (release === 'list' ? <ToReview me={me} /> : <ReleaseScreen me={me} id={release} />) : (<>
           {page === 'home' && (route.batch ? <BatchScreen me={me} id={route.batch} step={route.step} approve={route.approve} /> : <MyWork me={me} />)}
           {page === 'masters' && <Masters me={me} />}
         </>)}
