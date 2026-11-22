@@ -197,3 +197,6 @@
 .fill-card.bad { border-color: var(--bad, #c62828); }
 .fill-card.bad .countdown { color: var(--bad, #c62828); }
 .fill-card .big { width: 100%; }
+.all-go { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.all-filter { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.all-filter .search { flex: 1 1 260px; min-width: 0; }

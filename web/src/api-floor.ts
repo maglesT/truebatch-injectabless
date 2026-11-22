@@ -107,8 +107,9 @@ export function useLogbookItems(on: boolean): LogbookItems | null {
 }
 
 // ---- routes: #/ (My work), #/batch/12, #/batch/12/step/0.1.0.1, #/batch/12/approve, #/release (To review), #/release/12 ----
-export interface Route { batch?: number; step?: string; approve?: boolean; release?: number | 'list' }
+export interface Route { batch?: number; step?: string; approve?: boolean; release?: number | 'list'; all?: boolean }
 export function parseRoute(hash: string): Route {
+  if (/^#\/batches\/?$/.test(hash)) return { all: true };
   const r = /^#\/release(?:\/(\d+))?$/.exec(hash);
   if (r) return { release: r[1] ? Number(r[1]) : 'list' };
   const m = /^#\/batch\/(\d+)(?:\/(?:step\/([\d.]+)|(approve)))?$/.exec(hash);

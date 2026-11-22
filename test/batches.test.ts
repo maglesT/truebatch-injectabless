@@ -83,6 +83,19 @@ function pdfText(def: TDocumentDefinitions): string {
 }
 const recordText = async (id: number) => pdfText(batchRecordDoc(await recordInput(t.sql, (await loadBatch(t.sql, id))!), 'VIEWER'));
 
+describe('all batches', () => {
+  it('any signed-in person gets the list, newest first, with each batch\'s status', async () => {
+    const a = await issue(await effectiveMaster());
+    const b = await issue(await effectiveMaster());
+    const res = await as('asha', 'GET', '/api/batches/all');
+    expect(res.statusCode).toBe(200);
+    const rows = res.json() as { id: number; batchNo: string; status: string; issuedAt: string }[];
+    const ids = rows.map((r) => r.id);
+    expect(ids.indexOf(b.id)).toBeLessThan(ids.indexOf(a.id));
+    expect(rows.find((r) => r.id === a.id)).toMatchObject({ batchNo: a.batchNo, status: 'in production' });
+  });
+});
+
 describe('master versions', () => {
   it('a new master is version 1, a draft; the draft can be changed and checked', async () => {
     const res = await as('author', 'POST', '/api/masters', { doc: tablet() });

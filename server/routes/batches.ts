@@ -582,6 +582,17 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
     return out;
   });
 
+  // All batches: a plain list, newest first (the latest 200), so a released or closed batch is found from the menu.
+  app.get('/api/batches/all', anyUser, async () => {
+    const ids = await sql<{ id: number }[]>`select b.id::int from batches b order by b.issued_at desc, b.id desc limit 200`;
+    const out = [];
+    for (const { id } of ids) {
+      const l = (await loadBatch(sql, id))!;
+      out.push({ id, batchNo: l.batch.batchNo, productCode: l.doc.header.productCode, productName: l.doc.header.productName, status: view(l).status, issuedAt: l.batch.issuedAt });
+    }
+    return out;
+  });
+
   // To review: for QC the production-approved batches, for QA the QC-approved ones (TI-21), oldest decision first; for
   // QA also the batches still in production, which QA may terminate.
   app.get('/api/batches/to-review', { preHandler: requirePermission('truebatch_injectables.qc.approve', 'truebatch_injectables.qa.release') }, async (req) => {
