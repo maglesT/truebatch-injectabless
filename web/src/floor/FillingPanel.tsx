@@ -34,7 +34,7 @@ export function FillingPanel({ d, stage, now, here }: { d: BatchDetail; stage: n
   const log = of('interventions');
   return (
     <section className="filling" aria-label="Aseptic filling">
-      {card('Fill checks', ['fill', 'ffs-run', 'powder-fill'], 'Open the fill check')}
+      {card('Fill checks', ['fill', 'fill-suspension', 'ffs-run', 'powder-fill'], 'Open the fill check')}
       {card('Clean-air checks', ['em-filling'], 'Open the clean-air check')}
       {log && (
         <div className="fill-card">

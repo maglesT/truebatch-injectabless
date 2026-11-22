@@ -421,6 +421,15 @@ export const powderFill2: Block = {
   ],
 };
 
+// 14d. Fill a suspension or emulsion (template round, library check 50): the fill with the stirring answered every round,
+// never left out. Its own block, as the library keeps one block per setting that changes the fields.
+export const fillSuspension: Block = {
+  ...fill, id: 'fill-suspension', name: 'Fill a suspension or emulsion (stirring checked every round)',
+  instruction: 'At each round weigh one filled unit from every needle, check the stoppers and that the stirring is on, and read the counter.',
+  fields: fill.fields.map((f) => (f.name === 'stirring' ? { name: 'stirring', label: 'Stirring on', kind: 'yes-no' as const } : f)),
+  calcs: fill.calcs.map((c) => (c.name === 'stopperCheck' ? observe('stopperCheck', 'Stoppers seated and stirring on', ['stoppers', 'stirring']) : c)),
+};
+
 // 16. Terminal sterilisation (TI-24): one round per load; the lowest probe reaches the validated minimum F0 (or FH).
 export const terminalSterilise: Block = {
   id: 'terminal-sterilise', version: 1, name: 'Terminal sterilisation (each load)', checker: true,
@@ -508,6 +517,15 @@ export const headspaceGas: Block = {
     { name: 'balance', label: 'Units tested, accounted for', template: 'T4', args: { input: '$tested', parts: [{ name: 'passed', value: '$passed' }, { name: 'rejected', value: '$rejected' }], limit: { low: '100.0', high: '100.0', unit: '%' } } },
     { name: 'rejectRate', label: 'Reject rate', template: 'T3', args: { actual: '$rejected', theoretical: '$tested', limit: '$rejectLimit?' } },
   ],
+};
+
+// 18b. Headspace gas, version 2 (template round, library check 46): the lowest gas reading of the units against the minimum
+// the master gives (an inert gas is a minimum, oxygen a maximum). Version 1 stays for the recorded batches.
+export const headspaceGas2: Block = {
+  ...headspaceGas, version: 2,
+  fields: [...headspaceGas.fields, num('lowest', 'Lowest gas reading of the units tested', '%v/v')],
+  settings: [...headspaceGas.settings, limit('gasLimit', 'Gas limit (an inert gas: a minimum)', false)],
+  calcs: [...headspaceGas.calcs, within('gasCheck', 'Lowest gas reading', 'lowest', 'gasLimit')],
 };
 
 // 19. 100 % visual inspection (TI-30): rejects by category with their limits; units in = out + rejects + samples.

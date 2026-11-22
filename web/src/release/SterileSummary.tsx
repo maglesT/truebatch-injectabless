@@ -10,7 +10,7 @@ const GROUPS: { title: string; ids: string[] }[] = [
   { title: 'Sterile filtration and filter tests', ids: ['filter-test', 'filtration'] },
   { title: 'Aseptic set-up (isolator, RABS or BFS machine)', ids: ['aseptic-ready'] },
   // Run 3, H13: the fill itself (fill weights each round; the powder fill's humidity, the BFS parison temperature and air shower check).
-  { title: 'Filling', ids: ['fill', 'ffs-run', 'powder-fill'] },
+  { title: 'Filling', ids: ['fill', 'fill-suspension', 'ffs-run', 'powder-fill'] },
   { title: 'Clean air and microbiology', ids: ['em-filling', 'incubated-results', 'room-status'] },
   { title: 'Interventions and stoppages', ids: ['interventions'] },
   { title: 'Container closure', ids: ['seal-check', 'leak-test-100', 'headspace-gas', 'plunger-check', 'chamber-seal'] },

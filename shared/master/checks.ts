@@ -272,7 +272,7 @@ function formulaChecks(doc: MasterDoc, out: Problem[], error: (path: string, mes
     const target = new Dec(fh.fillVolumeMl).plus(fh.fillExcessMl ?? '0').times(fh.densityGPerMl);
     doc.stages.forEach((s, si) => s.steps.forEach((t, ti) => {
       const l = t.settings.meanLimit;
-      if (!['fill', 'ffs-run'].includes(t.block.id) || !l || typeof l !== 'object' || !('unit' in l)) return;
+      if (!['fill', 'fill-suspension', 'ffs-run'].includes(t.block.id) || !l || typeof l !== 'object' || !('unit' in l)) return;
       const k = ({ g: '1', kg: '1000', mg: '0.001' } as Record<string, string>)[l.unit];
       if (!k) return;
       const low = l.low !== undefined ? new Dec(l.low).times(k) : undefined, high = l.high !== undefined ? new Dec(l.high).times(k) : undefined;

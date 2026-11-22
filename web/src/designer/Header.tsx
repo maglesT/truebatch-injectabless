@@ -18,7 +18,7 @@ export function HeaderFields({ header, onChange, products, rooms }: { header: He
   const [picking, setPicking] = useState(!header.productItemId);
   const set = (k: keyof Header, v: string) => onChange({ ...header, [k]: v });
   // An optional number: empty removes it.
-  const opt = (k: 'densityGPerMl' | 'fillVolumeMl' | 'fillExcessMl', v: string) => onChange(v ? { ...header, [k]: v } : (({ [k]: _, ...h }) => h as Header)(header));
+  const opt = (k: 'densityGPerMl' | 'fillVolumeMl' | 'fillExcessMl' | 'densityAtC' | 'fillAtC', v: string) => onChange(v ? { ...header, [k]: v } : (({ [k]: _, ...h }) => h as Header)(header));
   const doc = { header, formula: [], stages: [] } as MasterDoc;
   const units = DECIMAL.test(header.batchSize) ? headerValue(doc, 'units') : undefined;
   const liquid = header.batchUnit !== 'units';
@@ -49,6 +49,8 @@ export function HeaderFields({ header, onChange, products, rooms }: { header: He
         </label>
         {/* Run 3, H14: a batch made in units has no density (its formula is per unit). */}
         {liquid && <label>Density (g/mL)<Decimal label="Density" placeholder={header.batchUnit === 'kg' ? 'needed' : 'not given'} value={header.densityGPerMl} onChange={(v) => opt('densityGPerMl', v)} /></label>}
+        {liquid && header.densityGPerMl && <label>Density stated at (°C)<Decimal label="Density temperature" placeholder="not given" value={header.densityAtC} onChange={(v) => opt('densityAtC', v)} /></label>}
+        {liquid && header.densityGPerMl && <label>Made up or filled at (°C)<Decimal label="Fill temperature" placeholder="not given" value={header.fillAtC} onChange={(v) => opt('fillAtC', v)} /></label>}
         {liquid && <label>Nominal fill (mL per container)<Decimal label="Nominal fill" value={header.fillVolumeMl} onChange={(v) => opt('fillVolumeMl', v)} /></label>}
         {liquid && <label>Fill excess (mL per container)<Decimal label="Fill excess" placeholder="none" value={header.fillExcessMl} onChange={(v) => opt('fillExcessMl', v)} /></label>}
         <label>Route (how it is made sterile)

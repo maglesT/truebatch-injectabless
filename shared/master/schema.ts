@@ -147,6 +147,9 @@ export const headerSchema = z.object({
   // The nominal fill per container and the fill excess (overfill), in mL (a batch in L or kg).
   fillVolumeMl: decimal.optional(),
   fillExcessMl: decimal.optional(),
+  // Library check 27: the temperature (°C) the density is stated at, and the temperature the bulk is made up or filled at.
+  densityAtC: decimal.optional(),
+  fillAtC: decimal.optional(),
   // TI-01: how the product is made sterile (terminal sterilisation after filling, sterile filtration and aseptic
   // processing, or both). A draft may leave it empty; the master check asks for it.
   route: z.enum(ROUTES).optional(),

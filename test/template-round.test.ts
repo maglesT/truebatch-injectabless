@@ -1,6 +1,7 @@
 // Template round (22 Nov 2026): the calculation layer of the injectables library wired into the blocks and the master checks.
 import { describe, expect, it } from 'vitest';
-import { latestBlock } from '../shared/blocks/index.js';
+import { BLOCKS, latestBlock } from '../shared/blocks/index.js';
+const blocks = BLOCKS;
 import { blockProblems } from '../shared/blocks/format.js';
 import { evaluate, parseKey } from '../shared/engine/index.js';
 import { masterSchema, type MasterDoc } from '../shared/master/schema.js';
@@ -69,5 +70,61 @@ describe('part 2: a hold above the validated maximum (check 49)', () => {
     expect(timers(doc, done, at(60))).toMatchObject([{ id: 'hold:0:1', from: at(10), at: at(130) }]);
     const none = small([{ produces: { name: 'bulk', holdHours: 2 } }, { uses: ['s0'] }]);
     expect(timers(none, done, at(60))).toMatchObject([{ at: at(130) }]);
+  });
+});
+
+describe('part 3: the cheap master checks', () => {
+  const liquid = { batchUnit: 'L', batchSize: '100', densityGPerMl: '1.0', fillVolumeMl: '10.0', fillExcessMl: '0.5', claimPer: 'mL' };
+  const api = (o: object) => ({ key: 'a', materialItemId: 'm', code: 'M', name: 'Examplol', mg: '50.0', role: 'api', ...o });
+  const wfi = { key: 'w', materialItemId: 'w', code: 'W', name: 'Water for injections', role: 'solvent' };
+  const doc = (h: object, formula: object[], steps: object[] = []): MasterDoc => masterSchema.parse({ header: { ...header, ...liquid, ...h }, formula,
+    stages: [{ key: 's', name: 'Stage', kind: 'normal', steps }] });
+  const all = (d: MasterDoc) => msgs(d).join('|');
+  const step = (id: string, settings: object, version?: number) => { const b = version ? latestBlockV(id, version) : latestBlock(id)!; return { ...stepFrom(b, []), key: id, settings: { ...stepFrom(b, []).settings, ...settings } }; };
+  const latestBlockV = (id: string, v: number) => blocks.find((b) => b.id === id && b.version === v)!;
+
+  it('the new blocks are valid: fill-suspension asks the stirring every round, headspace gas 2 has the gas minimum', () => {
+    for (const b of [latestBlock('fill-suspension')!, latestBlock('headspace-gas')!]) expect([b.id, blockProblems(b)]).toEqual([b.id, []]);
+    expect(latestBlock('headspace-gas')!.version).toBe(2);
+    const d = doc({ productName: 'Examplol injectable suspension' }, [api({}), wfi], [step('fill-suspension', { needles: '4', meanLimit: { low: '10.5', high: '10.7', unit: 'g' }, band: '2' })]);
+    const w = ['10.60', '10.61', '10.60', '10.59'].map(g);
+    const base = { weights: w, stoppers: 'yes', counter: { value: '1', unit: 'units' }, filling: 'going on' };
+    expect(run(d, { ...base, stirring: 'yes' }).stopperCheck).toMatchObject({ check: { pass: true } });
+    expect(run(d, { ...base, stirring: 'no' }).stopperCheck).toMatchObject({ check: { pass: false } });
+    expect(run(d, base).stopperCheck).toBeUndefined();
+  });
+  it('check 21/50: a suspension is filled with the stirring block, never the plain fill', () => {
+    const plain = doc({ productName: 'Examplol injectable suspension' }, [api({}), wfi], [step('fill', { needles: '4', meanLimit: { low: '10.5', high: '10.7', unit: 'g' }, band: '2' })]);
+    expect(all(plain)).toMatch(/checks the stirring every round/);
+    expect(all(doc({}, [api({}), wfi], [step('fill', { needles: '4', meanLimit: { low: '10.5', high: '10.7', unit: 'g' }, band: '2' })]))).not.toMatch(/stirring/);
+  });
+  it('check 46: an inert-gas headspace limit written as a maximum is refused; as a minimum it passes and checks the lowest reading', () => {
+    const gas = (lim: object) => doc({}, [api({}), wfi], [step('headspace-gas', { gas: 'argon', rejectLimit: { high: '1', unit: '%' }, gasLimit: lim })]);
+    expect(all(gas({ high: '70', unit: '%v/v' }))).toMatch(/inert-gas headspace limit is a minimum/);
+    expect(all(gas({ low: '70', unit: '%v/v' }))).not.toMatch(/inert-gas headspace limit/);
+    const d = gas({ low: '70', unit: '%v/v' });
+    const v = (n: string) => ({ standards: 'yes', tested: { value: '10', unit: 'units' }, rejected: { value: '0', unit: 'units' }, passed: { value: '10', unit: 'units' }, lowest: { value: n, unit: '%v/v' } });
+    expect(run(d, v('85')).gasCheck).toMatchObject({ check: { pass: true } });
+    expect(run(d, v('40')).gasCheck).toMatchObject({ check: { pass: false } });
+  });
+  it('checks 18 and 19: two label bases ask which drives; two forms of one active each name their basis', () => {
+    expect(all(doc({}, [api({ labelClaim: '40 mg (4000 IU)' }), wfi]))).toMatch(/label claim in mg and in IU/);
+    const two = (a: string, b: string) => doc({}, [api({ name: 'Betamethasone phosphate', labelClaim: a }), api({ key: 'b', name: 'Betamethasone acetate', labelClaim: b }), wfi]);
+    expect(all(two('3 mg', '3 mg'))).toMatch(/one of 2 forms of one active/);
+    expect(all(two('3 mg as base', '3 mg as base'))).not.toMatch(/forms of one active/);
+  });
+  it('check 27: the density at another temperature than the fill asks for a reason', () => {
+    expect(all(doc({ densityAtC: '20', fillAtC: '30' }, [api({}), wfi]))).toMatch(/density is stated at 20 °C but the bulk is made up or filled at 30 °C/);
+    expect(all(doc({ densityAtC: '20', fillAtC: '21' }, [api({}), wfi]))).not.toMatch(/stated at/);
+  });
+  it('v1.1 checks 1 to 5: dilution of a solution drug substance, electrolyte per gram, two irradiation doses, a label claim by fill volume, no q.s.', () => {
+    const ds = api({ adjust: { content: { formulaQuantityIs: 'dry' } } });
+    const dilute = step('bulk-adjust', { target: '50 mg/mL', donor: '0 mg/mL', direction: 'dilute with the vehicle', largestLimit: { high: '5', unit: 'kg' }, tolerance: '1' });
+    expect(all(doc({}, [ds, { key: 'e', materialItemId: 'e', code: 'E', name: 'Sodium chloride', mg: '9.0', role: 'excipient' }, wfi], [dilute]))).toMatch(/excipient's final concentration still equals the formula/);
+    expect(all(doc({}, [api({ labelClaim: '4 mEq/g' }), wfi]))).toMatch(/per gram of the salt or of the parent/);
+    const irr = (n: string) => ({ ...step('irradiation', { boxCount: '2', minDoseLimit: { low: '25', unit: 'kGy' }, maxDoseLimit: { high: '40', unit: 'kGy' } }), key: n });
+    expect(all(doc({}, [api({}), wfi], [irr('i1'), irr('i2')]))).toMatch(/Two irradiation steps have the same minimum dose/);
+    expect(all(doc({ claimPer: 'container (filled content)' }, [api({ labelClaim: '1 g', mg: '50.0' }), wfi]))).toMatch(/the fill volume is the claim ÷ the concentration/);
+    expect(all(doc({}, [api({ mg: '50.0' }), { key: 'x', materialItemId: 'x', code: 'X', name: 'Sodium chloride', mg: '9.0', role: 'excipient' }]))).toMatch(/No line is made up to volume/);
   });
 });

@@ -32,7 +32,7 @@ const NON_AQUEOUS = /\b(oil|oleate|benzyl benzoate|polyethylene glycol|peg|propy
 const SUSPENSION = /\b(suspension|emulsion|depot|microspheres?|liposom\w*)\b/i;
 
 // The steps that fill product: a liquid (vials, ampoules, syringes; form-fill-seal or blow-fill-seal) or a sterile powder.
-const LIQUID_FILLS = ['fill', 'ffs-run'];
+const LIQUID_FILLS = ['fill', 'fill-suspension', 'ffs-run'];
 const FILLS = [...LIQUID_FILLS, 'powder-fill'];
 
 export function sterileChecks(doc: MasterDoc, ask: Ask, refuse: Refuse): void {
@@ -50,12 +50,12 @@ export function sterileChecks(doc: MasterDoc, ask: Ask, refuse: Refuse): void {
   if (h.claimPer === 'container (filled content)' && h.fillVolumeMl) {
     doc.formula.forEach((l, i) => {
       if (l.role !== 'api' || !l.labelClaim || !l.mg) return;
-      const m = /^(\d+(?:\.\d+)?)\s*mg$/.exec(l.labelClaim.trim());
+      const m = /^(\d+(?:\.\d+)?)\s*(mg|g|µg|mcg)$/.exec(l.labelClaim.trim());
       if (!m) return;
       const got = new Dec(l.mg).times(h.fillVolumeMl!);
-      const want = new Dec(m[1]!);
+      const want = new Dec(m[1]!).times(({ mg: '1', g: '1000', 'µg': '0.001', mcg: '0.001' } as Record<string, string>)[m[2]!]!);
       if (got.minus(want).abs().div(want).times(100).gt('0.5')) {
-        refuse(`formula[${i}].labelClaim`, `${l.name}: ${l.mg} mg/mL × ${h.fillVolumeMl} mL nominal fill = ${got.toString()} mg, not the label claim ${l.labelClaim} per container. Write the label quantity per mL; a surplus is an overage with its reason (library check 14)`);
+        refuse(`formula[${i}].labelClaim`, `${l.name}: ${l.mg} mg/mL × ${h.fillVolumeMl} mL nominal fill = ${got.toString()} mg, not the label claim ${l.labelClaim} per container (the fill volume is the claim ÷ the concentration). Write the label quantity per mL; a surplus is an overage with its reason (library check 14)`);
       }
     });
   }
@@ -208,8 +208,63 @@ export function sterileChecks(doc: MasterDoc, ask: Ask, refuse: Refuse): void {
   }
 
   // 50 ⛔ a suspension or emulsion filled without content at start, middle and end.
-  if (SUSPENSION.test(h.productName) && steps.some((x) => x.id === 'fill') && steps.filter((x) => x.id === 'qa-sample').length < 3) {
+  if (SUSPENSION.test(h.productName) && steps.some((x) => x.id === 'fill' || x.id === 'fill-suspension') && steps.filter((x) => x.id === 'qa-sample').length < 3) {
     refuse('stages', 'A suspension or emulsion is sampled for content at the start, middle and end of filling (three samples), with stirring on in every fill round (library check 50)');
+  }
+  // 50 / 21 ⛔ a suspension filled by the plain fill block: stirring is optional there, so it could never be recorded.
+  if (SUSPENSION.test(h.productName)) {
+    for (const x of steps.filter((y) => y.id === 'fill')) refuse(x.path, 'A suspension or emulsion is filled with the block that checks the stirring every round ("Fill a suspension or emulsion"), not the plain fill (library check 50)');
+  }
+
+  // Template round part 3: the cheap master checks.
+  // 46 ⛔ an inert-gas headspace limit written as a maximum (it must be a minimum).
+  for (const x of steps.filter((y) => y.id === 'headspace-gas')) {
+    const l = limitOf(x.t.settings.gasLimit);
+    if (l && l.high !== undefined && l.low === undefined) refuse(`${x.path}.settings.gasLimit`, 'An inert-gas headspace limit is a minimum (the gas fraction at least this): written as a maximum, a container of air would pass (library check 46)');
+  }
+  // 18 ⚠️ two label bases on one line (mg and IU); 19 ⛔ two forms of one active each name their basis.
+  doc.formula.forEach((l, i) => {
+    if (l.role === 'api' && l.labelClaim && /\bmg\b/i.test(l.labelClaim) && /\b(IU|units?)\b/i.test(l.labelClaim)) {
+      ask(`formula[${i}].labelClaim`, `two-bases/${l.key}`, `${l.name} has a label claim in mg and in IU: one of them drives the lot adjustment, the other is only checked. Say which, with a reason.`, ['the mg claim drives it', 'the IU claim drives it'], true);
+    }
+  });
+  const forms = new Map<string, number[]>();
+  doc.formula.forEach((l, i) => { if (l.role === 'api') { const k = l.name.trim().split(/\s+/)[0]!.toLowerCase(); forms.set(k, [...(forms.get(k) ?? []), i]); } });
+  for (const idx of forms.values()) {
+    const bad = idx.filter((i) => !/\b(as|base|salt|parent|equivalent)\b/i.test(doc.formula[i]!.labelClaim ?? ''));
+    if (idx.length > 1 && bad.length) refuse(`formula[${bad[0]}].labelClaim`, `${doc.formula[bad[0]!]!.name} is one of ${idx.length} forms of one active: each line's label claim names its basis ("as base", "as salt" ...), so the forms are never added on different bases (library check 19)`);
+  }
+  // 27 ⚠️ the density stated at another temperature than the bulk is made up or filled at.
+  if (h.densityAtC && h.fillAtC && new Dec(h.densityAtC).minus(h.fillAtC).abs().gt(2)) {
+    ask('header.fillAtC', 'density-temperature', `The density is stated at ${h.densityAtC} °C but the bulk is made up or filled at ${h.fillAtC} °C: the fill weight is off by about 0.02 % per °C for water (more for oils). Give the density at the fill temperature, or confirm with a reason.`, ['density difference accepted'], true);
+  }
+  // v1.1 1 ⚠️ a dilution of a drug substance that is itself a solution: the excipients' final concentrations equal the formula.
+  const solutionDs = doc.formula.some((l) => l.role === 'api' && l.adjust?.content);
+  const diluting = steps.find((x) => x.id === 'bulk-adjust' && x.t.settings.direction === 'dilute with the vehicle');
+  if (solutionDs && diluting && doc.formula.some((l) => l.role === 'excipient')) {
+    ask(diluting.path, 'ds-dilution', 'The drug substance solution is diluted with the vehicle: its own excipients are diluted too. Confirm that each excipient\'s final concentration still equals the formula (library v1.1 check 1).', ['final concentrations checked'], true);
+  }
+  // v1.1 2 ⚠️ an electrolyte figure per gram names its basis.
+  doc.formula.forEach((l, i) => {
+    if (l.labelClaim && /\b(mEq|mmol)\s*(\/|per)\s*g\b/i.test(l.labelClaim) && !/\b(salt|parent|base|anhydrous|hydrate|as)\b/i.test(l.labelClaim)) {
+      ask(`formula[${i}].labelClaim`, `per-gram/${l.key}`, `${l.name}: an electrolyte figure per gram says whether it is per gram of the salt or of the parent (the ion).`, ['per gram of the salt', 'per gram of the parent'], true);
+    }
+  });
+  // v1.1 3 ⚠️ two irradiation steps: each its own validated minimum dose (not the same figure copied).
+  const irr = steps.filter((x) => x.id === 'irradiation');
+  if (irr.length > 1) {
+    const dose = (x: (typeof irr)[number]) => limitOf(x.t.settings.minDoseLimit)?.low;
+    irr.slice(1).forEach((x) => {
+      if (dose(x) !== undefined && irr.some((y) => y !== x && dose(y) === dose(x))) {
+        ask(`${x.path}.settings.minDoseLimit`, `irradiation-dose/${x.s.key}/${x.t.key}`, 'Two irradiation steps have the same minimum dose: each has its own validated minimum. Confirm the reference of each validation.', ['each validated, named in the instruction'], true);
+      }
+    });
+  }
+  // v1.1 5 ⚠️ no q.s. component: the lines must add up to the density, or the batch is fixed by masses.
+  if (h.batchUnit !== 'units' && h.densityGPerMl && doc.formula.length > 1 && !doc.formula.some((l) => l.role === 'solvent')) {
+    const total = doc.formula.filter((l) => l.mg).reduce((t, l) => t.plus(l.mg!), new Dec(0));
+    const want = new Dec(h.densityGPerMl).times(1000);
+    if (total.minus(want).abs().div(want).gt('0.01')) ask('formula', 'no-qs', `No line is made up to volume (q.s.), and the lines add up to ${total.toString()} mg/mL while the density says ${want.toString()} mg/mL: the batch is fixed by masses with the densities of the lots. Confirm, or add the vehicle.`, ['fixed by masses, confirmed'], true);
   }
 }
 
