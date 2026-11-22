@@ -51,7 +51,9 @@ function said(s: StepRow, block: Block | undefined, checks: [string, StepRow['re
       const label = block?.calcs.find((c) => c.name === k)?.label ?? k;
       const shown = shortTime(words(r.ok ? (k === s.notYet ? notYetText(r.check!.shown) : r.check!.shown) : ''));
       // The worked line often starts with the check's own name: say it once.
-      return shown.startsWith(`${label}: `) ? shown : `${label}: ${shown}`;
+      // ("Filling finished" + "Filling: going on: …" says "Filling: going on: …".)
+      const head = shown.split(': ')[0]!;
+      return shown.includes(': ') && label.startsWith(head) ? shown : `${label}: ${shown}`;
     })
     : (block?.fields ?? []).filter((f) => f.kind !== 'machine' && s.values[f.name] !== undefined).slice(0, 4).map((f) => `${f.label}: ${valueText(s.values[f.name])}`);
 }

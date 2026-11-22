@@ -84,7 +84,9 @@ export function parse(q: Q, what: string): Parsed {
   const unit = findUnit(unitText);
   if (unit === undefined) refuse(`${what}: the unit "${unitText}" is not in the unit list`);
   const shown = shownNumber(v, unit.symbol, { written: valueText });
-  return { v, unit, text: unit.symbol === '' ? shown : `${shown} ${unit.symbol}` };
+  // Display only: "1 unit", "1 pack" (the number and the logic are the same).
+  const word = shown === '1' && (unit.symbol === 'units' || unit.symbol === 'packs') ? unit.symbol.slice(0, -1) : unit.symbol;
+  return { v, unit, text: unit.symbol === '' ? shown : `${shown} ${word}` };
 }
 
 /** Number of decimals as written: "50.300" -> 3, "105" -> 0. */

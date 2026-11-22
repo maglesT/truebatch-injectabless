@@ -17,6 +17,7 @@ export function Masters({ me }: { me: Me }) {
   const [creating, setCreating] = useState<{ copyOf?: MasterRow } | null>(null);
   const [issuing, setIssuing] = useState<MasterRow | null>(null);
   const [q, setQ] = useState('');
+  const [retired, setRetired] = useState(false);
   const author = can(me, 'master.author');
   const load = async () => setRows(await listMasters());
   useEffect(() => {
@@ -27,7 +28,11 @@ export function Masters({ me }: { me: Me }) {
   if (open !== null) return <Designer me={me} versionId={open} onOpen={setOpen} onBack={() => { setOpen(null); void load(); }} />;
 
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-  const shown = (rows ?? []).filter((r) => words.every((w) => `${r.header.productCode} ${r.header.productName}`.toLowerCase().includes(w)));
+  const found = (rows ?? []).filter((r) => words.every((w) => `${r.header.productCode} ${r.header.productName}`.toLowerCase().includes(w)));
+  // Effective and open versions first, newest first; retired versions only when asked for.
+  const retiredCount = found.filter((r) => r.state === 'retired').length;
+  const shown = found.filter((r) => retired || r.state !== 'retired')
+    .sort((a, b) => Number(a.state === 'retired') - Number(b.state === 'retired') || Number(b.state === 'effective') - Number(a.state === 'effective') || b.createdAt.localeCompare(a.createdAt));
   const pending = (masterId: number) => rows?.some((r) => r.masterId === masterId && ['draft', 'in_review', 'approved'].includes(r.state));
   const addVersion = async (r: MasterRow) => {
     try { setOpen((await newVersion(r.masterId)).id); } catch (e) { setError(e instanceof ApiError ? e.message : String(e)); }
@@ -43,6 +48,7 @@ export function Masters({ me }: { me: Me }) {
       </div>
       {error && <p className="notice">{error}</p>}
       <input className="search" placeholder="Search by product code or name" aria-label="Search masters" value={q} onChange={(e) => setQ(e.target.value)} />
+      {retiredCount > 0 || retired ? <label className="check"><input type="checkbox" checked={retired} onChange={(e) => setRetired(e.target.checked)} /> Show retired versions ({retiredCount})</label> : null}
       {rows === null ? <div className="skel skel-block" /> : !rows.length ? (
         <div className="card placeholder"><p>No {product.masters.toLowerCase()} yet.{author && ' Start with New master.'}</p></div>
       ) : (

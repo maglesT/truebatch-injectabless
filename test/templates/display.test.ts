@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { t6Ratio } from '../../shared/templates/basic.js';
 import { Dec } from '../../shared/templates/dec.js';
 import { shownNumber } from '../../shared/templates/core.js';
 import { checkLimit } from '../../shared/templates/rounding.js';
@@ -62,5 +63,11 @@ describe('worked-line numbers (shownNumber)', () => {
       for (const r of Object.values(workedExample(d, si, ti).results)) if (r.ok && /\d\.\d{5,}/.test(r.shown)) long.push(r.shown);
     }));
     expect(long).toEqual([]);
+  });
+
+  it('a worked line says "1 unit", not "1 units", with the same number', () => {
+    const r = ok(t6Ratio({ mode: 'ratio', a: '4854 units', b: '1 units', unit: 'packs', decimals: 0 }));
+    expect(r.shown).toBe('4854 units ÷ 1 unit = 4854 packs');
+    expect(r.value.toFixed(0)).toBe('4854');
   });
 });
