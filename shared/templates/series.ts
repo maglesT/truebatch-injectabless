@@ -141,6 +141,8 @@ export interface Around {
   /** What the centre is, for the worked line, e.g. "target weight from the blend assay". */
   readonly name?: string;
   readonly plusMinusPercent?: string;
+  /** Show the centre rounded to this many decimals, as the step shows the target it came from ("1.1170 g"), not cut ("1.116… g"). */
+  readonly centreDecimals?: number;
   /** Absolute ± in the centre's unit, e.g. "15.0 mg". */
   readonly plusMinus?: Q;
 }
@@ -156,7 +158,9 @@ export function c1WithinLimits(i: C1Input): Outcome<{ readonly deviation?: Dec }
       return { ok: true, value: p.v, unit: p.unit.symbol, check, shown: check.shown };
     }
     const a = i.around;
-    const c = parseAny(a.centre, 'The centre value');
+    const c0 = parseAny(a.centre, 'The centre value');
+    // Display only (centreDecimals): the check reads the full value.
+    const c = a.centreDecimals !== undefined ? { ...c0, text: `${fmt(c0.v, a.centreDecimals)} ${c0.unit.symbol}` } : c0;
     sameKind([p, c], 'Within limits');
     if ((a.plusMinusPercent === undefined) === (a.plusMinus === undefined)) refuse('Give the band either as ± % or as ± an amount (one of them)');
     const dev = to(p, c.unit).minus(c.v);

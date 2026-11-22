@@ -292,6 +292,14 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
 
   const resultRows = [...block.settings.map((s) => [s.name, s.label] as const), ...block.calcs.map((c) => [c.name, c.label] as const)]
     .filter(([n]) => row.results[n]).map(([n, label]) => ({ n, label, r: row.results[n]! }));
+  // Readings typed before the lot is recorded have no target to be judged against: say so, not "Out of limits".
+  const noTarget = block.calcs.find((c) => c.name === 'target' && c.template === 'T9') && !row.results.target?.ok && Object.keys(row.values).some((k) => k === 'weights');
+  if (noTarget) {
+    const i = resultRows.findIndex((x) => x.n === 'target');
+    const note = { n: 'target', label: block.calcs.find((c) => c.name === 'target')!.label, r: { ok: false as const, message: 'Target not set yet (record the lot first).' } as Stored };
+    if (i >= 0) resultRows[i] = note; else resultRows.unshift(note);
+    for (const n of ['meanCheck', 'each']) { const j = resultRows.findIndex((x) => x.n === n); if (j >= 0) resultRows.splice(j, 1); }
+  }
 
   return (
     <>
