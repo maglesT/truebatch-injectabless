@@ -153,3 +153,61 @@ function limitText(l: Limit): string {
   if (l.low !== undefined) return `not less than ${l.low} ${l.unit}`;
   return `not more than ${l.high ?? ''} ${l.unit}`;
 }
+
+export interface I21ListsInput {
+  /** The recipe in one line: phases separated by "|", each "name; duration; parameter range", e.g. "Hold; 15 to 20; 121 to 124". A range is "a to b", "at least a", "at most b" or "-" (none). */
+  readonly recipe: string;
+  /** Per phase, in the recipe's order: the time the phase took (min), and the lowest and highest value of the parameter. */
+  readonly minutes: readonly Q[];
+  readonly parameterMin: readonly Q[];
+  readonly parameterMax: readonly Q[];
+  /** The parameter's name and its unit ("Shelf temperature", "°C"). */
+  readonly parameter: string;
+  readonly unit: string;
+}
+
+const edge = (text: string, what: string) => {
+  const t = text.trim();
+  if (t === '-' || t === '') return {};
+  let m = /^(-?[\d.]+)\s+to\s+(-?[\d.]+)$/.exec(t);
+  if (m) return { low: m[1] as string, high: m[2] as string };
+  m = /^at least\s+(-?[\d.]+)$/.exec(t);
+  if (m) return { low: m[1] as string };
+  m = /^at most\s+(-?[\d.]+)$/.exec(t);
+  if (m) return { high: m[1] as string };
+  return refuse(`${what}: "${text}" is not a range: write "a to b", "at least a", "at most b" or "-"`);
+};
+
+/**
+ * I21 from lists (template round, 22 Nov 2026): the recipe is one text line of phases; the record is the time of each phase and
+ * the lowest and highest of its key parameter, in the recipe's order (the phases run one after the other, so the order is the
+ * list's). The total cycle time is the sum; a phase out of its time or band fails the check.
+ */
+export function i21FromLists(i: I21ListsInput): Outcome<I21Extra> {
+  return run(() => {
+    const phases = i.recipe.split('|').map((x) => x.trim()).filter(Boolean).map((line) => {
+      const [name, dur, par] = line.split(';').map((x) => x.trim());
+      if (!name || dur === undefined) refuse(`The recipe phase "${line}" needs its name and its duration: "Hold; 15 to 20; 121 to 124"`);
+      const d = edge(dur, `${name}: the duration`);
+      const p = edge(par ?? '-', `${name}: the ${i.parameter}`);
+      return { name, ...(d.low !== undefined || d.high !== undefined ? { duration: { ...d, unit: 'min' } } : {}),
+        ...(p.low !== undefined || p.high !== undefined ? { parameters: [{ name: i.parameter, unit: i.unit, ...p }] } : {}) } as I21Phase;
+    });
+    if (phases.length === 0) refuse('The recipe has no phases');
+    if (i.minutes.length !== phases.length || i.parameterMin.length !== phases.length || i.parameterMax.length !== phases.length) {
+      refuse(`The recipe has ${phases.length} phases: record the time, lowest and highest of each phase (${i.minutes.length}, ${i.parameterMin.length} and ${i.parameterMax.length} given)`);
+    }
+    const base = Date.UTC(2000, 0, 1) / 1000;
+    const stamp = (s: Dec) => new Date((base + s.toNumber()) * 1000).toISOString().slice(0, 19) + 'Z';
+    let at = new Dec(0);
+    const recorded = phases.map((p, n) => {
+      const mins = to(parse(i.minutes[n] as Q, `${p.name}: the time`), 'min');
+      const start = at;
+      at = at.plus(mins.times(60));
+      return { phase: p.name, start: stamp(start), end: stamp(at), ...(p.parameters ? { parameters: [{ name: i.parameter, min: i.parameterMin[n] as Q, max: i.parameterMax[n] as Q }] } : {}) };
+    });
+    const o = i21Cycle({ recipe: phases, recorded });
+    if (!o.ok) refuse(o.message);
+    return o;
+  });
+}

@@ -24,7 +24,7 @@ export const HEADER_VALUES = ['batchSize', 'batchVolume', 'batchMass', 'units', 
 // per batch, or the density).
 export const PER_UNIT_HEADERS: readonly (typeof HEADER_VALUES)[number][] = ['fillVolume', 'fillTarget'];
 export const settingValueSchema = z.union([
-  text(),
+  text(1000),
   limitSchema,
   z.object({ ref: z.string().regex(/^[a-z0-9-]+\/[a-z0-9-]+\/[a-zA-Z0-9]+$/, 'stage/step/name') }).strict(),
   z.object({ formula: keySchema, adjusted: z.boolean().optional() }).strict(),

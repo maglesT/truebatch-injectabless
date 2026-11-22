@@ -101,3 +101,38 @@ export function i20Lethality(i: I20Input): Outcome<I20Extra> {
     return { ok: true, value: low.value, unit: 'F-min', probes, lowest: low.name, shown: head, ...(check === undefined ? {} : { check }) };
   });
 }
+
+export interface I20ReadingsInput {
+  /** The temperature readings of each probe (up to three), taken at the same fixed interval from the start. */
+  readonly probe1: readonly Q[];
+  readonly probe2?: readonly Q[];
+  readonly probe3?: readonly Q[];
+  /** The time between two readings, e.g. "1 min": it is also the largest allowed gap. */
+  readonly interval: Q;
+  readonly tref?: Q;
+  readonly z?: Q;
+  readonly cutIn?: Q;
+  readonly limit?: Limit;
+  readonly decimals?: number;
+}
+
+/**
+ * I20 from the printout's temperature lists (template round, 22 Nov 2026): each probe's readings at a fixed interval
+ * become timed readings (0, 1, 2 intervals ...) for I20, so the F-value of every probe is worked out and the lowest probe
+ * is the result. Dry heat (FH) is the same with its own reference temperature and z-value.
+ */
+export function i20FromReadings(i: I20ReadingsInput): Outcome<I20Extra> {
+  return run(() => {
+    const gap = parse(i.interval, 'The time between readings');
+    needKind(gap, ['time'], 'The time between readings');
+    if (!gap.v.isPositive() || gap.v.isZero()) refuse('The time between readings must be more than zero');
+    const secs = to(gap, 's');
+    const base = Date.UTC(2000, 0, 1) / 1000;
+    const stamp = (n: number) => new Date((base + secs.times(n).toNumber()) * 1000).toISOString().slice(0, 19) + 'Z';
+    const probes = [i.probe1, i.probe2, i.probe3].flatMap((r, k) => (r === undefined ? [] : [{ name: `Probe ${k + 1}`, readings: r.map((v, n) => ({ time: stamp(n), value: v })) }]));
+    const o = i20Lethality({ probes, maxInterval: i.interval, ...(i.tref === undefined ? {} : { tref: i.tref }), ...(i.z === undefined ? {} : { z: i.z }),
+      ...(i.cutIn === undefined ? {} : { cutIn: i.cutIn }), ...(i.limit === undefined ? {} : { limit: i.limit }), ...(i.decimals === undefined ? {} : { decimals: i.decimals }) });
+    if (!o.ok) refuse(o.message);
+    return o;
+  });
+}

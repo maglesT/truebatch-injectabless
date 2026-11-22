@@ -1,4 +1,5 @@
 import type { Block, BlockField } from './format.js';
+import { cycleCalc, cycleFields, cycleSettings } from './cycle-parts.js';
 
 // TrueBatch Injectables library v1, section 4.2: dispensing, compounding, filtration, components, filling, sterilisation
 // and inspection. Each block is data; the engine runs it. Where a library "setting" changes which fields are needed, the
@@ -309,6 +310,14 @@ export const sterilise: Block = {
   ],
 };
 
+// 13b. Sterilise items, version 2: the cycle against its validated recipe (I21) beside the load checks.
+export const sterilise2: Block = {
+  ...sterilise, version: 2,
+  fields: [...sterilise.fields, ...cycleFields],
+  settings: [...sterilise.settings, ...cycleSettings],
+  calcs: [...sterilise.calcs, cycleCalc],
+};
+
 // 14. Fill with periodic fill-weight checks: one net weight per needle (N4), mean and every value in its band.
 export const fill: Block = {
   id: 'fill', version: 1, name: 'Fill with periodic fill-weight checks', checker: false, periodic: { maxMinutes: 1440 }, stop: 'done',
@@ -449,6 +458,26 @@ export const terminalSterilise: Block = {
     within('maxProductCheck', 'Highest product temperature', 'maxProduct', 'maxProductLimit?'),
     observe('loadCheck', 'Load pattern, indicators, kept apart', ['pattern', 'indicators', 'apart']),
   ],
+};
+
+// 16a. Terminal sterilisation, version 2 (template round part 5, I20): the F-value of each probe is worked out from its
+// temperature printout (readings at a fixed interval); the lowest probe is the result. Dry heat is the same with its own
+// reference temperature and z-value (FH). Version 1 (the F typed from the printout) stays for the recorded batches.
+export const terminalSterilise2: Block = {
+  ...terminalSterilise, version: 2,
+  instruction: 'Load as validated, run the validated cycle, record each probe\'s temperatures from the printout (the lethality is worked out), and check the indicators; keep sterilised and unsterilised units apart.',
+  fields: terminalSterilise.fields.flatMap((f) => f.name === 'lowestF'
+    ? [{ name: 'probe1', label: 'Probe 1: temperatures from the printout', kind: 'number' as const, unit: '°C', count: '$readings' },
+      { name: 'probe2', label: 'Probe 2: temperatures from the printout', kind: 'number' as const, unit: '°C', count: '$readings', optional: true },
+      { name: 'probe3', label: 'Probe 3: temperatures from the printout', kind: 'number' as const, unit: '°C', count: '$readings', optional: true }]
+    : [f]),
+  settings: [...terminalSterilise.settings,
+    { name: 'readings', label: 'Temperature readings per probe', kind: 'number' }, { name: 'interval', label: 'Time between readings (e.g. "1 min")', kind: 'text' },
+    { name: 'tref', label: 'Reference temperature (moist heat: 121.1 °C; dry heat: its own, e.g. 170 °C)', kind: 'text', optional: true },
+    { name: 'zvalue', label: 'z-value (moist heat: 10 °C; dry heat: its own, e.g. 20 °C)', kind: 'text', optional: true }],
+  calcs: terminalSterilise.calcs.map((c) => (c.name === 'lethality'
+    ? { name: 'lethality', label: 'Lethality of the lowest probe', template: 'I20R', args: { probe1: '$probe1', probe2: '$probe2?', probe3: '$probe3?', interval: '$interval', tref: '$tref?', z: '$zvalue?', limit: '$lethalityLimit' } }
+    : c)),
 };
 
 // 16b. A heat step below sterilising lethality (post-aseptic heat treatment, pasteurisation): no F0 minimum; it never

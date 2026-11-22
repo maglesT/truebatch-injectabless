@@ -18,7 +18,7 @@ export { c7SamplingPlan, codeLetter, plan } from './sampling.js';
 // TrueBatch Injectables library v1: the new templates I18-I21 (I22 with the counts).
 export { i18Density } from './fill.js';
 export { i19FilterIntegrity } from './filter.js';
-export { i20Lethality } from './lethality.js';
-export { i21Cycle } from './cycle.js';
+export { i20Lethality, i20FromReadings } from './lethality.js';
+export { i21Cycle, i21FromLists } from './cycle.js';
 export { i22Count, type I22Input, type CountSample } from './counts.js';
 export { t27Expiry, c8PrintedData, c9SerialCodes, expiryMonth, printedMonth, gs1 } from './packing.js';

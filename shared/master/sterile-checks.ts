@@ -217,6 +217,17 @@ export function sterileChecks(doc: MasterDoc, ask: Ask, refuse: Refuse): void {
     for (const x of steps.filter((y) => y.id === 'fill')) refuse(x.path, 'A suspension or emulsion is filled with the block that checks the stirring every round ("Fill a suspension or emulsion"), not the plain fill (library check 50)');
   }
 
+  // Template round part 5. The recipe has as many phases as the step says; dry heat has its own reference temperature and z-value (FH).
+  for (const x of steps) {
+    const recipe = x.t.settings.phaseRecipe, n = x.t.settings.phases;
+    if (typeof recipe === 'string' && typeof n === 'string' && /^\d+$/.test(n) && recipe.split('|').filter((r) => r.trim()).length !== Number(n)) {
+      refuse(`${x.path}.settings.phases`, `The recipe lists ${recipe.split('|').filter((r) => r.trim()).length} phases but the step records ${n}: they must be the same`);
+    }
+    if (x.id === 'terminal-sterilise' && x.t.block.version >= 2 && x.t.settings.medium === 'dry heat (sealed ampoules)' && (!x.t.settings.tref || !x.t.settings.zvalue)) {
+      refuse(`${x.path}.settings.tref`, 'Dry heat is not worked out at 121.1 °C and z 10 °C: give its own reference temperature and z-value from the validation (FH)', 'TI-24');
+    }
+  }
+
   // Template round part 4 (I22). The clean-air table is the limit: a tighter action limit may be set, never a looser one (also
   // refused at the step by I22). 45 ⚠️ a bioburden limit written per mL instead of per 100 mL.
   for (const x of steps.filter((y) => y.id === 'em-filling' && y.t.block.version >= 2)) {

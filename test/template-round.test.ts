@@ -167,3 +167,47 @@ describe('part 4: counts through I22, limits from the clean-air table', () => {
     expect(all(doc('incubated-bioburden', { bioburdenLimit: '0.1 CFU/mL' }))).toMatch(/per mL: a bioburden limit is written per 100 mL/);
   });
 });
+
+describe('part 5: the cycle against its recipe (I21) and the lethality per probe (I20)', () => {
+  const api = { key: 'a', materialItemId: 'm', code: 'M', name: 'Examplol', mg: '50.0', role: 'api' };
+  const liquid = { batchUnit: 'L', batchSize: '100', densityGPerMl: '1.0', fillVolumeMl: '10.0', fillExcessMl: '0.5', claimPer: 'mL', route: 'terminal' };
+  const doc = (id: string, settings: object): MasterDoc => { const b = latestBlock(id)!; return masterSchema.parse({ header: { ...header, ...liquid }, formula: [api],
+    stages: [{ key: 's', name: 'Stage', kind: 'normal', steps: [{ ...stepFrom(b, []), key: 't', settings: { ...stepFrom(b, []).settings, ...settings } }] }] }); };
+  const all = (d: MasterDoc) => msgs(d).join('|');
+  const c = (n: string) => ({ value: n, unit: '°C' });
+  it('the new blocks are valid and are the latest versions', () => {
+    for (const id of ['terminal-sterilise', 'sterilise', 'lyo-cycle']) { const b = latestBlock(id)!; expect([id, b.version, blockProblems(b)]).toEqual([id, 2, []]); }
+  });
+  it('terminal sterilisation: the F-value of each probe from its temperatures every minute; the lowest probe is the result', () => {
+    const d = doc('terminal-sterilise', { medium: 'moist heat', lethalityLimit: { low: '15.0', unit: 'F-min' }, readings: '16', interval: '1 min' });
+    const hot = Array.from({ length: 16 }, () => c('121.1'));
+    const cold = Array.from({ length: 16 }, () => c('120.1'));
+    const r = run(d, { probe1: hot, probe2: cold, units: { value: '100', unit: 'units' } });
+    expect(r.lethality).toMatchObject({ ok: true, unit: 'F-min', lowest: 'Probe 2', check: { pass: false } });
+    expect(run(d, { probe1: hot }).lethality).toMatchObject({ ok: true, check: { pass: true }, lowest: 'Probe 1' });
+    expect((r.lethality as { shown: string }).shown).toMatch(/Probe 1 15\.0 F-min, Probe 2 /);
+  });
+  it('dry heat is worked out with its own FH reference (170 °C, z 20 °C), and the master must give them', () => {
+    const settings = { medium: 'dry heat (sealed ampoules)', lethalityLimit: { low: '30.0', unit: 'F-min' }, readings: '31', interval: '1 min' };
+    expect(all(doc('terminal-sterilise', settings))).toMatch(/Dry heat is not worked out at 121\.1/);
+    const d = doc('terminal-sterilise', { ...settings, tref: '170 °C', zvalue: '20 °C' });
+    expect(all(d)).not.toMatch(/Dry heat is not worked out/);
+    expect(run(d, { probe1: Array.from({ length: 31 }, () => c('170')) }).lethality).toMatchObject({ ok: true, check: { pass: true } });
+  });
+  it('an autoclave and a freeze-dryer cycle: each phase in the recipe is recorded with its time and range, in the recipe\'s order, and the total is shown', () => {
+    const d = doc('sterilise', { what: 'items and parts', exposureLimit: { low: '15', unit: 'min' }, lowestLimit: { low: '121', unit: '°C' },
+      phases: '3', phaseRecipe: 'Heat-up; 10 to 30; 100 to 124 | Exposure; 15 to 20; 121 to 124 | Cool-down; at least 10; -', paramName: 'Chamber temperature', paramUnit: '°C' });
+    expect(all(d)).not.toMatch(/recipe lists/);
+    const rec = (m: string[], lo: string[], hi: string[]) => ({ phaseMinutes: m.map((x) => ({ value: x, unit: 'min' })), phaseMin: lo.map(c), phaseMax: hi.map(c) });
+    const ok = run(d, rec(['20', '16', '12'], ['100', '121.5', '60'], ['121', '123', '121']));
+    expect(ok.cycle).toMatchObject({ ok: true, value: '48', unit: 'min', check: { pass: true } });
+    const bad = run(d, rec(['20', '25', '12'], ['100', '119', '60'], ['121', '123', '121']));
+    expect(bad.cycle).toMatchObject({ ok: true, check: { pass: false } });
+    expect((bad.cycle as { shown: string }).shown).toMatch(/Exposure: duration 25\.0 min is out of limits/);
+    expect((bad.cycle as { shown: string }).shown).toMatch(/Exposure: Chamber temperature minimum 119 °C is out of limits/);
+    expect(run(d, rec(['20', '16'], ['100', '121.5'], ['121', '123'])).cycle).toMatchObject({ ok: false });
+    expect(all(doc('sterilise', { phases: '2', phaseRecipe: 'A; -; - | B; -; - | C; -; -', paramName: 'T', paramUnit: '°C' }))).toMatch(/lists 3 phases but the step records 2/);
+    const lyo = doc('lyo-cycle', { phases: '2', phaseRecipe: 'Freezing; 120 to 240; -50 to -40 | Primary drying; at least 600; -45 to -25', paramName: 'Shelf temperature', paramUnit: '°C' });
+    expect(run(lyo, rec(['150', '700'], ['-50', '-44'], ['-41', '-26'])).cycle).toMatchObject({ ok: true, check: { pass: true } });
+  });
+});

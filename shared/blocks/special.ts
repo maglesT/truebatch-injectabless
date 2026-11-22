@@ -1,4 +1,5 @@
 import type { Block } from './format.js';
+import { cycleCalc, cycleFields, cycleSettings } from './cycle-parts.js';
 
 // TrueBatch Injectables library v1, sections 4.3 to 4.8: aseptic processing, freeze-drying, prefilled syringes and
 // cartridges, bags and bottles, emulsions/suspensions/depots/liposomes, multi-chamber containers. Data only.
@@ -231,6 +232,16 @@ export const lyoCycle: Block = {
     within('productCheck', 'Product temperature', 'productMax?', 'productLimit?'), within('riseCheck', 'End of primary drying', 'pressureRise?', 'riseLimit?'),
     observe('alarmCheck', 'No alarm', ['noAlarm']),
   ],
+};
+
+// 31b. Freeze-drying cycle, version 2 (template round part 5, I21): the cycle against its validated recipe: every phase
+// (annealing included when the recipe has it) with its time and the lowest and highest shelf temperature or pressure, the
+// total cycle time, beside the limits of version 1.
+export const lyoCycle2: Block = {
+  ...lyoCycle, version: 2,
+  fields: [...lyoCycle.fields, ...cycleFields],
+  settings: [...lyoCycle.settings, ...cycleSettings],
+  calcs: [...lyoCycle.calcs, cycleCalc],
 };
 
 // 32. Stopper and unload: backfill, stoppering pressure, vials unloaded and damaged, time to capping.
