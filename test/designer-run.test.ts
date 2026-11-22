@@ -83,12 +83,12 @@ describe('designer findings of the TrueBatch Tablets 17 Nov 2026 run', () => {
   });
 
   it('pick lists offer master data\'s bulk products for a master, its packs for a packing master; no kind yet: both (F3, F14)', () => {
-    const p = (code: string, kind?: 'bulk' | 'pack' | null) => ({ code, kind });
+    const p = (code: string, kind?: 'bulk' | 'pack' | null) => ({ code, kind, dosageForm: 'Solution for injection' });
     const all = [p('FG-ONDA2', 'bulk'), p('PK-ONDA2-V10', 'pack'), p('FG-CEFT1', null), p('FG-HEP5')];
     expect(ownProducts(all, 'bulk').map((x) => x.code)).toEqual(['FG-ONDA2', 'FG-CEFT1', 'FG-HEP5']);
     expect(ownProducts(all, 'pack').map((x) => x.code)).toEqual(['PK-ONDA2-V10', 'FG-CEFT1', 'FG-HEP5']);
     // Tablets, capsules and syrups of the shared master data are not offered.
-    expect(ownProducts([{ code: 'A', kind: 'bulk' as const, dosageForm: 'Film-coated tablet' }, { code: 'B', kind: 'bulk' as const, dosageForm: 'Powder for solution for injection' }], 'bulk').map((x) => x.code)).toEqual(['B']);
+    expect(ownProducts([{ code: 'A', kind: 'bulk' as const, dosageForm: 'Film-coated tablet' }, { code: 'B', kind: 'bulk' as const, dosageForm: 'Powder for solution for injection' }, { code: 'C', kind: 'bulk' as const, dosageForm: null }], 'bulk').map((x) => x.code)).toEqual(['B']);
     // Display backlog item 9: one with no kind comes after those with the kind, marked.
     expect(ownProducts([all[2]!, ...all], 'bulk').map((x) => x.code)).toEqual(['FG-ONDA2', 'FG-CEFT1', 'FG-CEFT1', 'FG-HEP5']);
     expect(productNote({ strength: '2 mg/mL', dosageForm: 'Injection', kind: null })).toBe('2 mg/mL · Injection · kind not set in master data');
