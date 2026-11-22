@@ -43,13 +43,21 @@ export function FieldInput({ f, unit, saved, picks = [], note, options = [], res
   // A refusal is brought fully into view, above the sticky action bar (scroll-margin in floor.css).
   const errorRef = useRef<HTMLParagraphElement>(null);
   useEffect(() => { if (error) errorRef.current?.scrollIntoView({ block: 'nearest' }); }, [error]);
-  useEffect(() => { setRaw(typeof f.count === 'number' && !Array.isArray(initial) ? Array<string>(f.count).fill('') : initial); }, [savedKey]);
+  // A value typed but not saved yet (a reading typed before the lot was picked) is kept when the page reloads, and
+  // saved again so the checks run against the new target; only a saved change from elsewhere replaces what is shown.
+  const typed = useRef<Raw | null>(null);
+  useEffect(() => {
+    const t = typed.current;
+    if (typeof t === 'string' && t.trim() && JSON.stringify(t.trim()) !== savedKey && onSave) { void save(t.trim()); return; }
+    typed.current = null;
+    setRaw(typeof f.count === 'number' && !Array.isArray(initial) ? Array<string>(f.count).fill('') : initial);
+  }, [savedKey]);
 
-  const set = (v: Raw) => { setRaw(v); setError(''); onChange?.(v); };
+  const set = (v: Raw) => { setRaw(v); typed.current = v; setError(''); onChange?.(v); };
   const save = async (v: Raw | Pick) => {
     if (!onSave || JSON.stringify(v) === savedKey) return;
     setStatus('saving');
-    try { await onSave(v); setStatus('saved'); } catch (e) { setStatus(''); setError(plainError(e)); }
+    try { await onSave(v); typed.current = null; setStatus('saved'); } catch (e) { setStatus(''); setError(plainError(e)); }
   };
   const blurSave = () => typeof raw === 'string' && raw.trim() && void save(raw.trim());
   const enter = (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); };
