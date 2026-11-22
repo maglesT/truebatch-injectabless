@@ -35,7 +35,7 @@ export function summaryOf(s: StepRow, block: Block | undefined): { bad: boolean;
   // recorded it at use (run 2, G8); nothing new is kept.
   const machines = (block?.fields ?? []).filter((f) => f.kind === 'machine' && s.values[f.name] !== undefined).map((f) => {
     const src = s.source?.[f.name];
-    return `${f.label}: ${valueText(s.values[f.name])}${!src ? '' : src.from === 'hand' ? ` (Logbook ${src.state === 'down' ? 'down' : 'not linked'} at use: its status answered by hand)` : ` (Logbook at use: ${src.shown})`}`;
+    return `${f.label}: ${valueText(s.values[f.name])}${!src ? '' : src.from === 'hand' ? ` (LEAD ${src.state === 'down' ? 'down' : 'not linked'} at use: its status answered by hand)` : ` (LEAD at use: ${src.shown})`}`;
   });
   return { bad, said: [...machines, ...mediaFill(s), ...said(s, block, checks)] };
 }
@@ -49,7 +49,7 @@ function mediaFill(s: StepRow): string[] {
 function said(s: StepRow, block: Block | undefined, checks: [string, StepRow['results'][string]][]): string[] {
   return checks.length ? checks.map(([k, r]) => {
       const label = block?.calcs.find((c) => c.name === k)?.label ?? k;
-      const shown = shortTime(words(r.ok ? (k === s.notYet ? notYetText(r.check!.shown) : r.check!.shown) : ''));
+      const shown = shortTime(words(r.ok ? (k === s.notYet ? notYetText(r.check!.shown, false, true) : r.check!.shown) : ''));
       // The worked line often starts with the check's own name: say it once.
       // ("Filling finished" + "Filling: going on: …" says "Filling: going on: …".)
       const head = shown.split(': ')[0]!;

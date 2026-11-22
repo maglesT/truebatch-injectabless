@@ -49,7 +49,8 @@ export function Designer({ me, versionId, onBack, onOpen }: { me: Me; versionId:
   const load = async () => {
     const x = await getVersion(versionId);
     setV(x); setDoc(x.doc); latest.current = x.doc;
-    if (x.state !== 'draft') setTab((t) => (t === 'header' ? 'review' : t));
+    // A version waiting for review or approval opens on the review; an effective or retired one on its header.
+    if (['in_review', 'approved'].includes(x.state)) setTab((t) => (t === 'header' ? 'review' : t));
   };
   useEffect(() => {
     void load().catch((e: Error) => setError(e.message));
@@ -57,6 +58,8 @@ export function Designer({ me, versionId, onBack, onOpen }: { me: Me; versionId:
     void listMasters().then(setRows);
   }, [versionId]);
 
+  // The master check is for a version still being written or approved; an effective one is read only.
+  const isOpen = !!v && ['draft', 'in_review', 'approved'].includes(v.state);
   const editable = v?.state === 'draft' && can(me, 'master.author');
   const persist = async (d: MasterDoc) => {
     const p = masterSchema.safeParse(d);
@@ -104,7 +107,7 @@ export function Designer({ me, versionId, onBack, onOpen }: { me: Me; versionId:
           </span>}
         </nav>
       </div>
-      <div className="designer">
+      <div className="designer" style={isOpen ? undefined : { gridTemplateColumns: 'minmax(0, 1fr)' }}>
         <div className="d-main">
           <fieldset className="plain" disabled={!editable}>
             {tab === 'header' && <div className="card">{doc.pack ? <PackFields header={doc.header} pack={doc.pack} products={md.products} onChange={(header, pack) => change({ ...doc, header, pack })} />
@@ -117,7 +120,7 @@ export function Designer({ me, versionId, onBack, onOpen }: { me: Me; versionId:
           {tab === 'preview' && <Preview doc={doc} />}
           {tab === 'review' && <Review me={me} version={v} doc={doc} blocked={blocked} onChanged={load} onOpen={onOpen} onGo={go} onDeleted={onBack} />}
         </div>
-        <CheckPanel doc={doc} state={v.state} problems={problems} invalid={parsed && !parsed.success ? issueText(doc, parsed.error.issues[0]!.path, parsed.error.issues[0]!.message) : undefined} onGo={go} onAnswer={onAnswer} />
+        {isOpen && <CheckPanel doc={doc} state={v.state} problems={problems} invalid={parsed && !parsed.success ? issueText(doc, parsed.error.issues[0]!.path, parsed.error.issues[0]!.message) : undefined} onGo={go} onAnswer={onAnswer} />}
       </div>
     </div>
   );

@@ -122,7 +122,7 @@ export const makeUp: Block = {
   calcs: [
     { name: 'target', label: 'Target batch weight', template: 'I18', args: { mode: 'convert', quantity: '$volume', density: '$density', unit: 'kg', decimals: 3 } },
     { name: 'net', label: 'Batch weight', template: 'T1', args: { a: '$gross', b: '$tare' } },
-    { name: 'netCheck', label: 'Batch weight against the target', template: 'C1', args: { value: '$net', around: { centre: '$target', name: 'target batch weight', plusMinusPercent: '$tolerance' } } },
+    { name: 'netCheck', label: 'Batch weight against the target', template: 'C1', args: { value: '$net', around: { centre: '$target', name: 'target batch weight', centreDecimals: 3, plusMinusPercent: '$tolerance' } } },
     within('temperatureCheck', 'Temperature', 'temperature', 'temperatureLimit?'),
     duration('mixTime', 'Mixing time', 'mixStart', 'mixEnd', 'mixTimeLimit?'),
   ],
@@ -134,7 +134,7 @@ export const makeUp: Block = {
 const lab = (f: BlockField): BlockField => ({ ...f, qc: 'in_process' });
 export const bulkTest: Block = {
   id: 'bulk-test', version: 1, name: 'In-process bulk test (hold)', checker: true, qaHold: true,
-  instruction: 'Take the bulk sample and send it to QC. Pick each result from LIMS once QC has approved it (typed from the QC report only while LIMS cannot be reached). Wait for QA to release the hold.',
+  instruction: 'Take the bulk sample and send it to QC. Pick each result from QLIMS once QC has approved it (typed from the QC report only while QLIMS cannot be reached). Wait for QA to release the hold.',
   fields: [
     text('reference', 'Sample reference'),
     lab(num('ph', 'pH', 'pH', true)), lab(num('density', 'Density', 'g/mL', true)), lab(num('assay', 'Assay (% of target)', '%', true)),

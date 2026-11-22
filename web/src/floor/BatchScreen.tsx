@@ -127,7 +127,7 @@ function Overview({ me, d, blocks, now, reload }: { me: Me; d: BatchDetail; bloc
         </div>
       </section>
       {d.batch.exceptions.length > 0 && <section className="dash-panel" aria-label="Deviation notes without a number">
-        <div className="panel-head"><h2>Deviation notes without a number</h2><span className="muted">closed here (reason and signature) or sent to Deviations</span></div>
+        <div className="panel-head"><h2>Deviation notes without a number</h2><span className="muted">closed here (reason and signature) or sent to DIVE</span></div>
         <Exceptions me={me} batchId={d.batch.id} batchNo={d.batch.batchNo} exceptions={d.batch.exceptions} contentHash={d.batch.contentHash} deviationsLink={d.batch.deviationsLink}
           ended={ended} stepName={(k) => k} onDone={async () => reload()} />
       </section>}
@@ -175,7 +175,7 @@ export function Alerts({ d, blocks, now, only }: { d: BatchDetail; blocks: Block
     if (s.inputChanged.length) items.push({ tone: 'warn', tag: 'Input changed', text: title(s.key), sub: 'A value this step used was corrected: sign it again', step: s.id });
   }
   for (const v of d.batch.deviations.filter((x) => x.open)) items.push({ tone: 'bad', tag: 'Open deviation', text: `${deviationText(v)}: ${v.text}`, step: v.step });
-  for (const v of d.batch.exceptions.filter((x) => x.decision === 'open')) items.push({ tone: 'warn', tag: 'Note to decide', text: v.text, sub: 'Close it here or send it to Deviations', step: v.step });
+  for (const v of d.batch.exceptions.filter((x) => x.decision === 'open')) items.push({ tone: 'warn', tag: 'Note to decide', text: v.text, sub: 'Close it here or send it to DIVE', step: v.step });
   const shown = only ? items.filter((x) => x.step === only) : items;
   if (!shown.length) return only ? null : <p className="all-good"><span aria-hidden="true">✓</span> No alerts on this batch.</p>;
   return (

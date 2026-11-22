@@ -118,7 +118,7 @@ export async function bulkDeviations(app: FastifyInstance, l: LoadedBatch): Prom
   return r.state === 'ok' ? { bulk, open: r.value.filter((d) => !DEVIATION_DONE.includes(d.status)) } : null;
 }
 const bulkOpen = (b: Awaited<ReturnType<typeof bulkDeviations>>) => (b?.open ?? [])
-  .map((d) => `Deviation ${d.number} of the bulk batch ${b!.bulk} is still open in the Deviations system (${deviationStatusWords(d.status)}): it is closed there first`);
+  .map((d) => `Deviation ${d.number} of the bulk batch ${b!.bulk} is still open in the DIVE system (${deviationStatusWords(d.status)}): it is closed there first`);
 
 /**
  * Packing (suite B2, 17 Nov 2026): the issues of a batch of filled units to the OTHER packing batches of this product
@@ -267,7 +267,7 @@ async function readValues(app: FastifyInstance, tx: Tx, doc: MasterDoc, key: Ste
     // (a list: its individual values; a staged list may fill the other stage's field too); absent or down, typed below.
     if (f.qc === 'in_process' && noLabRequest(current)) {
       // Round 43: started before LIMS in-process requests: typed by hand below (a pick is refused: no request to pick from).
-      if (isPick(x)) { problems.push(`${f.label}: this step was started before LIMS in-process requests: type it from the QC report.`); continue; }
+      if (isPick(x)) { problems.push(`${f.label}: this step was started before QLIMS in-process requests: type it from the QC report.`); continue; }
       source[name] = { from: 'hand', link: 'lims', state: 'no_request' };
     } else if (f.qc === 'in_process') {
       const unitOf = (y: typeof f) => { const u = y.unit?.startsWith('$') ? step.settings[y.unit.slice(1)] : y.unit; return typeof u === 'string' ? u : ''; };
@@ -830,7 +830,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
           const no = batchRefusal(action, view(l, dv.read), user, b.note);
           if (no) throw new StepError(no.status, no.error, no.problems);
           // Sent to Deviations only where there is a Deviations system to file it (owner decision 20 Nov 2026).
-          if (action === 'send-exception' && dv.link === 'absent') throw new StepError(409, 'not_linked', ['Deviations is not linked: close it here.']);
+          if (action === 'send-exception' && dv.link === 'absent') throw new StepError(409, 'not_linked', ['DIVE is not linked: close it here.']);
           if (action === 'release') { const p = bulkOpen(await bulkDeviations(app, l)); if (p.length) throw new StepError(409, 'not_ready', p); }
           if (signer && b.contentHash !== batchHash(l)) throw new StepError(409, 'content_changed', ['The batch record changed since you opened it.']);
           // EM (owner rule 19 Nov 2026: LIMS owns EM): while LIMS answers, QC reviews the batch's EM samples read from LIMS
@@ -838,7 +838,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
           // excursion has no deviation number. No aseptic room, or LIMS absent or down: the EM review is typed as before.
           const em = action === 'qc-approve' && !l.doc.pack ? await batchEm(app, l.doc, l.events, l.batch.batchNo, l.now, PLANT_TZ) : null;
           if (em?.pulled && em.problems.length) throw new StepError(409, 'em_not_ready', em.problems);
-          if (em?.pulled && b.emReview) throw new StepError(400, 'invalid', ['The EM review comes from LIMS: it is not typed while LIMS answers.']);
+          if (em?.pulled && b.emReview) throw new StepError(400, 'invalid', ['The EM review comes from QLIMS: it is not typed while QLIMS answers.']);
           if (em && !em.pulled && !b.emReview) throw new StepError(400, 'invalid', ['emReview: the EM review of the batch is needed for QC approval']);
           const emPayload = em?.pulled ? { em: { shown: emText(em.rows, em.window), rooms: em.window.rooms, from: em.window.from, to: em.window.to,
             samples: em.rows.map((r) => ({ sample: r.sampleNumber, point: r.pointName ?? r.pointCode, room: r.roomCode, grade: r.grade, kind: r.kind, takenOn: r.takenOn,
@@ -938,7 +938,7 @@ export function batchRoutes(app: FastifyInstance, sql: Sql) {
             // The reference must be a deviation of the Deviations system while it answers; else typed, and QA closes it by hand.
             const r = await app.links.deviations.byNumbers([b.reference]);
             const d = r.state === 'ok' ? r.value.get(b.reference) : undefined;
-            if (r.state === 'ok' && !d) throw new StepError(409, 'unknown_deviation', [`${b.reference} is not in the Deviations system: pick one of the deviations of this batch, or check the number.`]);
+            if (r.state === 'ok' && !d) throw new StepError(409, 'unknown_deviation', [`${b.reference} is not in the DIVE system: pick one of the deviations of this batch, or check the number.`]);
             payload.reference = b.reference;
             payload.source = { reference: d ? { from: 'deviations', asOf: null, shown: `${d.number}: ${d.title ?? ''} (${d.status})` } : { from: 'hand', link: 'deviations', state: r.state as 'absent' | 'down' } };
           }

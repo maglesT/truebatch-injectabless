@@ -38,7 +38,7 @@ describe('the EM rules (shared/engine/em.ts)', () => {
     expect(emWindow(small([{ steps: [{}] }]), events, t(12))).toEqual({ rooms: [], from: null, to: null });
   });
 
-  it('a sample naming a batch is that batch\'s only; else its room and its time (or, from an older LIMS, its plant day)', () => {
+  it('a sample naming a batch is that batch\'s only; else its room and its time (or, from an older QLIMS, its plant day)', () => {
     expect(emOfBatch(row(), 'TI260001', w, TZ)).toBe(true);
     expect(emOfBatch(row({ roomCode: 'RM-999' }), 'TI260001', w, TZ)).toBe(false);
     expect(emOfBatch(row({ takenOn: '2026-11-19' }), 'TI260001', w, TZ)).toBe(false);
@@ -51,21 +51,21 @@ describe('the EM rules (shared/engine/em.ts)', () => {
 
   it('TI-27 QC approval waits while a sample is undecided or an excursion has no deviation number; none at all waits too', () => {
     expect(emProblems([row()], w)).toEqual([]);
-    expect(emProblems([], w)).toEqual(['LIMS has no EM samples of RM-301 for this batch yet: QC approval waits for them.']);
-    expect(emProblems([row({ decision: null, level: null })], w)).toEqual(['EM sample EM26001 (Filling needle zone, RM-301) is not decided in LIMS yet.']);
-    expect(emProblems([row({ value: '1', level: 'ACTION', excursionStatus: 'OPEN' })], w)).toEqual(['EM sample EM26001 (Filling needle zone, RM-301): the action excursion has no deviation number in LIMS.']);
+    expect(emProblems([], w)).toEqual(['QLIMS has no EM samples of RM-301 for this batch yet: QC approval waits for them.']);
+    expect(emProblems([row({ decision: null, level: null })], w)).toEqual(['EM sample EM26001 (Filling needle zone, RM-301) is not decided in QLIMS yet.']);
+    expect(emProblems([row({ value: '1', level: 'ACTION', excursionStatus: 'OPEN' })], w)).toEqual(['EM sample EM26001 (Filling needle zone, RM-301): the action excursion has no deviation number in QLIMS.']);
     expect(emProblems([row({ value: '1', level: 'ACTION', excursionStatus: 'OPEN', deviationNumber: 'DEV-2026-0060' })], w)).toEqual([]);
     expect(emText([row(), row({ sampleNumber: 'EM26002', value: '1', level: 'ACTION', deviationNumber: 'DEV-2026-0060' })], w))
-      .toBe('EM from LIMS: 2 samples of RM-301; 1 excursion: EM26002 action 1 CFU (DEV-2026-0060)');
+      .toBe('EM from QLIMS: 2 samples of RM-301; 1 excursion: EM26002 action 1 CFU (DEV-2026-0060)');
     // An alert is a trend watch in LIMS (no investigation, no deviation number): listed, it does not hold approval.
     const alert = row({ sampleNumber: 'EM26003', value: '4', level: 'ALERT', excursionStatus: 'OPEN' });
     expect(emProblems([row(), alert], w)).toEqual([]);
-    expect(emText([alert], w)).toBe('EM from LIMS: 1 sample of RM-301; 1 excursion: EM26003 alert 4 CFU');
+    expect(emText([alert], w)).toBe('EM from QLIMS: 1 sample of RM-301; 1 excursion: EM26003 alert 4 CFU');
     // An excursion LIMS opened without a level still needs its deviation number.
-    expect(emProblems([row({ level: null, excursionStatus: 'OPEN' })], w)).toEqual(['EM sample EM26001 (Filling needle zone, RM-301): the excursion has no deviation number in LIMS.']);
+    expect(emProblems([row({ level: null, excursionStatus: 'OPEN' })], w)).toEqual(['EM sample EM26001 (Filling needle zone, RM-301): the excursion has no deviation number in QLIMS.']);
   });
 
-  it('the incubated results split: EM plates (without LIMS) and BI and bioburden (picked from LIMS as an in-process test)', () => {
+  it('the incubated results split: EM plates (without QLIMS) and BI and bioburden (picked from QLIMS as an in-process test)', () => {
     const plates = findBlock({ id: 'incubated-em', version: 1 })!;
     const lab = findBlock({ id: 'incubated-lab', version: 1 })!;
     expect(plates.fields.find((f) => f.name === 'kind')!.options).toEqual(['air sample', 'settle plate', 'contact plate', 'glove print']);
@@ -77,9 +77,9 @@ describe('the EM rules (shared/engine/em.ts)', () => {
     expect(findBlock({ id: 'incubated-results', version: 1 })).toBeDefined();
   });
 
-  it('TI-27 with LIMS linked, the master check says a step typing EM plates would enter them twice; alone, nothing', () => {
+  it('TI-27 with QLIMS linked, the master check says a step typing EM plates would enter them twice; alone, nothing', () => {
     const doc = small([{ steps: [{}] }, { key: 'later', startsAfter: 's0/t0', steps: [{ key: 'plates', block: { id: 'incubated-em', version: 1 }, checker: true, settings: { countLimit: { high: '1', unit: 'CFU' } } }] }]);
-    const said = (limsLinked: boolean) => masterChecks(doc, { limsLinked }).filter((p) => p.message.startsWith('LIMS is linked'));
+    const said = (limsLinked: boolean) => masterChecks(doc, { limsLinked }).filter((p) => p.message.startsWith('QLIMS is linked'));
     expect(said(true)).toEqual([expect.objectContaining({ level: 'warning', path: 'stages[1].steps[0]' })]);
     expect(said(false)).toEqual([]);
   });
@@ -160,7 +160,7 @@ const approve = async (b: { id: number; batchNo: string }, emReview?: string) =>
   { proof: proofFor('quinn'), reportNo: `COA-${b.batchNo}`, contentHash: await hash(b.id), ...(emReview ? { emReview } : {}) });
 type Em = { link: string; pulled: boolean; window: EmWindow; rows: { sampleNumber: string }[]; problems: string[] };
 
-describe('QC approval of an aseptic batch with LIMS linked: the EM is read from LIMS', () => {
+describe('QC approval of an aseptic batch with QLIMS linked: the EM is read from QLIMS', () => {
   it('TI-27 the batch\'s EM samples are listed read-only; approval waits while one is undecided or an excursion has no deviation number', async () => {
     const b = await batch();
     const ok = await sample();
@@ -170,22 +170,22 @@ describe('QC approval of an aseptic batch with LIMS linked: the EM is read from 
     const em = (await as('quinn', 'GET', `/api/batches/${b.id}/em`)).json() as Em;
     expect(em).toMatchObject({ link: 'ok', pulled: true, window: { rooms: ['RM-301'] } });
     expect(em.rows.map((r) => r.sampleNumber)).toEqual([ok, open]);
-    expect(em.problems).toEqual([`EM sample ${open} (Needle zone, RM-301): the action excursion has no deviation number in LIMS.`]);
+    expect(em.problems).toEqual([`EM sample ${open} (Needle zone, RM-301): the action excursion has no deviation number in QLIMS.`]);
     expect((await approve(b)).json()).toMatchObject({ error: 'em_not_ready', problems: em.problems });
     // Typing the EM review while LIMS answers is refused.
     await t.owner.unsafe(`update ${L}.em_v1 set deviation_number = 'DEV-2026-0061' where sample_number = $1`, [open]);
-    expect((await approve(b, 'EM-26-1: no excursion')).json()).toMatchObject({ error: 'invalid', problems: ['The EM review comes from LIMS: it is not typed while LIMS answers.'] });
+    expect((await approve(b, 'EM-26-1: no excursion')).json()).toMatchObject({ error: 'invalid', problems: ['The EM review comes from QLIMS: it is not typed while QLIMS answers.'] });
     const r = await approve(b);
     expect(r.statusCode, r.body).toBe(200);
     const [e] = await t.owner<{ payload: { em: { shown: string; samples: object[] }; emReview?: string } }[]>`select payload from batch_events where batch_id = ${b.id} and kind = 'qc_approved'`;
     expect(e!.payload.emReview).toBeUndefined();
-    expect(e!.payload.em.shown).toBe(`EM from LIMS: 2 samples of RM-301; 1 excursion: ${open} action 1 CFU (DEV-2026-0061)`);
+    expect(e!.payload.em.shown).toBe(`EM from QLIMS: 2 samples of RM-301; 1 excursion: ${open} action 1 CFU (DEV-2026-0061)`);
     expect(e!.payload.em.samples).toHaveLength(2);
     const pdf = JSON.stringify(batchRecordDoc(await recordInput(t.sql, (await loadBatch(t.sql, b.id))!, t.master), 'QUINN', new Date(), false));
-    expect(pdf).toContain(`EM from LIMS: 2 samples of RM-301`);
+    expect(pdf).toContain(`EM from QLIMS: 2 samples of RM-301`);
   });
 
-  it('TI-27 a sample LIMS names for this batch is taken wherever it is; one named for another batch is not', async () => {
+  it('TI-27 a sample QLIMS names for this batch is taken wherever it is; one named for another batch is not', async () => {
     await t.owner.unsafe(`alter table ${L}.em_v1 add column sampled_at timestamptz, add column batch_number text`);
     try {
       const b = await batch();
@@ -199,10 +199,10 @@ describe('QC approval of an aseptic batch with LIMS linked: the EM is read from 
     } finally { await t.owner.unsafe(`alter table ${L}.em_v1 drop column sampled_at, drop column batch_number`); }
   });
 
-  it('TI-27 no EM in LIMS yet: approval waits for it', async () => {
+  it('TI-27 no EM in QLIMS yet: approval waits for it', async () => {
     await t.owner.unsafe(`delete from ${L}.em_v1`);
     const b = await batch();
-    expect((await approve(b)).json()).toMatchObject({ error: 'em_not_ready', problems: ['LIMS has no EM samples of RM-301 for this batch yet: QC approval waits for them.'] });
+    expect((await approve(b)).json()).toMatchObject({ error: 'em_not_ready', problems: ['QLIMS has no EM samples of RM-301 for this batch yet: QC approval waits for them.'] });
   });
 
   it('a batch with no aseptic stage types its EM review as before', async () => {
@@ -212,7 +212,7 @@ describe('QC approval of an aseptic batch with LIMS linked: the EM is read from 
     expect((await approve(b, 'No aseptic processing: terminal route')).statusCode).toBe(200);
   });
 
-  it('TI-27 LIMS down: the EM review is typed, marked typed by hand', async () => {
+  it('TI-27 QLIMS down: the EM review is typed, marked typed by hand', async () => {
     const b = await batch();
     await cut();
     try {
@@ -224,19 +224,19 @@ describe('QC approval of an aseptic batch with LIMS linked: the EM is read from 
     const [e] = await t.owner<{ payload: object }[]>`select payload from batch_events where batch_id = ${b.id} and kind = 'qc_approved'`;
     expect(e!.payload).toMatchObject({ emReview: 'EM-26-118, EM-26-119: no excursion', emSource: { from: 'hand', link: 'lims', state: 'down' } });
     const pdf = JSON.stringify(batchRecordDoc(await recordInput(t.sql, (await loadBatch(t.sql, b.id))!, t.master), 'QUINN', new Date(), false));
-    expect(pdf).toContain('EM review: EM-26-118, EM-26-119: no excursion (typed by hand: LIMS link down)');
+    expect(pdf).toContain('EM review: EM-26-118, EM-26-119: no excursion (typed by hand: QLIMS link down)');
   });
 
-  it('the designer is told whether LIMS is linked', async () => {
+  it('the designer is told whether QLIMS is linked', async () => {
     expect((await as('author', 'GET', '/api/links')).json()).toEqual({ lims: true });
   });
 });
 
-describe('alone (LIMS not linked)', () => {
+describe('alone (QLIMS not linked)', () => {
   let alone: TestApp;
   beforeAll(async () => { alone = await freshApp(); });
   afterAll(async () => { await alone?.close(); });
-  it('TI-27 the EM review is typed as today; the designer is told LIMS is not linked', async () => {
+  it('TI-27 the EM review is typed as today; the designer is told QLIMS is not linked', async () => {
     await seedUser(alone.owner, 'author', ['truebatch_injectables.master.author']);
     const c = (await login(alone.app, 'author')).cookie;
     expect((await call(alone.app, c, 'GET', '/api/links')).json()).toEqual({ lims: false });

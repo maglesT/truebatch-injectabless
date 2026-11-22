@@ -21,6 +21,6 @@ export const weigh: Block = {
   ],
   calcs: [
     { name: 'net', label: 'Net weight', template: 'T1', args: { a: '$gross', b: '$tare' } },
-    { name: 'netCheck', label: 'Net against target', template: 'C1', args: { value: '$net', around: { centre: '$target', name: 'target', plusMinusPercent: '$tolerance' } } },
+    { name: 'netCheck', label: 'Net against target', template: 'C1', args: { value: '$net', around: { centre: '$target', name: 'target', centreDecimals: 3, plusMinusPercent: '$tolerance' } } },
   ],
 };

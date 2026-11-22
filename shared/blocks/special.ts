@@ -42,7 +42,7 @@ export const asepticReady2: Block = {
 // glove test (and the decontamination) through the isolator or RABS field. The line's media fill stays typed.
 export const asepticReady3: Block = {
   ...asepticReady2, version: 3,
-  instruction: 'Before aseptic work: the isolator or RABS fit for use in the Logbook (its glove test and decontamination), people in grade A/B qualified, the line\'s media fill in date, sterilised items within their use-by, grade A airflow and pressure as specified, and the aseptic assembly done.',
+  instruction: 'Before aseptic work: the isolator or RABS fit for use in the LEAD (its glove test and decontamination), people in grade A/B qualified, the line\'s media fill in date, sterilised items within their use-by, grade A airflow and pressure as specified, and the aseptic assembly done.',
   fields: asepticReady2.fields.filter((f) => f.name !== 'gloves'),
   calcs: [observe('ready', 'Ready for aseptic work', ['people', 'airflow', 'assembly'])],
 };
@@ -52,7 +52,7 @@ export const asepticReady3: Block = {
 // in place the Logbook decides. Version 3 stays for the recorded batches.
 export const asepticReady4: Block = {
   ...asepticReady3, version: 4,
-  instruction: 'Before aseptic work: the isolator, RABS or blow-fill-seal machine fit for use in the Logbook, people in grade A/B qualified, the line\'s media fill in date, sterilised items within their use-by, grade A airflow and pressure as specified, and the aseptic assembly done.',
+  instruction: 'Before aseptic work: the isolator, RABS or blow-fill-seal machine fit for use in the LEAD, people in grade A/B qualified, the line\'s media fill in date, sterilised items within their use-by, grade A airflow and pressure as specified, and the aseptic assembly done.',
   fields: asepticReady3.fields.map((f) => (f.name === 'isolator' ? { ...f, label: 'Isolator, RABS or blow-fill-seal machine', types: ['isolator', 'rabs', 'blow'] } : f)),
 };
 
@@ -144,7 +144,7 @@ export const incubatedResults: Block = {
 // 29a. EM plates read after incubation: for a plant WITHOUT Medhanta LIMS. With LIMS linked, LIMS owns the EM results
 // (em_v1): QC reviews them at QC approval and the master check says this step would type them again.
 export const incubatedEm: Block = {
-  id: 'incubated-em', version: 1, name: 'EM plates read (without LIMS)', checker: true,
+  id: 'incubated-em', version: 1, name: 'EM plates read (without QLIMS)', checker: true,
   instruction: 'When the incubation is over, read each EM plate or sample and record the count against its limit.',
   fields: [
     text('sampleId', 'Sample ID'), { name: 'kind', label: 'Sample', kind: 'choice', options: ['air sample', 'settle plate', 'contact plate', 'glove print'] },
@@ -174,7 +174,7 @@ export const incubatedEm2: Block = {
 // millilitres filtered (I22), a QC lab result picked from LIMS as the biological indicator's is.
 export const incubatedBioburden: Block = {
   id: 'incubated-bioburden', version: 1, name: 'Bioburden results (per 100 mL)', checker: true,
-  instruction: 'Pick the count of each bioburden sample from LIMS once QC has approved it (typed from the QC report only while LIMS cannot be reached) and the volume of product filtered.',
+  instruction: 'Pick the count of each bioburden sample from QLIMS once QC has approved it (typed from the QC report only while QLIMS cannot be reached) and the volume of product filtered.',
   fields: [text('sampleId', 'Sample ID'), num('volume', 'Product filtered', 'mL'), { ...num('count', 'Count', 'CFU'), qc: 'in_process' }],
   settings: [{ name: 'bioburdenLimit', label: 'Bioburden limit (per 100 mL, e.g. "10 CFU/100 mL")', kind: 'text' }, { name: 'alertLimit', label: 'Alert limit (per 100 mL)', kind: 'text', optional: true }],
   calcs: [{ name: 'countCheck', label: 'Bioburden per 100 mL', template: 'I22', args: { sample: 'bioburden', counts: '$count', sampled: '$volume', actionLimit: '$bioburdenLimit', alertLimit: '$alertLimit?' } }],
@@ -184,7 +184,7 @@ export const incubatedBioburden: Block = {
 // in-process report of the step's lab request while LIMS answers (rounds 40 to 44); typed from the QC report otherwise.
 export const incubatedLab: Block = {
   id: 'incubated-lab', version: 1, name: 'Biological indicator and bioburden results', checker: true,
-  instruction: 'Pick the result of each biological indicator or bioburden sample from LIMS once QC has approved it (typed from the QC report only while LIMS cannot be reached).',
+  instruction: 'Pick the result of each biological indicator or bioburden sample from QLIMS once QC has approved it (typed from the QC report only while QLIMS cannot be reached).',
   fields: [
     text('sampleId', 'Sample ID'), { name: 'kind', label: 'Sample', kind: 'choice', options: ['biological indicator', 'bioburden'] },
     { ...num('count', 'Count (CFU; a BI: 0 = no growth)', 'CFU'), qc: 'in_process' },

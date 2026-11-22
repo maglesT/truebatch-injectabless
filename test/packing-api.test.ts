@@ -33,7 +33,7 @@ beforeAll(async () => {
       create schema ${TB};
       create table ${TB}.batch_fact_v1 (batch_id uuid, batch_number text, product_code text, strength text, mbr_version_id uuid, family_code text, record_kind text,
         status text, issued_at timestamptz, completed_at timestamptz, released boolean, read_at timestamptz default now(), data_as_of timestamptz default now(), manufactured_on date);
-      -- The Deviations system's deviation_v1 (in the same fake schema): the bulk batch's open deviations block release (S24).
+      -- The DIVE system's deviation_v1 (in the same fake schema): the bulk batch's open deviations block release (S24).
       create table ${TB}.deviation_v1 (number text, status text, classification text, opened_at timestamptz, closed_at timestamptz, product text, batch text,
         batch_norm text, outcome text, read_at timestamptz default now(), data_as_of timestamptz default now(), title text, source_ref text);
       grant usage on schema ${TB} to ${PACKING_APP_ROLE};
@@ -321,7 +321,7 @@ describe('a packing batch from the filled units of a released batch', () => {
     expect(await review()).toEqual({ bulk: 'TI260001', open: [{ number: 'DEV-2026-0045', status: 'closure', title: 'Room refused at line clearance', closedAt: null }] });
     const held = await as('qa1', 'POST', `/api/batches/${id}/release`, { proof: proofFor('qa1'), contentHash: b.batch.contentHash });
     expect(held.statusCode).toBe(409);
-    expect(held.json()).toMatchObject({ problems: ['Deviation DEV-2026-0045 of the bulk batch TI260001 is still open in the Deviations system (waiting for closure): it is closed there first'] });
+    expect(held.json()).toMatchObject({ problems: ['Deviation DEV-2026-0045 of the bulk batch TI260001 is still open in the DIVE system (waiting for closure): it is closed there first'] });
     await t.owner.unsafe(`update ${TB}.deviation_v1 set status = 'closed', closed_at = now() where number = 'DEV-2026-0045'`);
     expect(await review()).toBeNull();
     const rel = await as('qa1', 'POST', `/api/batches/${id}/release`, { proof: proofFor('qa1'), contentHash: b.batch.contentHash });

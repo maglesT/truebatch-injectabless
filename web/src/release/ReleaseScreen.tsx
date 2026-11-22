@@ -100,9 +100,9 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
   const bulkOpen = r.bulkOpen?.open ?? [];
   const qcTurn = d.batch.status === 'production approved';
   const qaTurn = d.batch.status === 'QC approved';
-  const blockers = [...openDevs.map((x) => `Deviation ${x.reference} (${name(x.step)}) is ${x.status ? `still open in the Deviations system (${deviationStatusWords(x.status)}): it is closed there first.` : 'open: close it first.'}`),
-    ...d.batch.exceptions.filter((x) => x.decision !== 'closed').map((x) => `Deviation note “${x.text}” (${x.where ?? name(x.step)}) ${x.decision === 'open' ? 'waits for a decision: close it here or send it to Deviations.' : 'was sent to Deviations and is not filed there yet.'}`),
-    ...bulkOpen.map((x) => `Deviation ${x.number} of the bulk batch ${r.bulkOpen!.bulk} is still open in the Deviations system (${deviationStatusWords(x.status)}): it is closed there first.`), ...d.batch.yieldOut.map(plain)];
+  const blockers = [...openDevs.map((x) => `Deviation ${x.reference} (${name(x.step)}) is ${x.status ? `still open in the DIVE system (${deviationStatusWords(x.status)}): it is closed there first.` : 'open: close it first.'}`),
+    ...d.batch.exceptions.filter((x) => x.decision !== 'closed').map((x) => `Deviation note “${x.text}” (${x.where ?? name(x.step)}) ${x.decision === 'open' ? 'waits for a decision: close it here or send it to DIVE.' : 'was sent to DIVE and is not filed there yet.'}`),
+    ...bulkOpen.map((x) => `Deviation ${x.number} of the bulk batch ${r.bulkOpen!.bulk} is still open in the DIVE system (${deviationStatusWords(x.status)}): it is closed there first.`), ...d.batch.yieldOut.map(plain)];
   const handLabel = (step: string, field: string) => field === 'reference' ? 'deviation number' : fieldLabel(step, field);
 
   const sign = async ({ proof }: { proof: string }) => {
@@ -134,7 +134,7 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
         <Kpi n={openDevs.length + bulkOpen.length} label={r.deviations.length ? `Open deviations (${r.deviations.length} in all)` : 'Open deviations'} tone="bad" />
         <Kpi n={r.hand.length} label="Typed by hand, not pulled through a link" tone="warn" />
       </div>
-      {r.deviationsLink === 'down' && <p className="notice warn">The Deviations link is down: the deviation statuses shown are TrueBatch's own (closed by hand).</p>}
+      {r.deviationsLink === 'down' && <p className="notice warn">The DIVE link is down: the deviation statuses shown are TrueBatch's own (closed by hand).</p>}
 
       {!product.packing && <SterileSummary d={d} blocks={blocks} />}
       <section className="dash-panel" aria-label="Review of the record and its audit trail">
@@ -158,15 +158,15 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
           <li key={x.step}><b>{name(x.step)}</b><small>{x.changes.map((e) => `${e.personName}, ${plainClock(e.at)}`).join(' · ')}</small></li>))}</Group>}
         <Group title="Deviation notes" empty="No deviation note has a deviation number.">{r.deviations.map((x) => (
           <li key={x.note} className={x.open ? 'bad' : 'ok'}><b>{deviationNumber(x)} · {name(x.step)}</b><span>{x.text}</span>
-            <small>{x.status ? `${deviationStatusWords(x.status)} in the Deviations system${x.closedAt ? `, ${plainClock(x.closedAt)}` : ''}` : x.open ? 'Open: QA closes it before release' : `Closed by ${x.closed?.personName}, ${plainClock(x.closed?.at ?? '')}: ${x.closed?.payload.reason ?? ''}`}</small>
+            <small>{x.status ? `${deviationStatusWords(x.status)} in the DIVE system${x.closedAt ? `, ${plainClock(x.closedAt)}` : ''}` : x.open ? 'Open: QA closes it before release' : `Closed by ${x.closed?.personName}, ${plainClock(x.closed?.at ?? '')}: ${x.closed?.payload.reason ?? ''}`}</small>
             {x.open && !x.status && !decided && can(me, 'qa.release') && <button onClick={() => setClosing(x)}>Close the deviation…</button>}</li>))}</Group>
         <h3>Deviation notes without a number</h3>
         <Exceptions me={me} batchId={id} batchNo={d.batch.batchNo} exceptions={d.batch.exceptions} contentHash={d.batch.contentHash} deviationsLink={d.batch.deviationsLink}
           ended={decided} stepName={name} onDone={async (t) => { setNotice(t); await reload(); }} />
         {r.unlinked.length > 0 && <Group title="Deviations naming this batch that no note links" empty="">{r.unlinked.map((x) => (
-          <li key={x.number} className="bad"><b>{x.number}</b><span>{x.title}</span><small>{deviationStatusWords(x.status)} in the Deviations system</small></li>))}</Group>}
+          <li key={x.number} className="bad"><b>{x.number}</b><span>{x.title}</span><small>{deviationStatusWords(x.status)} in the DIVE system</small></li>))}</Group>}
         {r.bulkOpen && <Group title={`Open deviations of the bulk batch ${r.bulkOpen.bulk}`} empty="">{r.bulkOpen.open.map((x) => (
-          <li key={x.number} className="bad"><b>{x.number}</b><span>{x.title}</span><small>{deviationStatusWords(x.status)} in the Deviations system: closed there before release</small></li>))}</Group>}
+          <li key={x.number} className="bad"><b>{x.number}</b><span>{x.title}</span><small>{deviationStatusWords(x.status)} in the DIVE system: closed there before release</small></li>))}</Group>}
         <Group title="Typed by hand (a link was off or down)" empty="Every linked value came through its link.">{r.hand.map((h, i) => (
           <li key={i}><b>{name(h.step)} · {handLabel(h.step, h.field)}</b><span>{handWhy(h, 'link was down')}</span>
             <small>{h.personName}, {plainClock(h.at)}</small></li>))}</Group>
@@ -192,8 +192,8 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
         {qcTurn && (can(me, 'qc.approve') ? (
           <div className="decide">
             {lims ? (<>
-              <p className="lbl">Certificate of analysis of batch {d.batch.batchNo} in LIMS</p>
-              {lims.coas.length === 0 ? <p className="notice">LIMS has no approved CoA of this batch yet: QC approves the sample in LIMS first.</p> : (
+              <p className="lbl">Certificate of analysis of batch {d.batch.batchNo} in QLIMS</p>
+              {lims.coas.length === 0 ? <p className="notice">QLIMS has no approved CoA of this batch yet: QC approves the sample in QLIMS first.</p> : (
                 <div className="picks" role="group" aria-label="Certificate of analysis">
                   {lims.coas.map((c) => (
                     <button key={c.coaNumber} type="button" className={reportNo === c.coaNumber ? 'on' : ''} aria-pressed={reportNo === c.coaNumber} onClick={() => setReportNo(c.coaNumber)}>
@@ -204,7 +204,7 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
               )}
             </>) : <label>QC report number<input value={reportNo} onChange={(e) => setReportNo(e.target.value)} maxLength={60} placeholder="e.g. QC-26-0042" /></label>}
             {product.packing ? <p className="why">Your signature means: the finished packed product was tested and complies with its specification, as in the QC report.</p> : <>
-              {em?.pulled ? <EmFromLims em={em} /> : <label>EM review of the batch (report numbers; the Deviations number of each action-limit excursion, or "no excursion")<input value={emReview} onChange={(e) => setEmReview(e.target.value)} maxLength={500} placeholder="e.g. EM-26-118, EM-26-119: no excursion" /></label>}
+              {em?.pulled ? <EmFromLims em={em} /> : <label>EM review of the batch (report numbers; the DIVE number of each action-limit excursion, or "no excursion")<input value={emReview} onChange={(e) => setEmReview(e.target.value)} maxLength={500} placeholder="e.g. EM-26-118, EM-26-119: no excursion" /></label>}
               <p className="why">Your signature means: the release tests meet the specification as in the QC report, including sterility (each sub-batch or load), bacterial endotoxins and the bioburden results; and the environmental monitoring of the batch was reviewed, every action-limit excursion with its deviation.</p></>}
             <button className="big primary" disabled={!reportNo.trim() || (!product.packing && (emPulled ? em!.problems.length > 0 : !emReview.trim()))} onClick={() => setSigning({ meaning: 'qc_approved', action: 'qc-approve' })}>Sign: QC approved</button>
           </div>
@@ -227,7 +227,7 @@ export function ReleaseScreen({ me, id }: { me: Me; id: number }) {
       {signing && (
         <SignDialog meaning={signing.meaning} what={`Batch ${d.batch.batchNo} · ${doc.header.productName}`} onCancel={() => setSigning(null)} onSign={sign}>
           <div className="summary-box">
-            {signing.action === 'qc-approve' && <p>QC report <b>{reportNo.trim()}</b>{product.packing ? '' : emPulled ? <> · EM from LIMS: <b>{em!.rows.length} samples reviewed</b></> : <> · EM review <b>{emReview.trim()}</b></>}</p>}
+            {signing.action === 'qc-approve' && <p>QC report <b>{reportNo.trim()}</b>{product.packing ? '' : emPulled ? <> · EM from QLIMS: <b>{em!.rows.length} samples reviewed</b></> : <> · EM review <b>{emReview.trim()}</b></>}</p>}
             {signing.action === 'reject' && <p>Reason: <b>{rejectWhy.trim()}</b></p>}
             {signing.action !== 'qc-approve' && <p>This signature also records your review of the batch's audit trail: {count(r.corrections.length, 'correction')}, {count(r.sentBack.length, 'step')} sent back,
               {' '}{count(r.late.length, 'late timer')}, {count(r.outOfLimits.length, 'value')} out of limits, {count(r.deviations.length, 'deviation')}, {count(r.notApplicable.length, 'step')} not applicable.</p>}
@@ -273,7 +273,7 @@ interface BatchEm { link: string; pulled: boolean; window: { rooms: string[]; fr
 function EmFromLims({ em }: { em: BatchEm }) {
   return (
     <div className="em-lims">
-      <p className="lbl">Environmental monitoring of {em.window.rooms.join(', ')} from LIMS{em.window.from && em.window.to ? ` (${plainClock(em.window.from)} to ${plainClock(em.window.to)})` : ''}: read-only</p>
+      <p className="lbl">Environmental monitoring of {em.window.rooms.join(', ')} from QLIMS{em.window.from && em.window.to ? ` (${plainClock(em.window.from)} to ${plainClock(em.window.to)})` : ''}: read-only</p>
       {em.rows.length > 0 && (
         <table className="small"><thead><tr><th>Sample</th><th>Point</th><th>Kind</th><th>Taken</th><th>Result</th><th>Level</th><th>Deviation</th></tr></thead>
           <tbody>{em.rows.map((r) => (

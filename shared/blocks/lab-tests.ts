@@ -6,7 +6,7 @@ import type { Block } from './format.js';
 // limits; a test whose unit is not set is not asked for (the lab request leaves it out), so one, two or three tests.
 export const labTests: Block = {
   id: 'lab-tests', version: 1, name: 'In-process lab tests (QC lab)', checker: true,
-  instruction: 'Take the sample as the sampling plan says, label it and send it to QC. Pick each result from LIMS once QC has approved it (typed from the QC report only while LIMS cannot be reached).',
+  instruction: 'Take the sample as the sampling plan says, label it and send it to QC. Pick each result from QLIMS once QC has approved it (typed from the QC report only while QLIMS cannot be reached).',
   fields: [
     { name: 'test1', label: 'Lab test 1', labelFrom: 'what1', kind: 'number', unit: '$unit1', qc: 'in_process' },
     { name: 'test2', label: 'Lab test 2', labelFrom: 'what2', kind: 'number', unit: '$unit2', qc: 'in_process', optional: true },

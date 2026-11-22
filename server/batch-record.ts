@@ -4,7 +4,7 @@
 import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces.js';
 import { findBlock, type Block } from '../shared/blocks/index.js';
 import { materialLines, type Step } from '../shared/master/schema.js';
-import { batchText, batchView, deviations, exceptions, exceptionText, NOTE_EVENTS, deviationNumber, deviationText, fieldLabel, handFields, lateItems, lineQuantity, notYetText, cutShort, terminatedText, TERMINATED_STATE, openSteps, PROVIDER_NAME, deviationStatusWords, stepTitle, unitName, headline, limitOf, withoutVerdict, statusWords, CERTIFICATE, handWhy, isHand, perPackText, trainingOf, trainingText, trainingTyped, skillText, qcReportText, type DeviationStatus, type EventKind, type Source, type Stored, type StepView, type Value } from '../shared/engine/index.js';
+import { batchText, batchView, deviations, exceptions, exceptionText, NOTE_EVENTS, deviationNumber, deviationText, fieldLabel, handFields, lateItems, lineQuantity, notYetText, followedBy, cutShort, terminatedText, TERMINATED_STATE, openSteps, PROVIDER_NAME, deviationStatusWords, stepTitle, unitName, headline, limitOf, withoutVerdict, statusWords, CERTIFICATE, handWhy, isHand, perPackText, trainingOf, trainingText, trainingTyped, skillText, qcReportText, type DeviationStatus, type EventKind, type Source, type Stored, type StepView, type Value } from '../shared/engine/index.js';
 import type { LoadedBatch } from './routes/batches.js';
 import { pageFrame, plant, runs } from './pdf.js';
 import { plantText } from '../shared/plant-time.js';
@@ -147,7 +147,7 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
       return [
         { stack: [small(stepName(v), { bold: true }), small((ended && TERMINATED_STATE[v.state]) || (STATE[v.state] ?? v.state), { color: v.state === 'not_applicable' ? '#666666' : undefined })] },
         { stack: block ? valueLines(block, v, who, unitOf(v)) : [] },
-        { stack: block ? resultLines(block, st, v, who, cutShort(ended, v, steps), unitOf(v)) : [] },
+        { stack: block ? resultLines(block, st, v, who, cutShort(ended, v, steps), unitOf(v), followedBy(v, steps)) : [] },
         { stack: v.events.filter((e) => e.kind !== 'value').map((e) => {
           // Demo installations only (server/demo.ts).
           if (e.kind === 'demo_wait_skipped') return small(`DEMO: wait skipped by ${who(e.person)} at ${plant(e.at)} · ${String(e.payload.label ?? '')}`, { color: RED, bold: true });
@@ -180,7 +180,7 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
     const d = devOf(e);
     const closed = d?.closed && batchEvents.find((b) => b.id === d.closed!.id);
     return [small(d ? deviationNumber(d) : '—'), small(stepLabel(`${e.stage}.${e.sub}.${e.step}.${e.round}`)), small(e.payload.text ?? ''), small(`${who(e.person)}, ${plant(e.at)}`),
-      small(!d ? excText(e) || 'note (no deviation number)' : d.status ? `${d.open ? 'OPEN: ' : ''}${deviationStatusWords(d.status)} in the Deviations system${d.closedAt ? `, ${plant(d.closedAt)}` : ''}` : d.open ? 'OPEN' : `closed by ${closed?.personName ?? ''}, ${plant(closed?.at)}: ${closed?.payload.reason ?? ''}`, d?.open || excs.some((x) => x.note === e.id && x.decision !== 'closed') ? { color: RED } : {})];
+      small(!d ? excText(e) || 'note (no deviation number)' : d.status ? `${d.open ? 'OPEN: ' : ''}${deviationStatusWords(d.status)} in the DIVE system${d.closedAt ? `, ${plant(d.closedAt)}` : ''}` : d.open ? 'OPEN' : `closed by ${closed?.personName ?? ''}, ${plant(closed?.at)}: ${closed?.payload.reason ?? ''}`, d?.open || excs.some((x) => x.note === e.id && x.decision !== 'closed') ? { color: RED } : {})];
   })));
 
   // Signatures whose training was typed by hand because Recruitment was not reachable, for QA (owner, 17 Nov 2026);
@@ -242,7 +242,7 @@ function certificateText(s: Source | undefined): string {
 
 /** The worked calculation lines, with the limits and pass or fail; a count of the step's material in master data's name
  *  for it (nos for units), as its recorded values and the floor's worked lines. */
-function resultLines(block: Block, st: Step, v: StepView, who: (id: number | null) => string, terminated: boolean, stockUnit?: string): Content[] {
+function resultLines(block: Block, st: Step, v: StepView, who: (id: number | null) => string, terminated: boolean, stockUnit?: string, followed = false): Content[] {
   const label = (name: string) => block.calcs.find((c) => c.name === name)?.label ?? block.settings.find((s) => s.name === name)?.label ?? name;
   const out: Content[] = Object.entries(v.results).flatMap(([name, r]) => {
     if (!r.ok) return [small(`${label(name)}: ${r.message}`, { color: RED })];
@@ -250,7 +250,7 @@ function resultLines(block: Block, st: Step, v: StepView, who: (id: number | nul
     // A round whose stop check is not reached yet is not out of limits: the rounds go on.
     const notYet = name === v.notYet;
     const counted = (t: string) => t.replace(/\bunits\b/g, unitName('units', stockUnit));
-    const text = (t: string) => counted(plantText(notYet ? notYetText(t, terminated) : t, true));
+    const text = (t: string) => counted(plantText(notYet ? notYetText(t, terminated, followed) : t, true));
     // A check's worked line may start with its own question ("Packing finished: no", "Line clear after packing: …"):
     // the label is not said twice.
     // A figure leads, with its limit (owner, 17 Nov 2026); the worked lines follow without their verdict, which the

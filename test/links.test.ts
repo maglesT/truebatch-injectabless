@@ -172,14 +172,14 @@ describe('the labels people saw', () => {
   });
 });
 
-describe('TI-11 Logbook: equipment and rooms fit for use', () => {
+describe('TI-11 LEAD: equipment and rooms fit for use', () => {
   let b: { id: number; batchNo: string };
   beforeAll(async () => {
     b = await issue(small([{ machineTypes: ['stirrer'], steps: [{ block: { id: 'line-clearance', version: 1 }, checker: true, settings: {} },
       { block: { id: 'mix', version: 1 }, settings: {} }, yieldStep] }]));
   });
 
-  it('TI-10 line clearance: the room\'s cleaning facts are pulled from the Logbook and cannot be typed over', async () => {
+  it('TI-10 line clearance: the room\'s cleaning facts are pulled from the LEAD and cannot be typed over', async () => {
     await act('asha', b.id, '0.1.0.1', 'start');
     expect((await record(b.id, '0.1.0.1', { room: 'rm-1' })).statusCode).toBe(200);
     const s = await stepOf(b.id, '0.1.0.1');
@@ -187,12 +187,12 @@ describe('TI-11 Logbook: equipment and rooms fit for use', () => {
     expect(s.values.cleanedOn).toMatch(/^2026-11-15 05:30/);
     expect(s.source.cleanedBy).toMatchObject({ from: 'logbook' });
     expect(s.handFields).toEqual([]);
-    expect(await problems(record(b.id, '0.1.0.1', { cleanedBy: 'SOMEONE ELSE' }))).toEqual(['Cleaned by (name on the label) comes from Logbook and cannot be typed over']);
+    expect(await problems(record(b.id, '0.1.0.1', { cleanedBy: 'SOMEONE ELSE' }))).toEqual(['Cleaned by (name on the label) comes from LEAD and cannot be typed over']);
     expect((await record(b.id, '0.1.0.1', { previousRemoved: 'yes', noOther: 'yes' })).statusCode).toBe(200);
     expect((await sign('asha', b.id, '0.1.0.1', 'done')).statusCode).toBe(200);
   });
 
-  it('TI-11 while the Logbook answers, the machine and room pickers offer only what it has (an empty one names the rest); absent or down, every one', async () => {
+  it('TI-11 while the LEAD answers, the machine and room pickers offer only what it has (an empty one names the rest); absent or down, every one', async () => {
     const read = async () => (await as('asha', 'GET', '/api/logbook/items')).json() as { link: string; items: string[]; notFit: Record<string, string> };
     const r = await read();
     expect(r.link).toBe('ok');
@@ -205,7 +205,7 @@ describe('TI-11 Logbook: equipment and rooms fit for use', () => {
     // A picker with choices has no note; an empty one names what the Logbook does not have.
     expect(picks.note).toBeNull();
     expect(inLogbook(stirrers.filter((m) => m.code === 'STR-05'), r.items)).toEqual({ offered: [],
-      note: 'Not offered, because the Logbook does not have it: STR-05. Only what the Logbook has can be used while it is linked.' });
+      note: 'Not offered, because the LEAD does not have it: STR-05. Only what the LEAD has can be used while it is linked.' });
     expect(inLogbook(t.master.rooms_, r.items).offered.map((x) => x.code)).toEqual(['GRN-01']);
     await cut(S.lb);
     try {
@@ -215,14 +215,14 @@ describe('TI-11 Logbook: equipment and rooms fit for use', () => {
     expect((await call(t.app, '', 'GET', '/api/logbook/items')).statusCode).toBe(401);
   });
 
-  it('TI-11 a machine the Logbook says is not fit for use is refused with the Logbook\'s reasons; one in use by another batch too', async () => {
+  it('TI-11 a machine the LEAD says is not fit for use is refused with the LEAD\'s reasons; one in use by another batch too', async () => {
     await act('asha', b.id, '0.1.1.1', 'start');
-    expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str2' }))).toEqual(['STR-02 is not fit for use (Logbook): Dirty: clean and verify before the next use; Calibration overdue.']);
-    expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str3' }))).toEqual(['STR-03 is in use by batch XB26001 (Logbook).']);
-    expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str5' }))).toEqual(['STR-05 is not in the Logbook, so it cannot be used.']);
+    expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str2' }))).toEqual(['STR-02 is not fit for use (LEAD): Dirty: clean and verify before the next use; Calibration overdue.']);
+    expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str3' }))).toEqual(['STR-03 is in use by batch XB26001 (LEAD).']);
+    expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str5' }))).toEqual(['STR-05 is not in the LEAD, so it cannot be used.']);
   });
 
-  it('TI-11 F19 the aseptic set-up records the isolator or RABS: refused while the Logbook says it is not fit (glove test, decontamination); taken when fit', async () => {
+  it('TI-11 F19 the aseptic set-up records the isolator or RABS: refused while the LEAD says it is not fit (glove test, decontamination); taken when fit', async () => {
     t.master.equipment_.push({ ...item('eq-iso', 'ISO-01', 'Isolator'), kind: 'equipment', type: 'Isolator', room: null },
       { ...item('eq-rabs', 'RAB-01', 'RABS'), kind: 'equipment', type: 'RABS', room: null });
     await t.owner.unsafe(`insert into ${S.lb}.equipment_status_v1 (master_id, code, kind, state, fit_for_use, blockers, warnings, checked_at) values
@@ -230,7 +230,7 @@ describe('TI-11 Logbook: equipment and rooms fit for use', () => {
       ('eq-rabs', 'RAB-01', 'equipment', 'clean', true, '{}', '{}', now())`);
     const c = await issue(small([{ steps: [{ block: { id: 'aseptic-ready', version: 2 }, checker: true, settings: {} }, yieldStep] }]));
     await act('asha', c.id, '0.1.0.1', 'start');
-    expect(await problems(record(c.id, '0.1.0.1', { isolator: 'eq-iso' }))).toEqual(['ISO-01 is not fit for use (Logbook): Glove test overdue; Decontamination expired.']);
+    expect(await problems(record(c.id, '0.1.0.1', { isolator: 'eq-iso' }))).toEqual(['ISO-01 is not fit for use (LEAD): Glove test overdue; Decontamination expired.']);
     expect((await record(c.id, '0.1.0.1', { isolator: 'eq-rabs' })).statusCode).toBe(200);
     expect((await stepOf(c.id, '0.1.0.1')).source.isolator).toMatchObject({ from: 'logbook', shown: 'RAB-01: clean' });
   });
@@ -263,7 +263,7 @@ describe('TI-11 Logbook: equipment and rooms fit for use', () => {
     expect((await stepOf(b.id, '0.1.1.1')).state).toBe('done');
   });
 
-  it('TI-11 Logbook down or its status too old: the label questions, answered yes, and a second-person check', async () => {
+  it('TI-11 LEAD down or its status too old: the label questions, answered yes, and a second-person check', async () => {
     const c = await issue(small([{ machineTypes: ['stirrer'], steps: [{ block: { id: 'mix', version: 1 }, settings: {} }, yieldStep] }]));
     await act('asha', c.id, '0.1.0.1', 'start');
     expect((await record(c.id, '0.1.0.1', { machine: 'eq-str4', speed: '300' })).statusCode).toBe(200);
@@ -460,7 +460,7 @@ describe('TI-12 a lot typed by hand after an MMS lot', () => {
   });
 });
 
-describe('TI-21 Deviations: the deviation number and its status come from the Deviations system', () => {
+describe('TI-21 DIVE: the deviation number and its status come from the DIVE system', () => {
   let b: { id: number; batchNo: string };
   const devs = async () => ((await as('meera', 'GET', `/api/batches/${b.id}`)).json() as { batch: { deviations: { reference: string; open: boolean; status?: string }[]; deviationsLink: string } }).batch;
   beforeAll(async () => {
@@ -471,37 +471,37 @@ describe('TI-21 Deviations: the deviation number and its status come from the De
       ('DEV-26-0500', 'closed', 'OTHER1', 'other1', 'Another batch')`);
   });
 
-  it('a note\'s reference must be a deviation in the Deviations system; the pick list holds the deviations naming the batch', async () => {
+  it('a note\'s reference must be a deviation in the DIVE system; the pick list holds the deviations naming the batch', async () => {
     const picks = (await as('asha', 'GET', `/api/batches/${b.id}/deviations`)).json() as { link: string; deviations: { number: string }[] };
     expect(picks.deviations.map((d) => d.number)).toEqual(['DEV-26-0001', 'DEV-26-0099']);
     expect((await act('asha', b.id, '0.1.0.1', 'note', { text: 'pH 7.4', reference: 'DEV-26-9999' })).json())
-      .toMatchObject({ error: 'unknown_deviation', problems: ['DEV-26-9999 is not in the Deviations system: pick one of the deviations of this batch, or check the number.'] });
+      .toMatchObject({ error: 'unknown_deviation', problems: ['DEV-26-9999 is not in the DIVE system: pick one of the deviations of this batch, or check the number.'] });
     expect((await act('asha', b.id, '0.1.0.1', 'note', { text: 'pH 7.4', reference: 'DEV-26-0001' })).statusCode).toBe(200);
   });
 
-  it('TI-21 its status is Deviations\' while the link answers: QA cannot close it by hand, and an unlinked deviation is shown', async () => {
+  it('TI-21 its status is DIVE\' while the link answers: QA cannot close it by hand, and an unlinked deviation is shown', async () => {
     expect(await devs()).toMatchObject({ deviationsLink: 'ok', deviations: [{ reference: 'DEV-26-0001', open: true, status: 'investigation' }] });
     const note = ((await as('meera', 'GET', `/api/batches/${b.id}/review`)).json() as { deviations: { note: number }[]; unlinked: { number: string }[] });
     expect(note.unlinked.map((d) => d.number)).toEqual(['DEV-26-0099']);
     expect((await as('meera', 'POST', `/api/batches/${b.id}/close-deviation`, { note: note.deviations[0]!.note, reason: 'Closed' })).json())
-      .toMatchObject({ problems: ['The status of DEV-26-0001 comes from the Deviations system (now under investigation): it is closed there.'] });
+      .toMatchObject({ problems: ['The status of DEV-26-0001 comes from the DIVE system (now under investigation): it is closed there.'] });
     await t.owner.unsafe(`update ${S.dv}.deviation_v1 set status = 'closed', closed_at = now() where number = 'DEV-26-0001'`);
     expect(await devs()).toMatchObject({ deviations: [{ reference: 'DEV-26-0001', open: false, status: 'closed' }] });
   });
 
-  it('TI-21 release is blocked until Deviations has the deviation closed (the server passes the statuses in)', () => {
+  it('TI-21 release is blocked until DIVE has the deviation closed (the server passes the statuses in)', () => {
     const doc = small([{ steps: [{ checker: true }] }]);
     const events = [ev('started', '0.1.0.1', { min: 1 }), ev('done', '0.1.0.1', { min: 2 }), ev('checked', '0.1.0.1', { person: 2, min: 3 }),
       ev('note', '0.1.0.1', { min: 4, payload: { text: 'pH', reference: 'DEV-26-001' } })];
     const approved: BatchEvent[] = [{ id: 1, kind: 'production_approved', payload: {}, person: 3, at: at(5) }, { id: 2, kind: 'qc_approved', payload: { reportNo: 'QC-1' }, person: 4, at: at(6) }];
     const qa = { id: 9, permissions: ['truebatch_injectables.qa.release'] };
     const release = (status: string) => batchRefusal('release', batchView(doc, events, approved, at(10), new Map([['DEV-26-001', { status, closedAt: null }]])), qa)?.problems ?? null;
-    expect(release('investigation')).toEqual(['Deviation DEV-26-001 (Stage 0 › Check a value against limits: pH) is still open in the Deviations system (under investigation): it is closed there first']);
+    expect(release('investigation')).toEqual(['Deviation DEV-26-001 (Stage 0 › Check a value against limits: pH) is still open in the DIVE system (under investigation): it is closed there first']);
     expect(release('closed')).toBeNull();
     expect(release('rejected')).toBeNull();
   });
 
-  it('TI-21 Deviations down: the number is typed, and a QA person other than the one who typed it closes it by hand', async () => {
+  it('TI-21 DIVE down: the number is typed, and a QA person other than the one who typed it closes it by hand', async () => {
     await cut(S.dv);
     try {
       expect((await act('mona', b.id, '0.1.0.1', 'note', { text: 'Second pH reading', reference: 'DEV-PAPER-7' })).statusCode).toBe(200);
@@ -584,7 +584,7 @@ describe('the views TrueBatch publishes', () => {
   const columns = async (view: string) => (await t.owner<{ c: string }[]>`
     select column_name || ' ' || data_type as c from information_schema.columns where table_schema = ${rep()} and table_name = ${view} order by ordinal_position`).map((r) => r.c);
 
-  it('batch_fact_v1 and equipment_use_v1 have the names and columns of Batchwright\'s, as the Logbook and Deviations read them', async () => {
+  it('batch_fact_v1 and equipment_use_v1 have the names and columns of Batchwright\'s, as the LEAD and DIVE read them', async () => {
     // Batchwright's columns, in its order, as on the platform demo database; then TrueBatch's own manufactured_on, added
     // at the end only (0007), so every reader that selects Batchwright's named columns reads TrueBatch unchanged.
     const batchwright = ['batch_id uuid', 'batch_number text', 'product_code text', 'strength text', 'mbr_version_id uuid', 'family_code text',
@@ -600,7 +600,7 @@ describe('the views TrueBatch publishes', () => {
       'decision text', 'sent_at timestamp with time zone']);
   });
 
-  it('the Logbook\'s and Deviations\' own queries read TrueBatch batches, the equipment they used and the notes', async () => {
+  it('the LEAD\'s and DIVE\' own queries read TrueBatch batches, the equipment they used and the notes', async () => {
     const r = rep();
     // The Logbook's batch list (server/batches.ts COLS and IN_PRODUCTION) and "used on".
     const batches = await t.owner.unsafe(`select batch_number, product_code, strength, status, issued_at::text, completed_at::text, coalesce(released, false) as released,
@@ -795,14 +795,14 @@ describe('the views TrueBatch publishes', () => {
     const [u] = await t.owner<{ id: number }[]>`select id::int from users order by id limit 1`;
     // The binder preparation runs in RM-104; the granulation in the Granulation area, RM-104's area; the balance stands in dispensing.
     const doc = tablet();
-describe('a note without a number is closed here or sent to Deviations (owner decision 20 Nov 2026)', () => {
+describe('a note without a number is closed here or sent to DIVE (owner decision 20 Nov 2026)', () => {
   type Exc = { note: number; decision: string; decided?: { personName: string; payload: { reason?: string } } };
   let b: { id: number; batchNo: string };
   const batch = async () => ((await as('dina', 'GET', `/api/batches/${b.id}`)).json() as { batch: { exceptions: Exc[]; contentHash: string } }).batch;
   const row = async (note: number) => (await t.owner.unsafe(`select decision, sent_at from ${t.schema}_report.deviation_note_v1 where note_id = $1`, [note]))[0] as unknown as { decision: string; sent_at: Date | null };
   beforeAll(async () => { b = await issue(small([{ steps: [{ checker: true }, yieldStep] }])); });
 
-  it('TI-21 send to Deviations: the view says "sent" with the time, so Deviations files it; only a person holding the permission decides, once', async () => {
+  it('TI-21 send to DIVE: the view says "sent" with the time, so DIVE files it; only a person holding the permission decides, once', async () => {
     expect((await act('asha', b.id, '0.1.0.1', 'note', { text: 'Binder added late' })).statusCode).toBe(200);
     const [x] = (await batch()).exceptions;
     expect(x).toMatchObject({ decision: 'open' });
@@ -815,7 +815,7 @@ describe('a note without a number is closed here or sent to Deviations (owner de
     expect(r.decision).toBe('sent');
     expect(r.sent_at).toBeInstanceOf(Date);
     expect((await as('dina', 'POST', `/api/batches/${b.id}/close-exception`, { note: x!.note, reason: 'x', proof: proofFor('dina'), contentHash: (await batch()).contentHash })).json())
-      .toMatchObject({ problems: ['This note is already sent to Deviations.'] });
+      .toMatchObject({ problems: ['This note is already sent to DIVE.'] });
     const [audit] = await t.owner`select action from audit_log where object_type = 'batch' and object_id = ${String(b.id)} and action = 'batch.exception_sent'`;
     expect(audit).toBeDefined();
   });
@@ -916,8 +916,8 @@ describe('a note without a number is closed here or sent to Deviations (owner de
   });
 });
 
-describe('TI-11 Logbook: an antibiotic\'s line kept for it', () => {
-  it('TI-11 after an antibiotic only that product may follow until the Logbook verifies a product-changeover cleaning (its only_product); a view without the column reads as any product', async () => {
+describe('TI-11 LEAD: an antibiotic\'s line kept for it', () => {
+  it('TI-11 after an antibiotic only that product may follow until the LEAD verifies a product-changeover cleaning (its only_product); a view without the column reads as any product', async () => {
     // The stand-in view has no only_product yet (as the Logbook's before it was appended): read as null.
     expect(await t.app.links.logbook.status('eq-str')).toMatchObject({ state: 'ok', value: { code: 'STR-01', onlyProduct: null } });
     await t.owner.unsafe(`alter table ${S.lb}.equipment_status_v1 add column only_product text`);
@@ -926,7 +926,7 @@ describe('TI-11 Logbook: an antibiotic\'s line kept for it', () => {
       const c = await issue(small([{ machineTypes: ['stirrer'], steps: [{ block: { id: 'mix', version: 1 }, settings: {} }, yieldStep] }]));
       await act('asha', c.id, '0.1.0.1', 'start');
       expect(await problems(record(c.id, '0.1.0.1', { machine: 'eq-str' }))).toEqual(
-        ['STR-01 was last used for an antibiotic (FG-PWD-EXC1): a product-changeover cleaning is needed in the Logbook before P.']);
+        ['STR-01 was last used for an antibiotic (FG-PWD-EXC1): a product-changeover cleaning is needed in the LEAD before P.']);
       // The same product follows: allowed, pulled.
       await t.owner.unsafe(`update ${S.lb}.equipment_status_v1 set only_product = 'P' where master_id = 'eq-str'`);
       expect((await record(c.id, '0.1.0.1', { machine: 'eq-str', speed: '300' })).statusCode).toBe(200);
@@ -1005,7 +1005,7 @@ describe('the aseptic set-up: the line\'s media fill from Qualification (owner, 
   });
 });
 
-describe('gap 6: the deviation number Deviations gave a note written without one (owner, 17 Nov 2026)', () => {
+describe('gap 6: the deviation number DIVE gave a note written without one (owner, 17 Nov 2026)', () => {
   let b: { id: number; batchNo: string };
   type Dev = { note: number; reference: string; open: boolean; status?: string; filed?: boolean; typed?: boolean };
   const devs = async () => ((await as('meera', 'GET', `/api/batches/${b.id}`)).json() as { batch: { deviations: Dev[]; deviationsLink: string } }).batch;
@@ -1013,7 +1013,7 @@ describe('gap 6: the deviation number Deviations gave a note written without one
     b = await issue(small([{ steps: [{ checker: true }, yieldStep] }]));
   });
 
-  it('read by its source_ref ("truebatch_injectables:note:<note id>", as Deviations files it): shown with its number and status, and release waits until it is closed there', async () => {
+  it('read by its source_ref ("truebatch_injectables:note:<note id>", as DIVE files it): shown with its number and status, and release waits until it is closed there', async () => {
     expect((await act('asha', b.id, '0.1.0.1', 'note', { text: 'Stirrer stopped for 2 minutes' })).statusCode).toBe(200);
     const [n] = await t.owner<{ id: number }[]>`select id::int from step_events where batch_id = ${b.id} and kind = 'note'`;
     // Not filed yet: a note, no deviation.
@@ -1023,25 +1023,25 @@ describe('gap 6: the deviation number Deviations gave a note written without one
       ('DEV-2026-0041', 'closed', 'OTHER2', 'other2', 'Tablets note of the same id', 'truebatch:note:${n!.id}')`);
     const d = (await devs()).deviations;
     expect(d).toMatchObject([{ note: n!.id, reference: 'DEV-2026-0040', filed: true, open: true, status: 'classification' }]);
-    expect(deviationText(d[0]!)).toBe('DEV-2026-0040 (filed in Deviations from this note) · waiting for classification (Deviations)');
+    expect(deviationText(d[0]!)).toBe('DEV-2026-0040 (filed in DIVE from this note) · waiting for classification (DIVE)');
     const r = (await as('meera', 'GET', `/api/batches/${b.id}/review`)).json() as { deviations: Dev[]; unlinked: { number: string }[] };
     expect(r.deviations.map((d) => d.reference)).toEqual(['DEV-2026-0040']);
     // It is the note's deviation, no longer one "no note links".
     expect(r.unlinked).toEqual([]);
     // QA cannot close it by hand: its status is Deviations'.
     expect((await as('meera', 'POST', `/api/batches/${b.id}/close-deviation`, { note: n!.id, reason: 'Closed' })).json())
-      .toMatchObject({ problems: ['The status of DEV-2026-0040 comes from the Deviations system (now waiting for classification): it is closed there.'] });
+      .toMatchObject({ problems: ['The status of DEV-2026-0040 comes from the DIVE system (now waiting for classification): it is closed there.'] });
     // The batch record names it.
     const l = (await loadBatch(t.sql, b.id))!;
     const pdf = JSON.stringify(batchRecordDoc({ ...await recordInput(t.sql, l), deviationsRead: (await deviationsRead(t.app, l)).read }, 'QA'));
-    expect(pdf).toContain('"DEV-2026-0040 (filed in Deviations from this note)"');
-    expect(pdf).toContain('deviation DEV-2026-0040 (filed in Deviations from this note) · waiting for classification (Deviations): Stirrer stopped for 2 minutes');
-    expect(pdf).toContain('OPEN: waiting for classification in the Deviations system');
+    expect(pdf).toContain('"DEV-2026-0040 (filed in DIVE from this note)"');
+    expect(pdf).toContain('deviation DEV-2026-0040 (filed in DIVE from this note) · waiting for classification (DIVE): Stirrer stopped for 2 minutes');
+    expect(pdf).toContain('OPEN: waiting for classification in the DIVE system');
     await t.owner.unsafe(`update ${S.dv}.deviation_v1 set status = 'closed', closed_at = now() where number = 'DEV-2026-0040'`);
     expect((await devs()).deviations).toMatchObject([{ reference: 'DEV-2026-0040', open: false, status: 'closed' }]);
   });
 
-  it('whole-suite run, S14: QA release through the API is refused while the deviation Deviations filed from a note of this batch is open; closed there, it goes through', async () => {
+  it('whole-suite run, S14: QA release through the API is refused while the deviation DIVE filed from a note of this batch is open; closed there, it goes through', async () => {
     const c = await issue(small([{ steps: [{}, yieldStep] }]));
     await act('asha', c.id, '0.1.0.1', 'start');
     await record(c.id, '0.1.0.1', { reading: '6.0' });
@@ -1062,7 +1062,7 @@ describe('gap 6: the deviation number Deviations gave a note written without one
       ('DEV-2026-0045', 'classification', '${c.batchNo}', '${c.batchNo.toLowerCase()}', 'Room refused', 'truebatch_injectables:note:${n!.id}')`);
     const held = await batchSign('meera', 'release');
     expect(held.statusCode).toBe(409);
-    expect(held.json()).toMatchObject({ problems: ['Deviation DEV-2026-0045 (Stage 0 › Check a value against limits: pH) is still open in the Deviations system (waiting for classification): it is closed there first'] });
+    expect(held.json()).toMatchObject({ problems: ['Deviation DEV-2026-0045 (Stage 0 › Check a value against limits: pH) is still open in the DIVE system (waiting for classification): it is closed there first'] });
     // The view names the note by the same ref Deviations filed it under (S22).
     expect(await t.owner.unsafe(`select source_ref from ${t.schema}_report.deviation_note_v1 where note_id = $1`, [n!.id])).toEqual([{ source_ref: `truebatch_injectables:note:${n!.id}` }]);
     await t.owner.unsafe(`update ${S.dv}.deviation_v1 set status = 'closed', closed_at = now() where number = 'DEV-2026-0045'`);
@@ -1077,13 +1077,13 @@ describe('gap 6: the deviation number Deviations gave a note written without one
     const qa = { id: 9, permissions: ['truebatch_injectables.qa.release'] };
     const release = (read: Map<string, { status: string; closedAt: null; number?: string }> | null) => batchRefusal('release', batchView(doc, events, approved, at(10), read), qa)?.problems ?? null;
     expect(release(new Map([[filedKey(note.id), { status: 'investigation', closedAt: null, number: 'DEV-2026-0040' }]])))
-      .toEqual(['Deviation DEV-2026-0040 (Stage 0 › Check a value against limits: pH) is still open in the Deviations system (under investigation): it is closed there first']);
+      .toEqual(['Deviation DEV-2026-0040 (Stage 0 › Check a value against limits: pH) is still open in the DIVE system (under investigation): it is closed there first']);
     expect(release(new Map([[filedKey(note.id), { status: 'closed', closedAt: null, number: 'DEV-2026-0040' }]]))).toBeNull();
     // Deviations down or absent: the note is an exception of the record, decided here first (owner decision 20 Nov 2026).
-    expect(release(null)).toEqual(['Deviation note “Stirrer stopped” (Stage 0 › Check a value against limits: pH) waits for a decision: close it here or send it to Deviations']);
+    expect(release(null)).toEqual(['Deviation note “Stirrer stopped” (Stage 0 › Check a value against limits: pH) waits for a decision: close it here or send it to DIVE']);
   });
 
-  it('Deviations down: the filed number is not shown (never stale); a number typed with a note says "typed by hand"', async () => {
+  it('DIVE down: the filed number is not shown (never stale); a number typed with a note says "typed by hand"', async () => {
     await cut(S.dv);
     try {
       expect((await devs())).toMatchObject({ deviationsLink: 'down', deviations: [] });
@@ -1099,8 +1099,8 @@ describe('gap 6: the deviation number Deviations gave a note written without one
     const l = (await loadBatch(t.sql, b.id))!;
     const note = l.events.find((e) => e.kind === 'note' && !e.payload.reference)!;
     const pdf = JSON.stringify(batchRecordDoc({ ...await recordInput(t.sql, l), deviationsRead: new Map([[filedKey(note.id), { status: 'capa', closedAt: null, number: 'DEV-2026-0040' }]]) }, 'QA'));
-    expect(pdf).toContain('deviation DEV-2026-0040 (filed in Deviations from this note) · waiting for its CAPA (Deviations): Stirrer stopped for 2 minutes');
+    expect(pdf).toContain('deviation DEV-2026-0040 (filed in DIVE from this note) · waiting for its CAPA (DIVE): Stirrer stopped for 2 minutes');
     expect(pdf).toContain('deviation DEV-PAPER-9 (typed by hand) · open: Second stop');
-    expect(pdf).toContain('OPEN: waiting for its CAPA in the Deviations system');
+    expect(pdf).toContain('OPEN: waiting for its CAPA in the DIVE system');
   });
 });

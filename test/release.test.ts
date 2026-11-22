@@ -122,7 +122,7 @@ describe('batch signatures', () => {
   });
 });
 
-describe('a deviation note without a number: closed here or sent to Deviations (owner decision 20 Nov 2026)', () => {
+describe('a deviation note without a number: closed here or sent to DIVE (owner decision 20 Nov 2026)', () => {
   const bare = ev('note', '0.1.0.1', { min: 5, payload: { text: 'Granules spilled at discharge' } });
   const decider = { id: 9, permissions: ['truebatch_injectables.exception.decide'] };
   const both = { permissions: ['truebatch_injectables.qa.release', 'truebatch_injectables.exception.decide'] };
@@ -138,23 +138,23 @@ describe('a deviation note without a number: closed here or sent to Deviations (
 
   it.each<[string, BatchAction, { permissions: string[] }, BatchEvent[], number, string | null]>([
     ['close it here', 'close-exception', decider, [], bare.id, null],
-    ['send it to Deviations', 'send-exception', decider, [], bare.id, null],
+    ['send it to DIVE', 'send-exception', decider, [], bare.id, null],
     ['close it without the permission (QA release is not enough)', 'close-exception', people.qa, [], bare.id, 'You do not have the permission for this action.'],
     ['send it without the permission', 'send-exception', people.operator, [], bare.id, 'You do not have the permission for this action.'],
     ['close it twice', 'close-exception', decider, [closedHere], bare.id, 'This note is already closed here.'],
     ['send it after it was closed here', 'send-exception', decider, [closedHere], bare.id, 'This note is already closed here.'],
-    ['close it after it was sent', 'close-exception', decider, [sent], bare.id, 'This note is already sent to Deviations.'],
+    ['close it after it was sent', 'close-exception', decider, [sent], bare.id, 'This note is already sent to DIVE.'],
     ['decide a note with a deviation number', 'close-exception', decider, [], deviation.id, 'There is no deviation note without a number with this number.'],
     ['decide after release', 'send-exception', decider, [be('released')], bare.id, 'The batch is released.'],
   ])('TI-21 %s', (_what, action, who, batch, note, want) => {
     expect(batchRefusal(action, view([...complete, bare, deviation], [...approved, ...batch]), who, note)?.problems[0] ?? null).toBe(want);
   });
 
-  it('TI-21 release and rejection wait for the decision, and for Deviations to file a note sent there', () => {
+  it('TI-21 release and rejection wait for the decision, and for DIVE to file a note sent there', () => {
     const where = 'Stage 0 › Check a value against limits: pH';
-    expect(batchRefusal('release', view([...complete, bare], approved), both)?.problems).toEqual([`Deviation note “Granules spilled at discharge” (${where}) waits for a decision: close it here or send it to Deviations`]);
+    expect(batchRefusal('release', view([...complete, bare], approved), both)?.problems).toEqual([`Deviation note “Granules spilled at discharge” (${where}) waits for a decision: close it here or send it to DIVE`]);
     expect(batchRefusal('reject', view([...complete, bare], approved), both)?.problems).toHaveLength(1);
-    expect(batchRefusal('release', view([...complete, bare], [...approved, sent]), both)?.problems).toEqual([`Deviation note “Granules spilled at discharge” (${where}) was sent to Deviations and is not filed there yet`]);
+    expect(batchRefusal('release', view([...complete, bare], [...approved, sent]), both)?.problems).toEqual([`Deviation note “Granules spilled at discharge” (${where}) was sent to DIVE and is not filed there yet`]);
     expect(batchRefusal('release', view([...complete, bare], [...approved, closedHere]), both)).toBeNull();
     // Filed by Deviations from the sent note: it is that deviation now, closed there first.
     const filed = new Map([[`note:${bare.id}`, { status: 'investigation', closedAt: null, number: 'DEV-26-0100' }]]);
@@ -192,7 +192,7 @@ describe('the review list for QA', () => {
     expect(r.late).toEqual([]);
   });
 
-  it('TI-21 run 3 H4: a corrected room is one correction, not one per cleaning fact the Logbook gives with it; a typed fact still counts', () => {
+  it('TI-21 run 3 H4: a corrected room is one correction, not one per cleaning fact the LEAD gives with it; a typed fact still counts', () => {
     const d = small([{ roomTypes: ['RM-219'], steps: [{ block: { id: 'line-clearance', version: 1 }, checker: true, settings: {} }] }]);
     const lb = (room: string) => ({ from: 'logbook' as const, asOf: null, shown: `${room}: clean` });
     const room = (code: string) => ({ itemId: code, code, name: code, version: 1, type: 'Aseptic filling', room: code, area: 'Aseptic filling' });
@@ -237,11 +237,11 @@ describe('the review list for QA', () => {
     const record = (batchEvents: BatchEvent[]) => JSON.stringify(batchRecordDoc({ batch: { id: 1, batchNo: 'TI260099', masterVersionId: 1, issuedBy: 1, issuedAt: at(0) }, doc: d,
       events: events.map((e) => ({ ...e, personName: 'RAMESH' })), batchEvents: batchEvents.map((b) => ({ ...b, personName: 'MEERA' })), now: at(1000), versionNo: 1, issuedByName: 'SUPER', signatures: [] }, 'QA'));
     const ended = record([be('rejected', { terminated: true, reason: 'The filling line broke down' })]);
-    expect(ended.match(/pH = 9: not yet, the rounds go on/g)).toHaveLength(1);
+    expect(ended.match(/pH = 9: not reached in this round; the next round followed/g)).toHaveLength(1);
     expect(ended.match(/NOT YET: the rounds go on/g)).toHaveLength(1);
     expect(ended.match(/pH = 9: not reached \(terminated\)/g)).toHaveLength(1);
     expect(ended.match(/NOT REACHED: terminated/g)).toHaveLength(1);
-    expect(ended.indexOf('the rounds go on')).toBeLessThan(ended.indexOf('not reached (terminated)'));
+    expect(ended.indexOf('the next round followed')).toBeLessThan(ended.indexOf('not reached (terminated)'));
     // In production both rounds read as before.
     const live = record([]);
     expect(live.match(/NOT YET: the rounds go on/g)).toHaveLength(2);

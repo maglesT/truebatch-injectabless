@@ -111,7 +111,7 @@ test('TI-P2 packing journey: packing master from the skeleton (labelling, carton
   try {
     await iss.page.getByRole('row', { name: /Effective/ }).getByRole('button', { name: 'Issue a batch' }).click();
     await expect(issue.getByRole('group', { name: 'Packing line' }).getByRole('button')).toHaveText([/LL-01/]);
-    await expect(issue.getByText(/Not offered, because the Logbook does not have/)).toHaveCount(0);
+    await expect(issue.getByText(/Not offered, because the LEAD does not have/)).toHaveCount(0);
     await issue.getByRole('group', { name: 'Packing line' }).getByRole('button', { name: /LL-01/ }).click();
     await issue.getByLabel('Batch no. of the filled units').fill('TI260001');
     // Pull, don't type: the units issued are what is left of the batch's good units, from TrueBatch Injectables,
@@ -121,7 +121,7 @@ test('TI-P2 packing journey: packing master from the skeleton (labelling, carton
     await issue.getByLabel('Filled units issued').fill('10001');
     await issue.getByRole('button', { name: 'Next: sign' }).click();
     await iss.page.getByRole('dialog').last().getByRole('button', { name: 'Sign', exact: true }).click();
-    await expect(issue.getByRole('alert')).toContainText('LL-01 is not fit for use (Logbook): Dirty: clean and verify before the next use.');
+    await expect(issue.getByRole('alert')).toContainText('LL-01 is not fit for use (LEAD): Dirty: clean and verify before the next use.');
     await expect(issue.getByRole('alert')).toContainText('Only 10000 units of batch TI260001 are left to issue (10000 good units, 0 already issued to other packing batches): issue 10000 or less.');
     await issue.getByRole('button', { name: 'Cancel' }).click();
   } finally {

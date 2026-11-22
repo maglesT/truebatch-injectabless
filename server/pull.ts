@@ -32,15 +32,15 @@ export async function pullItem(app: FastifyInstance, block: Block, f: BlockField
   const r = await app.links.logbook.status(item.itemId);
   if (r.state !== 'ok' || r.value === 'stale') return hand('logbook', r.state === 'absent' ? 'absent' : 'down');
   const s = r.value;
-  if (!s) return refused(`${item.code} is not in the Logbook, so it cannot be used.`);
+  if (!s) return refused(`${item.code} is not in the LEAD, so it cannot be used.`);
   // The line clearance after packing clears the line this batch has just used (it may already be dirty: a stage that
   // names no rooms does not keep the line in use, equipment_use_v1).
-  if (!s.fitForUse && block.id !== 'pack-clearance-after') return refused(`${item.code} is not fit for use (Logbook): ${clauses(s.blockers) || stateWords(s.state)}.`);
+  if (!s.fitForUse && block.id !== 'pack-clearance-after') return refused(`${item.code} is not fit for use (LEAD): ${clauses(s.blockers) || stateWords(s.state)}.`);
   // Owner 17 Nov 2026: after an antibiotic, only that product may follow until a product-changeover cleaning is verified in the Logbook.
   if (s.onlyProduct && s.onlyProduct !== productCode) {
-    return refused(`${item.code} was last used for an antibiotic (${s.onlyProduct}): a product-changeover cleaning is needed in the Logbook before ${productCode}.`);
+    return refused(`${item.code} was last used for an antibiotic (${s.onlyProduct}): a product-changeover cleaning is needed in the LEAD before ${productCode}.`);
   }
-  if (s.inUseBatch && s.inUseBatch !== batchNo) return refused(`${item.code} is in use by batch ${s.inUseBatch} (Logbook).`);
+  if (s.inUseBatch && s.inUseBatch !== batchNo) return refused(`${item.code} is in use by batch ${s.inUseBatch} (LEAD).`);
   const source: Source = { from: 'logbook', asOf: s.checkedAt, shown: clauses([`${item.code}: ${stateWords(s.state)}`, ...s.warnings]) };
   const out: Pulled = { source, values: {}, sources: {}, problems: [] };
   // The line clearance facts the Logbook has (the room, or a packing line): clean (it is fit for use), when and by whom it was cleaned.
@@ -224,10 +224,10 @@ export async function usableResults(app: FastifyInstance, want: Extract<CoaFor, 
 export async function pullQcResult(app: FastifyInstance, f: BlockField, fields: readonly BlockField[], raw: unknown, unit: string, batchNo: string, productCode: string,
   codes: Readonly<Record<string, string>> = {}): Promise<Pulled & { value?: Value }> {
   const r = await usableResults(app, { kind: 'PRODUCT', batchNo, productCode }, unit);
-  if (r.link !== 'ok') return isPick(raw) ? refused(`LIMS does not answer now: type ${f.label} from the QC report.`) : hand('lims', r.link);
-  if (!isPick(raw)) return refused(`${f.label} comes from LIMS: pick the result of the approved CoA of batch ${batchNo}.`);
+  if (r.link !== 'ok') return isPick(raw) ? refused(`QLIMS does not answer now: type ${f.label} from the QC report.`) : hand('lims', r.link);
+  if (!isPick(raw)) return refused(`${f.label} comes from QLIMS: pick the result of the approved CoA of batch ${batchNo}.`);
   const x = r.results.find((y) => y.resultId === raw.lims);
-  if (!x) return refused(`${f.label}: that result is not a result in ${unit} of an approved CoA of batch ${batchNo} in LIMS.`);
+  if (!x) return refused(`${f.label}: that result is not a result in ${unit} of an approved CoA of batch ${batchNo} in QLIMS.`);
   const other = fieldRefusal(x, f, fields, codes);
   if (other) return refused(other);
   const source: Source = { from: 'lims', asOf: null, shown: resultText(x) };
@@ -246,7 +246,7 @@ export async function pullCoa(app: FastifyInstance, number: string, want: CoaFor
   if (c) return { source: { from: 'lims', asOf: c.decidedAt, shown: coaText(c) }, values: { coaNumber: c.coaNumber! }, sources: {}, problems: [] };
   const other = r.all.find((x) => x.coaNumber?.trim().toLowerCase() === number.trim().toLowerCase());
   const what = want.kind === 'PRODUCT' ? `batch ${want.batchNo}` : `lot ${want.lot}`;
-  return refused(other ? coaRefusal(other, want)! : `${number} is not an approved CoA of ${what} in LIMS: pick one${r.coas.length ? '' : ' once QC has approved it there'}.`);
+  return refused(other ? coaRefusal(other, want)! : `${number} is not an approved CoA of ${what} in QLIMS: pick one${r.coas.length ? '' : ' once QC has approved it there'}.`);
 }
 
 /** Round 42: the step's lab request: this batch and product, the request '<batch>/<step key>'. */
@@ -280,10 +280,10 @@ export async function pullInProcess(app: FastifyInstance, block: Block, f: Block
   recorded: Record<string, Value>, coating: string | undefined, taken: ReadonlySet<string>, sampled: (request: string) => { round?: number; at?: string } | undefined,
   codes: Readonly<Record<string, string>> = {}): Promise<Pulled> {
   const r = await usableInProcess(app, want, [unitOf(f)]);
-  if (r.link !== 'ok') return isPick(raw) ? refused(`LIMS does not answer now: type ${f.label} from the QC report.`) : hand('lims', r.link);
-  if (!isPick(raw)) return refused(`${f.label} comes from LIMS: pick the result of in-process request ${want.request} once QC has approved it there.`);
+  if (r.link !== 'ok') return isPick(raw) ? refused(`QLIMS does not answer now: type ${f.label} from the QC report.`) : hand('lims', r.link);
+  if (!isPick(raw)) return refused(`${f.label} comes from QLIMS: pick the result of in-process request ${want.request} once QC has approved it there.`);
   const x = r.results.find((y) => y.resultId === raw.lims);
-  if (!x) return refused(`${f.label}: that result is not a result in ${unitOf(f)} of an approved in-process report of request ${want.request} (this step) in LIMS.`);
+  if (!x) return refused(`${f.label}: that result is not a result in ${unitOf(f)} of an approved in-process report of request ${want.request} (this step) in QLIMS.`);
   if (taken.has(x.resultId)) return refused(`${f.label}: in-process report ${x.coaNumber} (request ${x.requestId}) was used in another round of this step: one result fills one round.`);
   const fit = inProcessFit(x, f, unitOf(f), block.fields, recorded, coating, codes);
   if ('error' in fit) return refused(fit.error);

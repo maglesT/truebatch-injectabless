@@ -123,8 +123,14 @@ const notYetOf = (st: Step, round: number, results: Current['results']) => {
 /** The results out of limits: a real limit failure, never a round that is "not yet" (TI-14). */
 export const outOfLimits = (v: StepView) => Object.entries(v.results).filter(([n, r]) => n !== v.notYet && failed(r));
 /** A "not yet" worked line in plain words: the stop check is not reached yet and the rounds go on (a terminated batch: they do not). */
-export const notYetText = (shown: string, terminated = false) => shown.replace(/:\s*OUT OF LIMITS(?: \([^)]*\))?/g, terminated ? ': not reached (terminated)' : ': not reached yet, the rounds go on')
-  .replace(/:\s*FAIL\b/g, terminated ? ': not reached (terminated)' : ': not yet, the rounds go on');
+export const notYetText = (shown: string, terminated = false, followed = false) => {
+  // A round that another followed (a record read afterwards): said in the past, not as an open step.
+  const again = terminated ? 'not reached (terminated)' : followed ? 'not reached in this round; the next round followed' : 'not reached yet, the rounds go on';
+  return shown.replace(/:\s*OUT OF LIMITS(?: \([^)]*\))?/g, `: ${again}`).replace(/:\s*FAIL\b/g, `: ${terminated ? 'not reached (terminated)' : followed ? 'not reached in this round; the next round followed' : 'not yet, the rounds go on'}`);
+};
+/** A later round of the step was started: this round's stop check not being reached is history. */
+export const followedBy = (v: { key: StepKey }, all: readonly { key: StepKey; state?: string }[]) =>
+  all.some((o) => o.key.stage === v.key.stage && o.key.sub === v.key.sub && o.key.step === v.key.step && o.key.round > v.key.round && o.state !== 'waiting' && o.state !== 'open');
 /** A round of a terminated batch whose stop check is "not reached (terminated)": only the last round of its step. An earlier round was followed by another: its rounds went on. */
 // A later round counts only if it was started: a next round that never started (waiting or open) does not mean the rounds went on.
 export const cutShort = (terminated: unknown, v: { key: StepKey }, all: readonly { key: StepKey; state?: string }[]) =>

@@ -182,7 +182,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   // A10 (fix round 21 Nov 2026): every room the stage allows is busy or not clean: say how the master gets its own room.
   const allBusy = (f: BlockField) => { const p = picksFor(f); return f.kind === 'room' && p.length > 0 && p.every((x) => x.notFit); };
   const noteFor = (f: BlockField) => [mdRead && !fits(f).length ? emptyNote(stage, f, md.machine, md.room, dispensingRooms(doc, md.room), qty) : null, pickOf(f).note,
-    allBusy(f) ? `Every room this stage allows (${stage.roomTypes.join(', ')}) is in use or not fit in the Logbook. Wait for one, or the master names another room for this stage (by its code, in the stage settings of a new master version); a new room is added in master data first.` : null];
+    allBusy(f) ? `Every room this stage allows (${stage.roomTypes.join(', ')}) is in use or not fit in the LEAD. Wait for one, or the master names another room for this stage (by its code, in the stage settings of a new master version); a new room is added in master data first.` : null];
 
   const post = (action: string, body: object = {}, key = row.id) => api('POST', `/api/batches/${d.batch.id}/steps/${key}/${action}`, body);
   const run = async (fn: () => Promise<unknown>) => {
@@ -348,7 +348,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
           ) : (
             <section className="dash-panel" aria-label="Record">
               <div className="panel-head"><h2>Record</h2>{can('record') && <span className="muted">each value is saved when you leave the field</span>}</div>
-              {ipResults?.noRequest && <p className="notice warn">This step was started before LIMS in-process requests: type the in-process results from the QC report. They are marked typed by hand; a second person checks them.</p>}
+              {ipResults?.noRequest && <p className="notice warn">This step was started before QLIMS in-process requests: type the in-process results from the QC report. They are marked typed by hand; a second person checks them.</p>}
               {fields.map(fieldView)}
             </section>
           )}

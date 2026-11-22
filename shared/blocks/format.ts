@@ -158,11 +158,11 @@ export function blockProblems(b: Block): string[] {
   const settings = new Set(b.settings.map((s) => s.name));
   for (const f of b.fields) {
     if (f.kind === 'number' && !f.unit) p.push(`field ${f.name}: a number needs a unit`);
-    if (f.qc === true && (f.kind !== 'number' || f.count !== undefined)) p.push(`field ${f.name}: only a single number is a QC result from LIMS`);
-    if (f.qc === 'in_process' && f.kind !== 'number') p.push(`field ${f.name}: only a number or a list of readings is an in-process result from LIMS`);
+    if (f.qc === true && (f.kind !== 'number' || f.count !== undefined)) p.push(`field ${f.name}: only a single number is a QC result from QLIMS`);
+    if (f.qc === 'in_process' && f.kind !== 'number') p.push(`field ${f.name}: only a number or a list of readings is an in-process result from QLIMS`);
     // TrueBatch Injectables: LIMS gives exactly the values the request names, so an in-process list has a fixed count.
-    if (f.qc === 'in_process' && typeof f.count === 'string') p.push(`field ${f.name}: an in-process list from LIMS has a fixed count, not ${f.count}`);
-    if (f.figure && (f.qc !== 'in_process' || f.count === undefined)) p.push(`field ${f.name}: only an in-process list of readings names LIMS's figure`);
+    if (f.qc === 'in_process' && typeof f.count === 'string') p.push(`field ${f.name}: an in-process list from QLIMS has a fixed count, not ${f.count}`);
+    if (f.figure && (f.qc !== 'in_process' || f.count === undefined)) p.push(`field ${f.name}: only an in-process list of readings names QLIMS's figure`);
     if (f.figure === 'AV' && !b.settings.some((s) => s.name === 'coating')) p.push(`field ${f.name}: the acceptance value needs the coating setting`);
     if (f.nextStage) {
       const next = b.fields.find((x) => x.name === f.nextStage);

@@ -58,11 +58,11 @@ const needsDeviation = (r: EmRow) => excursion(r) && r.level !== 'ALERT';
 
 /** Why QC approval waits on the batch's EM in LIMS, in plain words (none: it may be signed). */
 export function emProblems(rows: readonly EmRow[], w: EmWindow): string[] {
-  if (!rows.length) return [`LIMS has no EM samples of ${w.rooms.join(', ') || 'the aseptic rooms'} for this batch yet: QC approval waits for them.`];
+  if (!rows.length) return [`QLIMS has no EM samples of ${w.rooms.join(', ') || 'the aseptic rooms'} for this batch yet: QC approval waits for them.`];
   const out: string[] = [];
   for (const r of rows) {
-    if (!r.decision) out.push(`EM sample ${r.sampleNumber} (${where(r)}) is not decided in LIMS yet.`);
-    else if (needsDeviation(r) && !r.deviationNumber) out.push(`EM sample ${r.sampleNumber} (${where(r)}): the ${r.level ? `${r.level.toLowerCase()} ` : ''}excursion has no deviation number in LIMS.`);
+    if (!r.decision) out.push(`EM sample ${r.sampleNumber} (${where(r)}) is not decided in QLIMS yet.`);
+    else if (needsDeviation(r) && !r.deviationNumber) out.push(`EM sample ${r.sampleNumber} (${where(r)}): the ${r.level ? `${r.level.toLowerCase()} ` : ''}excursion has no deviation number in QLIMS.`);
   }
   return out;
 }
@@ -70,6 +70,6 @@ export function emProblems(rows: readonly EmRow[], w: EmWindow): string[] {
 /** The EM QC reviewed, in words, for the record and the PDF. */
 export function emText(rows: readonly EmRow[], w: EmWindow): string {
   const ex = rows.filter(excursion);
-  return `EM from LIMS: ${rows.length} sample${rows.length === 1 ? '' : 's'} of ${w.rooms.join(', ')}; `
+  return `EM from QLIMS: ${rows.length} sample${rows.length === 1 ? '' : 's'} of ${w.rooms.join(', ')}; `
     + (ex.length ? `${ex.length} excursion${ex.length === 1 ? '' : 's'}: ${ex.map((r) => `${r.sampleNumber} ${(r.level ?? '').toLowerCase()} ${r.value ?? ''}${r.unit ? ` ${r.unit}` : ''}${r.deviationNumber ? ` (${r.deviationNumber})` : ''}`).join(', ')}` : 'no excursion');
 }

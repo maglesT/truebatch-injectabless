@@ -107,7 +107,7 @@ export function emptyNote(stage: Stage, f: BlockField, machines: readonly (PickM
   return [
     why.length ? `No ${what} can be used here: ${shown}.` : `Master data has no active ${what}.`,
     untyped,
-    why.length ? 'Engineering moves one into a room this stage allows, or adds one, in master data (the Logbook shows where each stands).' : 'Engineering adds it in master data.',
+    why.length ? 'Engineering moves one into a room this stage allows, or adds one, in master data (the LEAD shows where each stands).' : 'Engineering adds it in master data.',
   ].filter(Boolean).join(' ');
 }
 
@@ -123,5 +123,5 @@ export function inLogbook<T extends { itemId: string; code: string }>(items: rea
   // Only an empty picker says why (owner, 17 Nov 2026): a picker with choices needs no note.
   if (!codes.length || offered.length) return { offered, note: null };
   const shown = codes.length > 6 ? `${codes.slice(0, 6).join(', ')} and ${codes.length - 6} more` : codes.join(', ');
-  return { offered, note: `Not offered, because the Logbook does not have ${codes.length === 1 ? 'it' : 'them'}: ${shown}. Only what the Logbook has can be used while it is linked.` };
+  return { offered, note: `Not offered, because the LEAD does not have ${codes.length === 1 ? 'it' : 'them'}: ${shown}. Only what the LEAD has can be used while it is linked.` };
 }

@@ -410,13 +410,13 @@ describe('production approval, QC approval and QA release', () => {
     expect([await toReview('quinn'), await toReview('meera')]).toMatchObject([[], [{ waiting: 'QA', openDeviations: 1 }]]);
     expect((await batchSign('meera', 'reject', {})).statusCode).toBe(400);
     expect((await batchSign('meera', 'release')).json()).toMatchObject({ error: 'not_ready', problems: ['Deviation DEV-26-010 (Stage 0 › Check a value against limits: pH) is open',
-      'Deviation note “Granules spilled at discharge” (Stage 0 › Check a value against limits: pH) waits for a decision: close it here or send it to Deviations'] });
+      'Deviation note “Granules spilled at discharge” (Stage 0 › Check a value against limits: pH) waits for a decision: close it here or send it to DIVE'] });
     expect((await batchAct('quinn', 'close-deviation', { note, reason: 'x' })).statusCode).toBe(403);
     expect((await batchAct('meera', 'close-deviation', { note, reason: 'Meter recalibrated; results confirmed by a second meter' })).statusCode).toBe(200);
     expect((await batchAct('meera', 'close-deviation', { note, reason: 'again' })).statusCode).toBe(409);
     // The exception: QA release is not the permission (her signing proof does not carry it); without Deviations linked it can only be closed here.
     expect((await batchSign('meera', 'close-exception', { note: bare, reason: 'x' })).statusCode).toBe(401);
-    expect((await batchAct('dina', 'send-exception', { note: bare })).json()).toMatchObject({ error: 'not_linked', problems: ['Deviations is not linked: close it here.'] });
+    expect((await batchAct('dina', 'send-exception', { note: bare })).json()).toMatchObject({ error: 'not_linked', problems: ['DIVE is not linked: close it here.'] });
     expect((await batchAct('dina', 'close-exception', { note: bare, reason: 'x' })).statusCode).toBe(400);
     expect((await batchSign('dina', 'close-exception', { note: bare, reason: 'Swept up and weighed into the rejects' })).statusCode).toBe(200);
     expect((await full()).batch.exceptions).toMatchObject([{ note: bare, decision: 'closed', decided: { personName: 'DINA' } }]);

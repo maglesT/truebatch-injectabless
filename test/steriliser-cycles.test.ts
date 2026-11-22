@@ -51,8 +51,8 @@ const rows = async (batchNo: string) => t.owner.unsafe(`select cycle_id, equipme
   result, exposure_min::text, lowest_temp_c::text, lowest_f0::text, max_product_temp_c::text, h2o2_ppm::text, leak_rate::text, units::text, bi_id, use_by::text, signed
   from ${t.schema}_report.steriliser_cycle_v1 where batch_number = $1 order by cycle_id`, [batchNo]);
 
-describe('steriliser_cycle_v1: the batch\'s sterilisation cycles, published for the Logbook', () => {
-  it('its columns, as agreed with the Logbook (added only at the end)', async () => {
+describe('steriliser_cycle_v1: the batch\'s sterilisation cycles, published for the LEAD', () => {
+  it('its columns, as agreed with the LEAD (added only at the end)', async () => {
     const cols = await t.owner<{ c: string }[]>`select column_name || ' ' || data_type as c from information_schema.columns
       where table_schema = ${`${t.schema}_report`} and table_name = 'steriliser_cycle_v1' order by ordinal_position`;
     expect(cols.map((r) => r.c)).toEqual(['cycle_id text', 'batch_number text', 'product_code text', 'step_key text', 'step_name text', 'equipment_code text',

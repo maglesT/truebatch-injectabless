@@ -63,7 +63,7 @@ export function FieldInput({ f, unit, saved, picks = [], note, options = [], res
     input = <>
       {saved !== undefined && <div className="recorded"><span>{valueText(saved)}</span></div>}
       {inProcess.offered.length === 0
-        ? <p className="muted">Waiting for LIMS: request {inProcess.request} (sample not yet approved).</p>
+        ? <p className="muted">Waiting for QLIMS: request {inProcess.request} (sample not yet approved).</p>
         : (
           <div className="picks" role="group" aria-label={f.label}>
             {inProcess.offered.map((r) => (
@@ -100,7 +100,7 @@ export function FieldInput({ f, unit, saved, picks = [], note, options = [], res
     );
   } else if (f.qc === true && results) {
     input = results.length === 0
-      ? <p className="muted">LIMS has no approved CoA of this batch with a result in {unit || 'this unit'} yet: it is picked here once QC has approved it in LIMS.</p>
+      ? <p className="muted">QLIMS has no approved CoA of this batch with a result in {unit || 'this unit'} yet: it is picked here once QC has approved it in QLIMS.</p>
       : (
         <div className="picks" role="group" aria-label={f.label}>
           {results.map((r) => (
@@ -131,7 +131,7 @@ export function FieldInput({ f, unit, saved, picks = [], note, options = [], res
         <div className="picks" role="group" aria-label={f.label}>
           {picks.map((p) => (
             <button key={p.itemId} type="button" className={raw === p.itemId ? 'on' : ''} aria-pressed={raw === p.itemId} disabled={disabled} onClick={() => tap(p.itemId)}>
-              <b>{p.code}</b><small>{p.name}</small>{p.notFit && <small className="not-fit">{p.notFit} in the Logbook</small>}
+              <b>{p.code}</b><small>{p.name}</small>{p.notFit && <small className="not-fit">{p.notFit} in the LEAD</small>}
             </button>
           ))}
         </div>
@@ -145,7 +145,7 @@ export function FieldInput({ f, unit, saved, picks = [], note, options = [], res
   } else {
     input = <>
       <input id={id} className="text" type={f.date ? 'date' : 'text'} autoComplete="off" value={raw as string} disabled={disabled} maxLength={f.kind === 'lot' ? 60 : 2000} list={options.length ? `${id}-list` : undefined}
-        placeholder={f.kind === 'lot' ? (options.length ? 'Pick the lot from MMS' : 'Type the lot number from the label') : options.length ? 'Pick the CoA from LIMS' : undefined} onChange={(e) => set(e.target.value)} onBlur={blurSave} onKeyDown={enter} />
+        placeholder={f.kind === 'lot' ? (options.length ? 'Pick the lot from MMS' : 'Type the lot number from the label') : options.length ? (f.kind === 'bulk' ? 'Pick a released batch, or type its number' : 'Pick the CoA from QLIMS') : f.kind === 'bulk' ? 'Type the batch number from the tray label' : undefined} onChange={(e) => set(e.target.value)} onBlur={blurSave} onKeyDown={enter} />
       {options.length > 0 && <datalist id={`${id}-list`}>{options.map((o) => <option key={o} value={o} />)}</datalist>}
     </>;
   }

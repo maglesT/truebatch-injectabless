@@ -139,20 +139,20 @@ describe('the sterility assurance summary at release', () => {
     const row = (results: object, notYet?: string) => ({ key: { stage: 0, sub: 1, step: 0, round: 1 }, id: '0.1.0.1', results, values: {}, notYet }) as never;
     const r1 = summaryOf(row({ done: goingOn, defectCheck: pass }, 'done'), block);
     expect(r1.bad).toBe(false);
-    expect(r1.said.join(' ')).toMatch(/not yet, the rounds go on/);
+    expect(r1.said.join(' ')).toMatch(/not reached in this round; the next round followed/);
     expect(summaryOf(row({ done: goingOn, defectCheck: { ...pass, check: { pass: false, level: 'fail', shown: 'Defective units: 2 units: OUT OF LIMITS' } } }, 'done'), block).bad).toBe(true);
   });
 
-  it('run 2 G8: the summary names the isolator or RABS and the capping machine used, with their Logbook status as the step recorded it', async () => {
+  it('run 2 G8: the summary names the isolator or RABS and the capping machine used, with their LEAD status as the step recorded it', async () => {
     const { summaryOf } = await import('../web/src/release/SterileSummary.js');
     const { latestBlock } = await import('../shared/blocks/index.js');
     const iso = { itemId: 'i', code: 'EQS-ISO-01', name: 'Filling isolator', version: 1, type: 'Isolator', room: 'RM-207', area: 'Aseptic filling' };
     const row = (values: object, source: object) => ({ key: { stage: 0, sub: 1, step: 0, round: 1 }, id: '0.1.0.1', results: {}, values, source }) as never;
     expect(summaryOf(row({ isolator: iso, people: 'yes' }, { isolator: { from: 'logbook', asOf: null, shown: 'EQS-ISO-01: clean' } }), latestBlock('aseptic-ready')).said[0])
-      .toBe('Isolator, RABS or blow-fill-seal machine: EQS-ISO-01 · Filling isolator (Logbook at use: EQS-ISO-01: clean)');
+      .toBe('Isolator, RABS or blow-fill-seal machine: EQS-ISO-01 · Filling isolator (LEAD at use: EQS-ISO-01: clean)');
     const cap = { ...iso, code: 'EQS-CAP-01', name: 'Vial capping machine', type: 'Capping machine' };
     expect(summaryOf(row({ capper: cap }, { capper: { from: 'hand', link: 'logbook', state: 'down' } }), latestBlock('seal-check')).said[0])
-      .toBe('Capping machine: EQS-CAP-01 · Vial capping machine (Logbook down at use: its status answered by hand)');
+      .toBe('Capping machine: EQS-CAP-01 · Vial capping machine (LEAD down at use: its status answered by hand)');
     // Display backlog 12: the line's media fill with its outcome and next date in words, not the protocol number only.
     const aps = { from: 'qual', asOf: null, shown: 'Qualification media fill PRT-2026-0058 of RM-207: pass, next 2027-05-18' };
     expect(summaryOf(row({ isolator: iso, apsReport: 'PRT-2026-0058', apsDue: '2027-05-18' }, { apsReport: aps }), latestBlock('aseptic-ready')).said[1])

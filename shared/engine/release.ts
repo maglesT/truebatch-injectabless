@@ -105,9 +105,9 @@ export function exceptions(events: readonly StepEvent[], batchEvents: readonly B
 }
 /** An exception's decision in words, as the step, the batch screen, QA's review and the PDF show it. */
 export function exceptionText<T extends string | Date>(x: { decision: Exception['decision']; decided?: { personName?: string; at: T; payload: { reason?: string } } }, clock: (at: T) => string): string {
-  if (x.decision === 'open') return 'Exception: waits for a decision (close it here or send it to Deviations)';
+  if (x.decision === 'open') return 'Exception: waits for a decision (close it here or send it to DIVE)';
   const by = x.decided ? `${x.decided.personName ?? ''}, ${clock(x.decided.at)}` : '';
-  return x.decision === 'closed' ? `Exception closed here by ${by}: ${x.decided?.payload.reason ?? ''}` : `Exception sent to Deviations by ${by}: waiting to be filed there`;
+  return x.decision === 'closed' ? `Exception closed here by ${by}: ${x.decided?.payload.reason ?? ''}` : `Exception sent to DIVE by ${by}: waiting to be filed there`;
 }
 
 /**
@@ -115,12 +115,12 @@ export function exceptionText<T extends string | Date>(x: { decision: Exception[
  * "DEV-26-0001 · under investigation (Deviations)", "DEV-7 (typed by hand) · open", "… · closed by QA".
  */
 export function deviationText(d: Pick<Deviation, 'reference' | 'open' | 'status' | 'filed' | 'typed'>): string {
-  const status = d.status !== undefined ? `${deviationStatusWords(d.status)} (Deviations)` : d.open ? 'open' : 'closed by QA';
+  const status = d.status !== undefined ? `${deviationStatusWords(d.status)} (DIVE)` : d.open ? 'open' : 'closed by QA';
   return `${deviationNumber(d)} · ${status}`;
 }
 /** The number, and where it came from when it was not picked from Deviations: typed by hand, or filed there from the note. */
 export const deviationNumber = (d: Pick<Deviation, 'reference' | 'filed' | 'typed'>) =>
-  `${d.reference}${d.typed ? ' (typed by hand)' : ''}${d.filed ? ' (filed in Deviations from this note)' : ''}`;
+  `${d.reference}${d.typed ? ' (typed by hand)' : ''}${d.filed ? ' (filed in DIVE from this note)' : ''}`;
 
 /** Every timer that ran over, with the deviation notes made after it (a hold: in the using stage; a check: on it). */
 export function lateItems(doc: MasterDoc, events: readonly StepEvent[], now: Date): { timer: Timer; notes: StepEvent[] }[] {
@@ -180,7 +180,7 @@ export function batchRefusal(action: BatchAction, v: BatchView, user: { id?: num
     if (v.status === 'released' || v.status === 'rejected') return no(`The batch is ${words}.`);
     const x = v.exceptions.find((e) => e.note === note);
     if (!x) return no('There is no deviation note without a number with this number.');
-    if (x.decision !== 'open') return no(`This note is already ${x.decision === 'closed' ? 'closed here' : 'sent to Deviations'}.`);
+    if (x.decision !== 'open') return no(`This note is already ${x.decision === 'closed' ? 'closed here' : 'sent to DIVE'}.`);
     return null;
   }
   if (action === 'abandon') {
@@ -193,7 +193,7 @@ export function batchRefusal(action: BatchAction, v: BatchView, user: { id?: num
     if (action === 'terminate') return ['in production', 'manufacturing complete'].includes(v.status) ? null : no(`Not possible while the batch is ${words}: QA decides at release.`);
     const d = v.deviations.find((x) => x.note === note && x.open);
     if (!d) return no('There is no open deviation note with this number.');
-    if (d.status !== undefined) return no(`The status of ${d.reference} comes from the Deviations system (now ${deviationStatusWords(d.status)}): it is closed there.`);
+    if (d.status !== undefined) return no(`The status of ${d.reference} comes from the DIVE system (now ${deviationStatusWords(d.status)}): it is closed there.`);
     // By hand: a second person, who checked the closure in the deviation system or its paper record.
     if (d.by === user.id) return { status: 403, error: 'own_work', problems: ['You typed this deviation number: another QA person closes it.'] };
     return null;
@@ -204,12 +204,12 @@ export function batchRefusal(action: BatchAction, v: BatchView, user: { id?: num
   if (action === 'production-approve') return no(...v.late);
   if (action === 'qc-approve') return null;
   // TI-21: release or rejection only with every linked deviation closed; TI-18: a yield out of limits blocks release.
-  const open = v.deviations.filter((d) => d.open).map((d) => `Deviation ${d.reference} (${d.where ?? `step ${d.step}`}) is ${d.status ? `still open in the Deviations system (${deviationStatusWords(d.status)}): it is closed there first` : 'open'}`);
+  const open = v.deviations.filter((d) => d.open).map((d) => `Deviation ${d.reference} (${d.where ?? `step ${d.step}`}) is ${d.status ? `still open in the DIVE system (${deviationStatusWords(d.status)}): it is closed there first` : 'open'}`);
   // Owner decision 20 Nov 2026: every note without a number is decided first; a note sent to Deviations waits until
   // Deviations has filed it (it is then a deviation above, closed there first).
   const undecided = v.exceptions.filter((x) => x.decision !== 'closed').map((x) => x.decision === 'open'
-    ? `Deviation note “${x.text}” (${x.where ?? `step ${x.step}`}) waits for a decision: close it here or send it to Deviations`
-    : `Deviation note “${x.text}” (${x.where ?? `step ${x.step}`}) was sent to Deviations and is not filed there yet`);
+    ? `Deviation note “${x.text}” (${x.where ?? `step ${x.step}`}) waits for a decision: close it here or send it to DIVE`
+    : `Deviation note “${x.text}” (${x.where ?? `step ${x.step}`}) was sent to DIVE and is not filed there yet`);
   return no(...open, ...undecided, ...(action === 'release' ? v.yieldOut : []));
 }
 

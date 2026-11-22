@@ -178,7 +178,7 @@ test('TI-21 QA terminates a batch still in production from the To review list: a
   await qa.ctx.close();
 });
 
-test('TI-21 a deviation note without a number is closed here with a reason and a signature; Send to Deviations only where Deviations is linked', async ({ browser }) => {
+test('TI-21 a deviation note without a number is closed here with a reason and a signature; Send to DIVE only where DIVE is linked', async ({ browser }) => {
   const batch = await issuedBatch(browser);
   const op = await person(browser, 'op1');
   const r = await op.page.request.post(`/api/batches/${batch.id}/steps/0.1.0.1/note`, { data: { text: 'Lid of the blender found open' } });
@@ -195,7 +195,7 @@ test('TI-21 a deviation note without a number is closed here with a reason and a
   await exc.page.goto(`/#/batch/${batch.id}`);
   const mine = exc.page.getByRole('region', { name: 'Deviation notes without a number' });
   // The e2e server has no Deviations link: the note can only be closed here.
-  await expect(mine.getByRole('button', { name: 'Send to Deviations' })).toHaveCount(0);
+  await expect(mine.getByRole('button', { name: 'Send to DIVE' })).toHaveCount(0);
   await mine.getByRole('button', { name: 'Close here…' }).click();
   await exc.page.getByLabel('Reason for closing it here').fill('Lid closed at once; blend covered, no foreign matter found');
   await exc.page.getByRole('button', { name: 'Next: sign' }).click();

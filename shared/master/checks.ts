@@ -55,7 +55,7 @@ export function masterChecks(doc: MasterDoc, ctx: CheckContext = {}): Problem[] 
   // Owner rule 19 Nov 2026: the product that owns a job keeps it. With LIMS linked, LIMS owns the EM results: QC reviews
   // them from LIMS at QC approval, so a step typing the EM plate counts would enter them twice.
   if (ctx.limsLinked) doc.stages.forEach((s, i) => s.steps.forEach((t, j) => {
-    if (t.block.id === 'incubated-em') warn(`stages[${i}].steps[${j}]`, 'LIMS is linked: the EM plates are read in LIMS and QC reviews them from LIMS at QC approval. Remove this step (it would type the counts again); it is for a plant without LIMS.');
+    if (t.block.id === 'incubated-em') warn(`stages[${i}].steps[${j}]`, 'QLIMS is linked: the EM plates are read in QLIMS and QC reviews them from QLIMS at QC approval. Remove this step (it would type the counts again); it is for a plant without QLIMS.');
   }));
 
   twice(doc.stages.map((s) => s.key), 'stages');
@@ -213,7 +213,7 @@ export function masterChecks(doc: MasterDoc, ctx: CheckContext = {}): Problem[] 
       // lubrication) has a code for each occurrence ('@1', '@2'), which LIMS's in-process specification maps one by one.
       const times = doc.stages.reduce((n, x) => n + x.steps.filter((y) => y.block.id === st.block.id).length, 0);
       const codes = [...new Set(Object.values(ipcCodes(doc, si, ti, block.fields)))];
-      if (times > 1 && codes.length) out.push({ level: 'info', path: p, message: `${block.name} is in this master ${times} times: this step's in-process test is ${codes.join(', ')}. LIMS specification must map each occurrence` });
+      if (times > 1 && codes.length) out.push({ level: 'info', path: p, message: `${block.name} is in this master ${times} times: this step's in-process test is ${codes.join(', ')}. QLIMS specification must map each occurrence` });
     });
   });
   return out.map((p) => ({ ...p, message: plainWords(p.message) }));

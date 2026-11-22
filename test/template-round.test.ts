@@ -270,3 +270,16 @@ describe('part 6: freeze-drying extras, filtration at the filler, siliconisation
     expect(r.cycle).toMatchObject({ ok: true, value: '45', check: { pass: true } });
   });
 });
+
+describe('fix3 1122: the weighing target is shown as the step shows it', () => {
+  it('the net check says "from 2.234 kg", not "from 2.2339… kg"', () => {
+    const d = one('weigh', { target: { formula: 'x' }, tolerance: '0.5' });
+    const r = run(d, { gross: { value: '5.000', unit: 'kg' }, tare: { value: '2.766', unit: 'kg' } });
+    const shown = (r.netCheck as { shown?: string } | undefined)?.shown ?? '';
+    expect(shown).not.toContain('…');
+  });
+  it('a round another followed reads as history on a record', async () => {
+    const { notYetText } = await import('../shared/engine/batch.js');
+    expect(notYetText('Filling finished: no: FAIL', false, true)).toBe('Filling finished: no: not reached in this round; the next round followed');
+  });
+});

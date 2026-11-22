@@ -12,7 +12,7 @@ describe('plant time', () => {
       .toBe('15 Nov 2026, 23:53 IST − 15 Nov 2026, 23:43 IST = 11 min');
   });
 
-  it('a time read from the Logbook as PostgreSQL text (cleaned on) reads in plant time; a plain date reads as a date, never ISO', () => {
+  it('a time read from the LEAD as PostgreSQL text (cleaned on) reads in plant time; a plain date reads as a date, never ISO', () => {
     expect(plantText('2026-11-15 17:38:16.254+00', true)).toBe('15 Nov 2026, 23:08 IST');
     expect(plantText('MMS lot E26-0001: released, expiry 2029-10-31, retest 2027-04-01')).toBe('MMS lot E26-0001: released, expiry 31 Oct 2029, retest 1 Apr 2027');
     expect(valueText('2026-11-15')).toBe('15 Nov 2026');

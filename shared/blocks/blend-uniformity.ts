@@ -6,7 +6,7 @@ import type { Block } from './format.js';
 // is their mean, worked out again here.
 export const blendUniformity: Block = {
   id: 'blend-uniformity', version: 1, name: 'Blend uniformity sampling', checker: true,
-  instruction: 'Take one sample from each of the 10 locations of the sampling plan with the sampling thief, label them and send them to QC. Pick the results of the 10 locations from LIMS once QC has approved them (typed from the QC report only while LIMS cannot be reached).',
+  instruction: 'Take one sample from each of the 10 locations of the sampling plan with the sampling thief, label them and send them to QC. Pick the results of the 10 locations from QLIMS once QC has approved them (typed from the QC report only while QLIMS cannot be reached).',
   fields: [
     { name: 'machine', label: 'Blender', kind: 'machine', types: ['blend', 'bin'] },
     { name: 'results', label: 'Content at 10 locations (% of label claim)', kind: 'number', unit: '%', count: 10, qc: 'in_process', figure: 'mean' },

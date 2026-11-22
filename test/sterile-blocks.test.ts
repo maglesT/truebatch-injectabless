@@ -165,7 +165,7 @@ describe('the sterile blocks of the injectables library', () => {
     expect(usedQuantity(doc, st, { lot: 'P26-0013', issued: u('100'), returned: u('150') }, {}, [])).toEqual(u('0'));
   });
 
-  it('F19 the set-up and the seal check record their machine from the Logbook in a new version; the library offers only the latest', () => {
+  it('F19 the set-up and the seal check record their machine from the LEAD in a new version; the library offers only the latest', () => {
     expect(findBlock({ id: 'aseptic-ready', version: 3 })!.fields[0]).toEqual({ name: 'isolator', label: 'Isolator or RABS', kind: 'machine', types: ['isolator', 'rabs'] });
     // Run 2, G7: version 3 has no typed glove question (the Logbook decides the glove test through the isolator field).
     // Version 4 (aseptic blow-fill-seal, 17 Nov 2026): the same, and a BFS machine is taken in the isolator's place.
