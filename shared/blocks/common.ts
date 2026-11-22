@@ -14,6 +14,10 @@ const within = (name: string, label: string, value: string, lim: string) => ({ n
 const observe = (name: string, label: string, answers: string[]) => ({ name, label, template: 'C4', args: { question: label, answers: answers.map((a) => `$${a}`), expected: ['yes'] } });
 const duration = (name: string, label: string, start: string, end: string, lim: string) => ({ name, label, template: 'T13', args: { mode: 'duration', start: `$${start}`, end: `$${end}`, limit: `$${lim}` } });
 
+// A periodic check beside a stage stops when the operator answers "finished" (as the clean-air checks in filling).
+const finished = (field: string, what: string) => ({ name: 'done', label: `${what} finished`, template: 'C4', args: { question: what, answers: [`$${field}`], expected: ['finished'], options: ['going on', 'finished'] } });
+const going = (name: string, label: string) => ({ name, label, kind: 'choice' as const, options: ['going on', 'finished'] });
+
 // 1. Thaw and pool drug substance: the containers of a lot with their concentration from the certificate.
 export const dsThawPool: Block = {
   id: 'ds-thaw-pool', version: 1, name: 'Thaw and pool drug substance', checker: true,
@@ -243,6 +247,18 @@ export const filtration: Block = {
   ],
 };
 
+// 10c. Sterile filtration at the filler (template round part 6): the filter sits in the filling line, so its pressure difference
+// is read in rounds beside the fill (not once before it). The pre- and post-use integrity tests are still needed.
+export const filtrationInline: Block = {
+  id: 'filtration-inline', version: 1, name: 'Sterile filtration at the filler (rounds)', checker: false, periodic: { maxMinutes: 240, alongside: true }, stop: 'done',
+  instruction: 'At each round read the pressure difference across the filter at the filler and the flow; the filter train and its bioburden sample are as the master shows.',
+  fields: [
+    text('filters', 'Filter train IDs'), num('pressure', 'Pressure difference across the filter', 'bar'), num('flow', 'Flow', 'mL/min', true), going('filtering', 'Filtration'),
+  ],
+  settings: [limit('pressureLimit', 'Pressure difference limit', false), limit('flowLimit', 'Flow limits')],
+  calcs: [within('pressureCheck', 'Pressure difference', 'pressure', 'pressureLimit'), within('flowCheck', 'Flow', 'flow?', 'flowLimit?'), finished('filtering', 'Filtration')],
+};
+
 // 10b. Clarifying (non-sterilising) filtration: no integrity test, no bioburden sample, no filtered-bulk hold.
 export const filtrationClarifying: Block = {
   id: 'filtration-clarifying', version: 1, name: 'Clarifying filtration (not sterilising)', checker: false,
@@ -271,9 +287,19 @@ export const componentWash: Block = {
   calcs: [within('conductivityCheck', 'Final rinse conductivity', 'conductivity?', 'conductivityLimit?'), observe('visualCheck', 'Components clean', ['visual'])],
 };
 
-// A periodic check beside a stage stops when the operator answers "finished" (as the clean-air checks in filling).
-const finished = (field: string, what: string) => ({ name: 'done', label: `${what} finished`, template: 'C4', args: { question: what, answers: [`$${field}`], expected: ['finished'], options: ['going on', 'finished'] } });
-const going = (name: string, label: string) => ({ name, label, kind: 'choice' as const, options: ['going on', 'finished'] });
+// 11b. Siliconise containers or stoppers (template round part 6): the silicone emulsion lot and its concentration, then the
+// bake against its recipe (I21).
+export const siliconise: Block = {
+  id: 'siliconise', version: 1, name: 'Siliconise containers or stoppers (emulsion and bake)', checker: false,
+  instruction: 'Apply the silicone emulsion of the lot shown at the concentration shown, bake as the recipe says and record each phase from the printout.',
+  fields: [
+    { name: 'machine', label: 'Siliconising machine or oven', kind: 'machine', types: ['silicon', 'oven', 'washer'] },
+    { name: 'lot', label: 'Silicone emulsion lot', kind: 'lot' }, num('concentration', 'Emulsion concentration', '%'), num('count', 'Components siliconised', 'units'), text('printout', 'Bake printout reference'),
+    ...cycleFields,
+  ],
+  settings: [limit('concentrationLimit', 'Emulsion concentration limits', false), ...cycleSettings],
+  calcs: [within('concentrationCheck', 'Emulsion concentration', 'concentration', 'concentrationLimit'), cycleCalc],
+};
 
 // 12. Depyrogenate containers in a tunnel or oven, with belt speed and hot-zone checks alongside the stage.
 export const depyrogenate: Block = {

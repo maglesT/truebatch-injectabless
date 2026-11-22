@@ -7,7 +7,7 @@ import { blockOf, stepOf, tone, valueText, words, type BatchDetail, type Block, 
 // Read from the batch as recorded; nothing new is kept. Out of limits shows red, as in the review below it.
 const GROUPS: { title: string; ids: string[] }[] = [
   { title: 'Sterilisation and depyrogenation cycles', ids: ['terminal-sterilise', 'heat-treatment', 'irradiation', 'sterilise', 'depyrogenate', 'isolator-decon', 'lyo-cycle'] },
-  { title: 'Sterile filtration and filter tests', ids: ['filter-test', 'filtration'] },
+  { title: 'Sterile filtration and filter tests', ids: ['filter-test', 'filtration', 'filtration-inline'] },
   { title: 'Aseptic set-up (isolator, RABS or BFS machine)', ids: ['aseptic-ready'] },
   // Run 3, H13: the fill itself (fill weights each round; the powder fill's humidity, the BFS parison temperature and air shower check).
   { title: 'Filling', ids: ['fill', 'fill-suspension', 'ffs-run', 'powder-fill'] },

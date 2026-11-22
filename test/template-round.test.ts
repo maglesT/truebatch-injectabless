@@ -211,3 +211,41 @@ describe('part 5: the cycle against its recipe (I21) and the lethality per probe
     expect(run(lyo, rec(['150', '700'], ['-50', '-44'], ['-41', '-26'])).cycle).toMatchObject({ ok: true, check: { pass: true } });
   });
 });
+
+describe('part 6: freeze-drying extras, filtration at the filler, siliconisation', () => {
+  const api = { key: 'a', materialItemId: 'm', code: 'M', name: 'Examplol', mg: '50.0', role: 'api' };
+  const wfi = { key: 'w', materialItemId: 'w', code: 'W', name: 'Water for injections', role: 'solvent' };
+  const doc = (steps: object[]): MasterDoc => masterSchema.parse({ header: { ...header, batchUnit: 'L', batchSize: '100', densityGPerMl: '1.0', fillVolumeMl: '10.0', fillExcessMl: '0.5', claimPer: 'mL' }, formula: [api, wfi],
+    stages: [{ key: 's', name: 'Stage', kind: 'normal', steps }] });
+  const st = (id: string, settings: object) => { const b = latestBlock(id)!; return { ...stepFrom(b, []), key: id, settings: { ...stepFrom(b, []).settings, ...settings } }; };
+  const one = (id: string, settings: object) => doc([st(id, settings)]);
+  it('the new blocks are valid', () => {
+    for (const id of ['lyo-load', 'lyo-cycle', 'filtration-inline', 'siliconise']) expect([id, blockProblems(latestBlock(id)!)]).toEqual([id, []]);
+    expect(latestBlock('lyo-load')!.version).toBe(2);
+  });
+  it('lyo: a tray load records its shelves, trays and fill per tray; an annealing phase is in the recipe and has its shelf temperature checked', () => {
+    const load = latestBlock('lyo-load')!;
+    expect(load.fields.map((f) => f.name)).toEqual(expect.arrayContaining(['shelves', 'traysPerShelf', 'fillPerTray']));
+    const d = one('lyo-cycle', { annealingLimit: { low: '-25', high: '-15', unit: '°C' }, phases: '3', phaseRecipe: 'Freezing; 120 to 240; -50 to -40 | Annealing; 60 to 180; -25 to -15 | Primary drying; at least 600; -45 to -25', paramName: 'Shelf temperature', paramUnit: '°C' });
+    const c = (n: string) => ({ value: n, unit: '°C' });
+    const r = run(d, { annealingShelf: c('-12'), phaseMinutes: ['150', '90', '700'].map((x) => ({ value: x, unit: 'min' })), phaseMin: ['-50', '-24', '-44'].map(c), phaseMax: ['-41', '-16', '-26'].map(c) });
+    expect(r.annealingCheck).toMatchObject({ check: { pass: false } });
+    expect(r.cycle).toMatchObject({ ok: true, value: '940', check: { pass: true } });
+  });
+  it('filtration at the filler: the pressure difference in rounds beside the fill, and it counts as the sterile filtration for the master rules', () => {
+    const d = one('filtration-inline', { pressureLimit: { high: '3.5', unit: 'bar' } });
+    const v = (p: string) => ({ filters: 'F1', pressure: { value: p, unit: 'bar' }, filtering: 'going on' });
+    expect(run(d, v('2.1')).pressureCheck).toMatchObject({ check: { pass: true } });
+    expect(run(d, v('4.0')).pressureCheck).toMatchObject({ check: { pass: false } });
+    expect(latestBlock('filtration-inline')!.periodic).toEqual({ maxMinutes: 240, alongside: true });
+    const aseptic = doc([st('filtration-inline', { pressureLimit: { high: '3.5', unit: 'bar' } }), st('fill', { needles: '4', meanLimit: { low: '10.5', high: '10.7', unit: 'g' }, band: '2' })]);
+    expect(masterChecks({ ...aseptic, header: { ...aseptic.header, route: 'aseptic' } }).map((p) => p.message).join('|')).not.toMatch(/has its sterile filtration/);
+  });
+  it('siliconisation: the emulsion lot and concentration, then the bake against its recipe', () => {
+    const d = one('siliconise', { concentrationLimit: { low: '0.5', high: '2.0', unit: '%' }, phases: '2', phaseRecipe: 'Bake; 20 to 40; 300 to 330 | Cool; at least 10; -', paramName: 'Oven temperature', paramUnit: '°C' });
+    const c = (n: string) => ({ value: n, unit: '°C' });
+    const r = run(d, { concentration: { value: '1.2', unit: '%' }, phaseMinutes: ['30', '15'].map((x) => ({ value: x, unit: 'min' })), phaseMin: ['305', '60'].map(c), phaseMax: ['325', '300'].map(c) });
+    expect(r.concentrationCheck).toMatchObject({ check: { pass: true } });
+    expect(r.cycle).toMatchObject({ ok: true, value: '45', check: { pass: true } });
+  });
+});

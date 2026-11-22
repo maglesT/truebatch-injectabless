@@ -138,7 +138,7 @@ const describedChange = (prev: MasterDoc, next: MasterDoc) =>
 function fullInjection(): MasterDoc {
   const doc = masterSchema.parse({
     header: { productItemId: 'prd-1', productCode: 'PRD-001', productName: 'Examplol 100 mg/mL injection', batchSize: '100', batchUnit: 'L', densityGPerMl: '1.05',
-      fillVolumeMl: '10.0', fillExcessMl: '0.5', route: 'aseptic', claimPer: 'mL', dispensingRooms: ['DSP-01'] },
+      fillVolumeMl: '10.0', fillExcessMl: '0.5', densityAtC: '20', fillAtC: '20', route: 'aseptic', claimPer: 'mL', dispensingRooms: ['DSP-01'] },
     formula: [
       { key: 'api', materialItemId: 'mat-api', code: 'MAT-001', name: 'Examplol hydrochloride', mg: '100.0', role: 'api', labelClaim: '100 mg', batchQuantity: '10.000 kg',
         adjust: {
@@ -153,7 +153,7 @@ function fullInjection(): MasterDoc {
     containers: [{ key: 'vial', materialItemId: 'pm-vial', code: 'PM-201', name: 'Vial 10 mL' }],
     stages: [
       { key: 'compounding', name: 'Compounding', kind: 'normal', aseptic: true, roomTypes: ['Compounding room'], machineTypes: ['balance', 'vessel'], role: 'Compounding operator',
-        produces: { name: 'bulk solution', holdHours: 24 },
+        produces: { name: 'bulk solution', holdHours: 24, validatedMaxHours: 48 },
         steps: [
           { key: 'weigh-api', block: { id: 'weigh', version: 1 }, checker: true, settings: { target: { formula: 'api', adjusted: true }, tolerance: '0.5' } },
           { key: 'issue-vials', block: { id: 'container-issue', version: 3 }, checker: true, settings: { material: { formula: 'vial' }, expected: { header: 'units' }, unit: 'units' } },
@@ -170,7 +170,7 @@ function fullInjection(): MasterDoc {
       { key: 'em', name: 'Environmental monitoring results', kind: 'preparation', uses: ['compounding'], startsAfter: 'compounding/check-all', steps: [] },
       { key: 'filling', name: 'Filling', kind: 'sub-batch', count: 2, uses: ['compounding'], steps: [] },
     ],
-    timeLimits: [{ key: 'tl', name: 'Compounding to filling', from: { step: 'compounding/weigh-api', at: 'start' }, to: { step: 'compounding/check-all', at: 'end' }, hours: 24 }],
+    timeLimits: [{ key: 'tl', name: 'Compounding to filling', from: { step: 'compounding/weigh-api', at: 'start' }, to: { step: 'compounding/check-all', at: 'end' }, hours: 24, validatedMaxHours: 48 }],
   });
   // The salt line's label basis, answered with a reason.
   const q = masterChecks(doc).find((p) => p.question?.key === 'label-basis/api')!;
@@ -182,7 +182,7 @@ function fullInjection(): MasterDoc {
 // and a container, which a packing master does not use, so a packing master that has them still shows them.
 function fullPacking(): MasterDoc {
   const doc = packing({ serialisation: true, gtin: GTIN });
-  Object.assign(doc.header, { densityGPerMl: '1.05', fillVolumeMl: '10.0', fillExcessMl: '0.5', route: 'aseptic', claimPer: 'mL', dispensingRooms: ['DSP-01'] });
+  Object.assign(doc.header, { densityGPerMl: '1.05', fillVolumeMl: '10.0', fillExcessMl: '0.5', densityAtC: '20', fillAtC: '20', route: 'aseptic', claimPer: 'mL', dispensingRooms: ['DSP-01'] });
   doc.formula = [{ key: 'api', materialItemId: 'mat-api', code: 'MAT-001', name: 'Examplol', mg: '100.0', role: 'api' }];
   doc.containers = [{ key: 'vial', materialItemId: 'pm-vial', code: 'PM-201', name: 'Vial 10 mL' }];
   return masterSchema.parse(doc);

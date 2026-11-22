@@ -193,8 +193,8 @@ export function sterileChecks(doc: MasterDoc, ask: Ask, refuse: Refuse): void {
     // A liquid is sterile filtered; a sterile powder filled as it is has no filtration (owner, 17 Nov 2026), and its filter
     // tests apply only when it has one.
     const liquid = LIQUID_FILLS.some((id) => ids.has(id));
-    if (liquid) need('filtration', 'An aseptic master has its sterile filtration (with the bioburden sample just before the filter)', 'TI-25');
-    if ((liquid || ids.has('filtration')) && steps.filter((x) => x.id === 'filter-test').length < 2) {
+    if (liquid && !ids.has('filtration-inline')) need('filtration', 'An aseptic master has its sterile filtration (with the bioburden sample just before the filter)', 'TI-25');
+    if ((liquid || ids.has('filtration') || ids.has('filtration-inline')) && steps.filter((x) => x.id === 'filter-test').length < 2) {
       ask('stages', 'pupsit', 'An aseptic master tests the sterilising filter before use (after sterilisation) and after use. A pre-use test is left out only under the plant\'s risk assessment (Annex 1 8.87): confirm with its reference, or add the pre-use test.', ['pre-use test left out by the risk assessment'], true);
       need('filter-test', 'The sterilising filter is integrity tested after use', 'TI-25');
     }

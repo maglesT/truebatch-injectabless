@@ -203,7 +203,7 @@ export const HEADER_WORDS: Record<(typeof HEADER_VALUES)[number], string> = {
 export function batchText(doc: MasterDoc): string {
   const h = doc.header;
   const units = headerValue(doc, 'units');
-  return [`${Number(h.batchSize).toLocaleString('en-IN')} ${h.batchUnit}`, h.densityGPerMl ? `density ${h.densityGPerMl} g/mL` : '',
+  return [`${Number(h.batchSize).toLocaleString('en-IN')} ${h.batchUnit}`, h.densityGPerMl ? `density ${h.densityGPerMl} g/mL${h.densityAtC ? ` at ${h.densityAtC} °C` : ''}` : '', h.fillAtC ? `made up or filled at ${h.fillAtC} °C` : '',
     h.fillVolumeMl ? `fill ${h.fillVolumeMl} mL${h.fillExcessMl ? ` + ${h.fillExcessMl} mL excess` : ''}` : '',
     h.batchUnit !== 'units' && typeof units === 'string' ? `${Number(units.split(' ')[0]).toLocaleString('en-IN')} units expected` : ''].filter(Boolean).join(' · ');
 }

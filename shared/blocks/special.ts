@@ -213,6 +213,13 @@ export const lyoLoad: Block = {
   ],
 };
 
+// 30b. Load the freeze-dryer, version 2 (template round part 6): the shelves and trays of a bulk-tray load (trays of vials, or
+// bulk powder in trays) with the fill per tray; the units loaded stay as they were.
+export const lyoLoad2: Block = {
+  ...lyoLoad, version: 2,
+  fields: [...lyoLoad.fields, num('shelves', 'Shelves loaded', 'units', true), num('traysPerShelf', 'Trays per shelf (a tray load)', 'units', true), num('fillPerTray', 'Fill per tray (a bulk tray load)', 'kg', true)],
+};
+
 // 31. The freeze-drying cycle: each phase from the printout (phases the master leaves out are left empty).
 export const lyoCycle: Block = {
   id: 'lyo-cycle', version: 1, name: 'Freeze-drying cycle', checker: true,
@@ -239,9 +246,9 @@ export const lyoCycle: Block = {
 // total cycle time, beside the limits of version 1.
 export const lyoCycle2: Block = {
   ...lyoCycle, version: 2,
-  fields: [...lyoCycle.fields, ...cycleFields],
-  settings: [...lyoCycle.settings, ...cycleSettings],
-  calcs: [...lyoCycle.calcs, cycleCalc],
+  fields: [...lyoCycle.fields, num('annealingShelf', 'Annealing: shelf temperature (when the recipe has an annealing phase)', '°C', true), ...cycleFields],
+  settings: [...lyoCycle.settings, limit('annealingLimit', 'Annealing shelf temperature (when the recipe has it)'), ...cycleSettings],
+  calcs: [...lyoCycle.calcs, within('annealingCheck', 'Annealing shelf temperature', 'annealingShelf?', 'annealingLimit?'), cycleCalc],
 };
 
 // 32. Stopper and unload: backfill, stoppering pressure, vials unloaded and damaged, time to capping.
