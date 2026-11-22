@@ -309,6 +309,8 @@ async function readValues(app: FastifyInstance, tx: Tx, doc: MasterDoc, key: Ste
     const no = typeof v !== 'string' ? null : name.includes('.') || f.useBy ? handProblem({ ...f, name: f.useBy ? `${f.name}.expiry` : f.name }, v, now, PLANT_TZ)
       : name === 'mfgDate' && block.packing ? mfgDateProblem(f, v, now, PLANT_TZ) : null;
     if (no) { problems.push(no); continue; }
+    // Issuing nothing of a packing material is refused when recorded, not only at the reconciliation.
+    if (block.id === 'pack-material-issue' && name === 'issued' && typeof v === 'object' && !Array.isArray(v) && 'value' in v && !(Number(v.value) > 0)) { problems.push(`${f.label}: give more than 0`); continue; }
     // The QC report or certificate number of a lot typed by hand: while LIMS answers, an approved CoA of this lot and
     // material there (picked; kept with its LIMS reference); absent or down, typed, and marked so.
     if (lot && name === `${lot.name}.report` && typeof v === 'string') {

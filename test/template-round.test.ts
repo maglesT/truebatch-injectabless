@@ -56,6 +56,27 @@ describe('part 1: powder fill target per lot, with the excess', () => {
   });
 });
 
+describe('fix2 1122: powder fill from the lot needs a potency-adjusted dispensing step; the target is shown alike', () => {
+  const settings = { units: '4', labelClaim: '500 mg', excess: '25 mg', basis: 'anhydrous', standardIs: 'anhydrous', powderIs: 'the active itself', meanBand: '2.0', eachBand: '5.0', humidityLimit: { high: '35', unit: '%RH' } };
+  const withWeigh = (adjusted: boolean) => {
+    const d = one('powder-fill', settings);
+    const w = latestBlock('weigh')!;
+    d.stages[0]!.steps.unshift({ ...stepFrom(w, []), key: 'w', settings: { ...stepFrom(w, []).settings, target: adjusted ? { formula: 'x', adjusted: true } : { formula: 'x' }, tolerance: '0.5' } } as never);
+    return d;
+  };
+  it('asks when the powder is filled by the lot potency but weighed without the adjustment', () => {
+    expect(msgs(withWeigh(false)).join('|')).toMatch(/not dispensed adjusted for potency/);
+    expect(msgs(withWeigh(true)).join('|')).not.toMatch(/not dispensed adjusted for potency/);
+  });
+  it('the mean check shows the centre rounded like the target, not cut ("1.1170 g", not "1.116… g")', () => {
+    const d = one('powder-fill', { ...settings, basis: 'as is', labelClaim: '500 mg', excess: '25 mg' });
+    const r = run(d, { assay: pct('47.13'), weights: ['1.1140', '1.1140', '1.1140', '1.1140'].map(g), humidity: { value: '28', unit: '%RH' }, stoppers: 'yes', counter: { value: '10', unit: 'units' }, filling: 'going on' });
+    const target = /= ([\d.]+) g/.exec((r.target as { shown: string }).shown)![1]!;
+    expect(target).toMatch(/^\d\.\d{4}$/);
+    expect((r.meanCheck as { shown: string }).shown).toContain(`from ${target} g`);
+  });
+});
+
 describe('part 2: a hold above the validated maximum (check 49)', () => {
   const done = [ev('started', '0.1.0.1', { min: 0 }), ev('done', '0.1.0.1', { min: 10 })];
   it('the master refuses a hold longer than its validated maximum, for an intermediate and for a time limit', () => {

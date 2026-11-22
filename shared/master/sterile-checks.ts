@@ -160,6 +160,14 @@ export function sterileChecks(doc: MasterDoc, ask: Ask, refuse: Refuse): void {
     if (actives.length > 1 && !limitOf(x.t.settings.otherLimit)) {
       refuse(`${x.path}.settings.otherLimit`, `The fill weight is set from one of ${actives.length} actives: set the limits of the other active's amount per unit, so a wrong ratio in the blend is seen (library check 21)`);
     }
+    // The fill is worked out from the lot's potency, so the powder must be dispensed adjusted by the same potency: else
+    // the dispensed quantity is short of what the fill needs (ceftriaxone run, 22 Nov 2026: 2.000 kg against 2.234 kg).
+    const api0 = actives[0];
+    const weighs = (key: string) => steps.filter((w) => Object.values(w.t.settings).some((v) => typeof v === 'object' && v !== null && 'formula' in v && (v as { formula?: string }).formula === key));
+    if (api0 && x.t.settings.powderIs !== 'a blend or co-processed powder' && x.t.settings.basis !== undefined && x.t.settings.basis !== 'as is'
+      && weighs(api0.key).length && !weighs(api0.key).some((w) => Object.values(w.t.settings).some((v) => typeof v === 'object' && v !== null && 'formula' in v && (v as { formula?: string }).formula === api0.key && (v as { adjusted?: boolean }).adjusted))) {
+      ask(weighs(api0.key)[0]!.path, `fill-potency/${api0.key}`, `The powder fill weight is worked out from the lot's potency, but ${api0.name} is not dispensed adjusted for potency: the quantity dispensed can be short of what the fill needs. Set the dispensing step to the adjusted quantity, or confirm with a reason.`, ['intended'], true);
+    }
     const claim = typeof x.t.settings.labelClaim === 'string' ? /^(\d+(?:\.\d+)?)\s*mg$/.exec(x.t.settings.labelClaim.trim()) : null;
     const api = actives[0];
     if (claim && api?.mg && h.batchUnit === 'units' && !new Dec(claim[1]!).eq(api.mg)) {

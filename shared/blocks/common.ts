@@ -449,7 +449,7 @@ export const powderFill2: Block = {
   calcs: [
     { name: 'target', label: 'Fill weight for this lot', template: 'T9', args: { standard: '$labelClaim', basis: '$basis', assay: '$assay', water: '$water?', lod: '$lod?', standardIs: '$standardIs', excess: '$excess?', unit: 'g', decimals: 4 } },
     { name: 'mean', label: 'Mean fill weight', template: 'T7', args: { readings: '$weights' } },
-    { name: 'meanCheck', label: 'Mean against the fill weight', template: 'C1', args: { value: '$mean', around: { centre: '$target', name: 'fill weight for this lot', plusMinusPercent: '$meanBand' } } },
+    { name: 'meanCheck', label: 'Mean against the fill weight', template: 'C1', args: { value: '$mean', around: { centre: '$target', name: 'fill weight for this lot', plusMinusPercent: '$meanBand', centreDecimals: 4 } } },
     { name: 'each', label: 'Each fill weight', template: 'C3', args: { readings: '$weights', band: { plusMinusPercent: '$eachBand', of: { target: '$target' } } } },
     within('otherCheck', 'Other active per unit', 'otherPerUnit?', 'otherLimit?'),
     within('humidityCheck', 'Room humidity', 'humidity', 'humidityLimit'), observe('stopperCheck', 'Stoppers seated', ['stoppers']), finished('filling', 'Filling'),

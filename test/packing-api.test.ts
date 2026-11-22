@@ -191,6 +191,9 @@ describe('a packing batch from the filled units of a released batch', () => {
     expect((await as('chk1', 'POST', `/api/batches/${id}/steps/0.1.0.1/check`, { proof: proofFor('chk1'), contentHash: (await get(id)).steps[0]!.contentHash })).statusCode).toBe(200);
     for (const [key, values] of [['0.1.1.1', { lot: 'LABEL-9', issued: '5250' }], ['0.1.2.1', { lot: 'TRAY-9', issued: '500' }]] as const) {
       expect((await as('op1', 'POST', `/api/batches/${id}/steps/${key}/start`)).statusCode).toBe(200);
+      // Issuing none of a packing material is refused when recorded, not only at the reconciliation.
+      const zero = await as('op1', 'POST', `/api/batches/${id}/steps/${key}/record`, { values: { ...values, issued: '0', ...handLabels('lot', 'lot'), matches: 'yes' } });
+      expect(JSON.stringify(zero.json())).toMatch(/give more than 0/);
       const rec = await as('op1', 'POST', `/api/batches/${id}/steps/${key}/record`, { values: { ...values, ...handLabels('lot', 'lot'), matches: 'yes' } });
       expect(rec.statusCode, rec.body).toBe(200);
       const done = await as('op1', 'POST', `/api/batches/${id}/steps/${key}/done`, { proof: proofFor('op1'), contentHash: (await get(id)).steps.find((x) => x.id === key)!.contentHash });
