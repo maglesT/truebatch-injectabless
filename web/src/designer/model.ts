@@ -195,8 +195,8 @@ export function answerDoc(doc: MasterDoc, p: Problem, choice: string, reason: st
 /** The products of master data this master offers: the bulk products (TrueBatch Injectables) or the packs (Packing),
  *  plus those master data gives no kind yet. */
 export const ownProducts = <P extends { kind?: 'bulk' | 'pack' | null; dosageForm?: string | null }>(products: readonly P[], kind: 'bulk' | 'pack'): P[] =>
-  // Only injections, infusions and nebules (or a product master data gives no form): not tablets, capsules or syrups.
-  products.filter((p) => (p.kind ?? kind) === kind && (!p.dosageForm || /inject|infusion|nebuli/i.test(p.dosageForm)))
+  // Only injections, infusions and nebules: not tablets, capsules, syrups or a product with no form set.
+  products.filter((p) => (p.kind ?? kind) === kind && /inject|infusion|nebuli/i.test(p.dosageForm ?? ''))
     // Display backlog item 9: those master data has not given a kind yet come last, marked (productNote).
     .sort((a, b) => Number(!a.kind) - Number(!b.kind));
 

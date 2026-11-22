@@ -9,7 +9,9 @@ import type { Stored } from './values.js';
 // elsewhere; a demo note after it stays.
 const VERDICT = /:\s*(?:PASS|pass|within limits|FAIL|OUT OF LIMITS(?: \([^)]*\))?)(?=\s*(?: · DEMO: wait skipped)?\s*$)/;
 /** A worked line without its closing verdict, its rounding written the one way of today (tidyRounding). */
-export const withoutVerdict = (t: string) => tidyRounding(t).replace(VERDICT, '');
+/** "1 units" / "1 packs" of a result worked out before the singular rule: "1 unit", "1 pack" (display only). */
+export const singular = (t: string) => t.replace(/(?<![\d.,])1 (unit|pack)s\b/g, '1 $1');
+export const withoutVerdict = (t: string) => singular(tidyRounding(t).replace(VERDICT, ''));
 
 // A rounding to the limit's decimals as older records wrote it (display backlog item 6): one written out although it
 // changed nothing ("0.00 nos rounded to 0 decimals (as the limit is written) = 0 nos" reads "0 nos"), and one without

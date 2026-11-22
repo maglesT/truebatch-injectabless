@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { headline, withoutVerdict } from '../shared/engine/plain.js';
+import { headline, singular, withoutVerdict } from '../shared/engine/plain.js';
 import { store, type Stored } from '../shared/engine/values.js';
 import { t17LiquidMakeUp } from '../shared/templates/liquid.js';
 import { c1WithinLimits, c3AllIndividual } from '../shared/templates/series.js';
@@ -60,5 +60,11 @@ describe('rounding on older worked lines', () => {
     expect(withoutVerdict('99.009… % rounded to 1 decimal (as the limit is written) = 99.0 %; limit 97.0 to 100.5 %: within limits'))
       .toBe('99.009… % rounded to 1 decimal (as the limit is written) = 99.0 %; limit 97.0 to 100.5 %');
     expect(withoutVerdict('4,920 packs rounded to 0 decimals = 4,920 packs')).toBe('4,920 packs');
+  });
+
+  it('an old result printed "1 units" reads "1 unit" (display only)', () => {
+    expect(singular('4854 units ÷ 1 units = 4854 packs')).toBe('4854 units ÷ 1 unit = 4854 packs');
+    expect(withoutVerdict('1 units × 4826 packs = 4826 units: PASS')).toContain('1 unit × 4826 packs');
+    expect(singular('11 units, 0.1 units, 21 packs')).toBe('11 units, 0.1 units, 21 packs');
   });
 });
