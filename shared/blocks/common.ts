@@ -385,6 +385,42 @@ export const powderFill: Block = {
   ],
 };
 
+// 14c. Powder fill, version 2 (template round 22 Nov 2026, gap G1): the fill weight of a unit is worked out for the LOT
+// (I9 / T9): label claim plus the fill excess, divided by the lot's content from MMS; the mean and each unit are checked
+// against it by a percentage. The excess is shown apart from the lot's content. Version 1 stays for the recorded batches.
+export const powderFill2: Block = {
+  id: 'powder-fill', version: 2, name: 'Fill a sterile powder with periodic fill-weight checks', checker: false, periodic: { maxMinutes: 1440 }, stop: 'done',
+  instruction: 'At each round weigh the net powder of the filled units shown against the fill weight worked out for this lot, read the room humidity, check the stoppers and read the counter.',
+  fields: [
+    { name: 'machine', label: 'Powder filling machine', kind: 'machine', types: ['powder fill', 'auger'] },
+    { name: 'lot', label: 'Powder lot (the active or the blend)', kind: 'lot' },
+    num('assay', 'Assay or content (certificate)', '%', true), num('water', 'Water content (certificate)', '%', true), num('lod', 'Loss on drying (certificate)', '%', true),
+    { name: 'weights', label: 'Net fill weight per unit', kind: 'number', unit: 'g', count: '$units' },
+    num('otherPerUnit', 'Other active per unit (from the blend assay)', 'mg', true),
+    num('humidity', 'Room relative humidity', '%RH'), yes('stoppers', 'Stoppers seated'), num('counter', 'Counter', 'units'), going('filling', 'Filling'),
+  ],
+  settings: [
+    { name: 'material', label: 'Powder (formula line)', kind: 'material' },
+    { name: 'units', label: 'Units per round', kind: 'number' },
+    { name: 'labelClaim', label: 'Label claim of the active per unit', kind: 'quantity', notBatch: 'tablet' },
+    { name: 'excess', label: 'Fill excess (a mass such as "25 mg", or a percentage)', kind: 'text', optional: true },
+    { name: 'basis', label: 'The content is on the basis', kind: 'text', options: ['as is', 'anhydrous', 'dried'] },
+    { name: 'powderIs', label: 'The powder is', kind: 'text', options: ['the active itself', 'a blend or co-processed powder'] },
+    { name: 'standardIs', label: 'The label claim is for the', kind: 'text', options: ['anhydrous', 'hydrate or solvate'] },
+    { name: 'meanBand', label: 'Mean fill weight within (± % of the fill weight)', kind: 'number' },
+    { name: 'eachBand', label: 'Each fill weight within (± % of the fill weight)', kind: 'number' },
+    limit('otherLimit', 'Other active per unit limits (a blend of several actives)'), limit('humidityLimit', 'Room humidity limit', false),
+  ],
+  calcs: [
+    { name: 'target', label: 'Fill weight for this lot', template: 'T9', args: { standard: '$labelClaim', basis: '$basis', assay: '$assay', water: '$water?', lod: '$lod?', standardIs: '$standardIs', excess: '$excess?', unit: 'g', decimals: 4 } },
+    { name: 'mean', label: 'Mean fill weight', template: 'T7', args: { readings: '$weights' } },
+    { name: 'meanCheck', label: 'Mean against the fill weight', template: 'C1', args: { value: '$mean', around: { centre: '$target', name: 'fill weight for this lot', plusMinusPercent: '$meanBand' } } },
+    { name: 'each', label: 'Each fill weight', template: 'C3', args: { readings: '$weights', band: { plusMinusPercent: '$eachBand', of: { target: '$target' } } } },
+    within('otherCheck', 'Other active per unit', 'otherPerUnit?', 'otherLimit?'),
+    within('humidityCheck', 'Room humidity', 'humidity', 'humidityLimit'), observe('stopperCheck', 'Stoppers seated', ['stoppers']), finished('filling', 'Filling'),
+  ],
+};
+
 // 16. Terminal sterilisation (TI-24): one round per load; the lowest probe reaches the validated minimum F0 (or FH).
 export const terminalSterilise: Block = {
   id: 'terminal-sterilise', version: 1, name: 'Terminal sterilisation (each load)', checker: true,

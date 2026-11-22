@@ -149,6 +149,32 @@ export function sterileChecks(doc: MasterDoc, ask: Ask, refuse: Refuse): void {
     if (x.t.settings.oxygenUnit === 'mg/L' && hi && hi.gt(9)) refuse(`${x.path}.settings.oxygenLimit`, `A dissolved-oxygen limit of ${hi.toString()} mg/L is above saturation (about 9 mg/L at 20 °C): it can never fail (library check 47)`);
     if (x.t.flow.kind === 'optional-with-reason' && doc.formula.some((l) => ANTIOXIDANT.test(l.name))) refuse(`${x.path}.flow`, 'The nitrogen step cannot be optional in a product with an antioxidant or an oxygen limit (library check 48)');
   }
+  // Template round part 1. 20 ⛔ a blend filled by the active's potency; 21 ⛔ one active of a blend sets the fill weight with no
+  // check of each other active; the label claim of the fill is the formula's.
+  for (const x of steps.filter((y) => y.id === 'powder-fill' && y.t.block.version >= 2)) {
+    const actives = doc.formula.filter((l) => l.role === 'api');
+    if (x.t.settings.powderIs === 'a blend or co-processed powder' && x.t.settings.basis !== undefined && x.t.settings.basis !== 'as is') {
+      refuse(`${x.path}.settings.basis`, `A blend or co-processed powder is filled by its own content as it is, not by the potency of the active on the ${String(x.t.settings.basis)} basis: the fill weight would be wrong by the blend's ratio (library check 20)`);
+    }
+    if (actives.length > 1 && !limitOf(x.t.settings.otherLimit)) {
+      refuse(`${x.path}.settings.otherLimit`, `The fill weight is set from one of ${actives.length} actives: set the limits of the other active's amount per unit, so a wrong ratio in the blend is seen (library check 21)`);
+    }
+    const claim = typeof x.t.settings.labelClaim === 'string' ? /^(\d+(?:\.\d+)?)\s*mg$/.exec(x.t.settings.labelClaim.trim()) : null;
+    const api = actives[0];
+    if (claim && api?.mg && h.batchUnit === 'units' && !new Dec(claim[1]!).eq(api.mg)) {
+      refuse(`${x.path}.settings.labelClaim`, `The label claim of the fill (${claim[1]} mg per unit) is not the formula's ${api.name} (${api.mg} mg per unit): take the formula's quantity`);
+    }
+  }
+  // v1.1 check 7 ⛔ whole-container dose: no fill excess unless the claim is the filled content; the fill limits are two-sided.
+  if (h.claimPer === 'delivered dose' && h.fillExcessMl && new Dec(h.fillExcessMl).gt(0)) {
+    refuse('header.fillExcessMl', 'The label claim is the delivered dose of the whole container: a fill excess would change the dose. Use no excess unless the claim is the filled content (library v1.1)');
+  }
+  for (const x of steps.filter((y) => FILLS.includes(y.id))) {
+    for (const name of ['meanLimit', 'eachLimit']) {
+      const l = limitOf(x.t.settings[name]);
+      if (l && (l.low === undefined || l.high === undefined)) refuse(`${x.path}.settings.${name}`, 'The fill weight limits are set on both sides (a low and a high limit): a limit on one side lets an over-filled container pass (library v1.1)');
+    }
+  }
   // The sterile rules: the steps a master of this route must have (TI-01 lists them; each rule names its own).
   const ids = new Set(steps.map((x) => x.id));
   // They apply to a master that fills product (a fill, form-fill-seal or blow-fill-seal, or powder fill step).

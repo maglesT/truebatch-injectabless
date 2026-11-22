@@ -44,12 +44,17 @@ describe('the sterile blocks of the injectables library', () => {
     return masterSchema.parse({ header, formula: [{ key: 'x', materialItemId: 'm', code: 'M', name: 'M', mg: '50.0', role: 'api' }],
       stages: [{ key: 's', name: 'Stage', kind: 'normal', steps: [{ ...stepFrom(b, []), key: 't', settings: { ...stepFrom(b, []).settings, ...settings } }] }] });
   };
+  const latestV = (id: string, version: number, settings: object): MasterDoc => {
+    const b = findBlock({ id, version })!;
+    return masterSchema.parse({ header, formula: [{ key: 'x', materialItemId: 'm', code: 'M', name: 'M', mg: '50.0', role: 'api' }],
+      stages: [{ key: 's', name: 'Stage', kind: 'normal', steps: [{ ...stepFrom(b, []), key: 't', settings: { ...stepFrom(b, []).settings, ...settings } }] }] });
+  };
   const c = (value: string) => ({ value, unit: '°C' });
 
   it('TI-14 powder-fill: the net powder of the units per round, the mean and each unit within their limits, the room humidity within its limit', () => {
-    const b = latestBlock('powder-fill')!;
+    const b = findBlock({ id: 'powder-fill', version: 1 })!;
     expect([b.version, b.periodic, b.stop, b.fields.find((f) => f.name === 'machine')!.types]).toEqual([1, { maxMinutes: 1440 }, 'done', ['powder fill', 'auger']]);
-    const doc = latest('powder-fill', { units: '4', meanLimit: { low: '1.040', high: '1.080', unit: 'g' }, eachLimit: { low: '1.010', high: '1.110', unit: 'g' },
+    const doc = latestV('powder-fill', 1, { units: '4', meanLimit: { low: '1.040', high: '1.080', unit: 'g' }, eachLimit: { low: '1.010', high: '1.110', unit: 'g' },
       humidityLimit: { high: '35', unit: '%RH' } });
     expect(doc.stages[0]!.steps[0]).toMatchObject({ everyMinutes: 30, flow: { kind: 'repeat-until' } });
     const values = (weights: string[], rh: string) => ({ weights: weights.map(g), humidity: { value: rh, unit: '%RH' }, stoppers: 'yes', counter: { value: '1200', unit: 'units' }, filling: 'going on' });
@@ -63,7 +68,7 @@ describe('the sterile blocks of the injectables library', () => {
     expect(bad.each).toMatchObject({ ok: true, check: { pass: false } });
     expect(bad.humidityCheck).toMatchObject({ ok: true, check: { pass: false } });
     // The limits are the product's own: the master check asks for them.
-    expect(masterChecks(latest('powder-fill', {})).filter((p) => p.path.startsWith('stages[0].steps[0].settings')).map((p) => p.message))
+    expect(masterChecks(latestV('powder-fill', 1, {})).filter((p) => p.path.startsWith('stages[0].steps[0].settings')).map((p) => p.message))
       .toEqual(expect.arrayContaining(['Mean fill weight limits is not set', 'Each fill weight limits is not set', 'Room humidity limit is not set']));
   });
 
