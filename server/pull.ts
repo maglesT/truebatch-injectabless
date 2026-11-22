@@ -9,6 +9,7 @@ import type { LinkState } from '../shared/engine/links.js';
 import { emOfBatch, emProblems, emWindow, type EmRow } from '../shared/engine/em.js';
 import type { StepEvent } from '../shared/engine/state.js';
 import { plantDate } from '../shared/plant-time.js';
+import { Dec } from '../shared/templates/index.js';
 
 // What a link gives a step value at write time (owner 15 Nov 2026, TI-11, TI-12): the value as read now, or a
 // refusal in plain words; when the link is absent or down, the value is typed by hand (its questions in
@@ -122,11 +123,14 @@ export async function pullBulk(app: FastifyInstance, doc: MasterDoc, block: Bloc
     const left = bulkLeft(b.goodQuantity, await others());
     const part = typed === undefined || typed === null || (typeof typed === 'string' && !typed.trim()) ? null : readValue(units, typed, unit);
     if (part && typeof part === 'object' && 'error' in part) { problems.push(part.error); return out; }
-    const value = part && typeof part === 'object' && 'value' in part ? part.value : left.left;
+    // Fix round 21 Nov 2026 (A6): not typed, the issue is the packing master's batch (its standard packing batch in
+    // filled units), or what is left of the bulk when less: never all of the bulk only because nothing was typed.
+    const plan = new Dec(doc.header.batchSize);
+    const value = part && typeof part === 'object' && 'value' in part ? part.value : new Dec(left.left).gt(plan) ? plan.toString() : left.left;
     const no = bulkIssueProblem(batchNo, part ? value : null, b.goodQuantity, left);
     if (no) { problems.push(no); return out; }
     out.values.units = { value, unit };
-    out.sources.units = { ...source, shown: `${source.shown}, ${b.goodQuantity} good units, ${left.issued} issued to other packing batches, ${left.left} left${part ? `, ${value} issued (typed, a part issue)` : ''}` };
+    out.sources.units = { ...source, shown: `${source.shown}, ${b.goodQuantity} good units, ${left.issued} issued to other packing batches, ${left.left} left${part ? `, ${value} issued (typed)` : value !== left.left ? `, ${value} issued (the packing master's batch size)` : ''}` };
   }
   return out;
 }

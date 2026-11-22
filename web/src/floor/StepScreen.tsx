@@ -14,7 +14,7 @@ import { FillingPanel } from './FillingPanel.js';
 import { CERTIFICATE, fieldLabel, handEntered, LINK_OF } from '../../../shared/engine/links.js';
 import { answersField, inProcessFit, ipcCodes, labRequestId, sameUnit } from '../../../shared/engine/lims.js';
 import { askedFields, cutShort, notYetText } from '../../../shared/engine/batch.js';
-import { lineQuantity, stepFields } from '../../../shared/engine/values.js';
+import { limitInReadingUnit, lineQuantity, stepFields, weighTarget } from '../../../shared/engine/values.js';
 import { plantText } from '../../../shared/plant-time.js';
 import { needsText, stepNeeds } from '../../../shared/engine/state.js';
 import { dispensingRooms, emptyNote, inLogbook, machineRefusal, roomRefusal } from '../../../shared/engine/picks.js';
@@ -22,7 +22,7 @@ import { materialLines, type FormulaLine, type PackMaterial } from '../../../sha
 import { perPackText, unitName } from '../../../shared/engine/stock.js';
 import { neededText, tickText, trainingOf, trainingText, type Skill, type Training } from '../../../shared/engine/training.js';
 
-type Dialog = { kind: 'done' | 'repeat' | 'check' | 'release-hold' | 'na' | 'send-back' | 'note' } | { kind: 'na-sign'; reason: string } | { kind: 'correct'; field: BlockField };
+type Dialog = { kind: 'done' | 'repeat' | 'check' | 'release-hold' | 'na' | 'send-back' | 'note' | 'undo' } | { kind: 'na-sign' | 'undo-sign'; reason: string } | { kind: 'correct'; field: BlockField };
 const INVOLVING = ['started', 'value', 'done', 'corrected', 'not_applicable'];
 const same = (a: StepRow['key'], b: StepRow['key']) => a.stage === b.stage && a.sub === b.sub && a.step === b.step;
 
@@ -47,8 +47,10 @@ function settingsText(doc: BatchDetail['master']['doc'], block: Block, st: Step,
     if (m) return [[s.label, what!]];
     if (typeof v === 'string') return v && s.kind !== 'text' ? [[s.label, v]] : [];
     if (!v || !('unit' in v)) return [];
-    const u = v.unit ? ` ${v.unit}` : '';
-    return [[s.label, v.low && v.high ? `${v.low} to ${v.high}${u}` : v.high ? `not more than ${v.high}${u}` : `at least ${v.low}${u}`]];
+    const text = (l: { low?: string; high?: string; unit: string }) => { const u = l.unit ? ` ${l.unit}` : ''; return l.low && l.high ? `${l.low} to ${l.high}${u}` : l.high ? `not more than ${l.high}${u}` : `at least ${l.low}${u}`; };
+    // A11: a limit in another unit than the reading (kPa, reading in mbar) is shown in the reading's unit too.
+    const both = limitInReadingUnit(block, st, s.name);
+    return [[s.label, `${text(v)}${both ? `, that is ${text(both.limit)} (${both.label.toLowerCase()} is recorded in ${both.reading})` : ''}`]];
   });
 }
 
@@ -71,7 +73,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   const [md, setMd] = useState<Record<'machine' | 'room', PickItem[]>>({ machine: [], room: [] });
   const last = row.events.at(-1)?.id ?? 0;
   // The block's fields and the label questions of what was entered by hand (a link absent or down).
-  const fields = [...stepFields({ ...block, fields: askedFields(doc, block) }, st), ...row.handFields];
+  const fields = [...stepFields({ ...block, fields: askedFields(doc, block, st) }, st), ...row.handFields];
   const line = Object.values(st.settings).find((v): v is { formula: string } => typeof v === 'object' && 'formula' in v);
   const material = line && materialLines(doc).find((l) => l.key === line.formula)?.materialItemId;
   const lots = useLinked<{ lotNumber: string }>(block.fields.some((f) => f.kind === 'lot') && material ? `/api/mms/lots?material=${encodeURIComponent(material)}` : null, 'lots');
@@ -168,14 +170,19 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   // What each machine or room field offers: as the server accepts it (shared/engine/picks.ts), and while the Logbook
   // is linked only what the Logbook has; an empty picker says what is left out and why.
   const logbook = useLogbookItems(block.fields.some((f) => f.kind === 'machine' || f.kind === 'room'));
+  // A8: a balance is offered for the quantity this step weighs (within its range).
+  const qty = weighTarget(doc, row.key, row.results);
   const fits = (f: BlockField) => (f.kind === 'room' ? md.room.filter((r) => r.active && !roomRefusal(stage, r))
-    : f.kind === 'machine' ? md.machine.filter((m) => m.active && !machineRefusal(stage, f, m, md.room, dispensingRooms(doc, md.room))) : []);
+    : f.kind === 'machine' ? md.machine.filter((m) => m.active && !machineRefusal(stage, f, m, md.room, dispensingRooms(doc, md.room), qty)) : []);
   const pickOf = (f: BlockField) => inLogbook(fits(f), logbook?.items ?? null);
   // A machine or room not fit for use in the Logbook is marked with why ("Dirty in the Logbook") before it is picked.
   const picksFor = (f: BlockField) => pickOf(f).offered.map((p) => ({ ...p, notFit: logbook?.notFit[p.itemId] }));
   // An empty picker says why (once master data is read) and what the Logbook leaves out; one with choices says nothing.
   const mdRead = md.room.length > 0 && (md.machine.length > 0 || !block.fields.some((x) => x.kind === 'machine'));
-  const noteFor = (f: BlockField) => [mdRead && !fits(f).length ? emptyNote(stage, f, md.machine, md.room, dispensingRooms(doc, md.room)) : null, pickOf(f).note];
+  // A10 (fix round 21 Nov 2026): every room the stage allows is busy or not clean: say how the master gets its own room.
+  const allBusy = (f: BlockField) => { const p = picksFor(f); return f.kind === 'room' && p.length > 0 && p.every((x) => x.notFit); };
+  const noteFor = (f: BlockField) => [mdRead && !fits(f).length ? emptyNote(stage, f, md.machine, md.room, dispensingRooms(doc, md.room), qty) : null, pickOf(f).note,
+    allBusy(f) ? `Every room this stage allows (${stage.roomTypes.join(', ')}) is in use or not fit in the Logbook. Wait for one, or the master names another room for this stage (by its code, in the stage settings of a new master version); a new room is added in master data first.` : null];
 
   const post = (action: string, body: object = {}, key = row.id) => api('POST', `/api/batches/${d.batch.id}/steps/${key}/${action}`, body);
   const run = async (fn: () => Promise<unknown>) => {
@@ -388,6 +395,8 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
         {['done', 'checked', 'not_applicable'].includes(row.state) && !next && !can('release-hold') && <p className="why">This step is finished.</p>}
         <span className="spacer" />
         {can('not-applicable') && <button className="big" disabled={busy} onClick={() => setDialog({ kind: 'na' })}>Not applicable</button>}
+        {/* A7: undo the weighing to weigh another lot (reason and signature), while no later step uses it. */}
+        {can('undo') && <button className="big" disabled={busy} onClick={() => setDialog({ kind: 'undo' })}>Undo: weigh another lot</button>}
         {can('note') && <button className={noteNeeded ? 'big attn' : 'big'} disabled={busy} onClick={() => setDialog({ kind: 'note' })}>Add deviation note</button>}
       </div>
 
@@ -419,6 +428,14 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
       {dialog?.kind === 'na' && (
         <ReasonDialog title="Not applicable" label="Why this step does not apply to this batch" submit="Next: sign" onCancel={() => setDialog(null)}
           onSubmit={async (reason) => setDialog({ kind: 'na-sign', reason })} />
+      )}
+      {dialog?.kind === 'undo' && (
+        <ReasonDialog title="Undo the weighing" label="Why another lot is weighed (the material goes back to its lot)" submit="Next: sign" onCancel={() => setDialog(null)}
+          hint="The values recorded stay in the record as undone. The step is then recorded again with the other lot and signed again."
+          onSubmit={async (reason) => setDialog({ kind: 'undo-sign', reason })} />
+      )}
+      {dialog?.kind === 'undo-sign' && (
+        <SignDialog meaning="performed" what={`${title} · batch ${d.batch.batchNo}: weighing undone, another lot will be weighed. Reason: “${dialog.reason}”`} onCancel={() => setDialog(null)} onSign={signed('undo', { reason: dialog.reason })} />
       )}
       {dialog?.kind === 'na-sign' && (
         <SignDialog meaning="performed" what={`${title} · batch ${d.batch.batchNo}: not applicable. Reason: “${dialog.reason}”`} onCancel={() => setDialog(null)} onSign={signed('not-applicable', { reason: dialog.reason })} />
@@ -531,6 +548,7 @@ function History_({ h, block, deviations, exceptions }: { h: History | null; blo
     // The deviation's number and status, read live: the one written with the note, or the one Deviations filed from it.
     note: `Deviation note${((x) => (x ? ` ${deviationText(x)}` : e.payload.reference ? ` ${e.payload.reference}` : ''))(deviations.find((x) => x.note === e.id))}: “${e.payload.text}”${((x) => (x ? ` · ${exceptionText(x, plainClock)}` : ''))(exceptions.find((x) => x.note === e.id))}`, qa_released_hold: 'QA released the hold',
     demo_wait_skipped: `DEMO: wait skipped by ${e.personName ?? '—'} at ${plainClock(e.at)}: ${String(e.payload.label ?? '')}`,
+    undone: `Weighing undone (signed), to weigh another lot: “${e.payload.reason}”`,
   })[e.kind];
   return (
     <section className="dash-panel" aria-label="History">

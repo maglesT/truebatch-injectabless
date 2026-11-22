@@ -117,7 +117,7 @@ test('TI-P2 packing journey: packing master from the skeleton (labelling, carton
     // Pull, don't type: the units issued are what is left of the batch's good units, from TrueBatch Injectables,
     // offered in the field; less may be typed (a part issue), more is refused (suite B2).
     await expect(issue.getByLabel('Filled units issued')).toHaveValue('10000');
-    await expect(issue.getByText('Left to issue of TI260001: 10,000 units (10,000 good units in TrueBatch Injectables). Issue all of it, or type less for a part issue.')).toBeVisible();
+    await expect(issue.getByText('Left to issue of TI260001: 10,000 units (10,000 good units in TrueBatch Injectables). Shown: all that is left. Type the units actually issued.')).toBeVisible();
     await issue.getByLabel('Filled units issued').fill('10001');
     await issue.getByRole('button', { name: 'Next: sign' }).click();
     await iss.page.getByRole('dialog').last().getByRole('button', { name: 'Sign', exact: true }).click();

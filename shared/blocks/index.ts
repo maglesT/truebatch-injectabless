@@ -19,6 +19,7 @@ import { bulkIssue } from './bulk-issue.js';
 import { cartonCheck } from './carton-check.js';
 import { codingCheck } from './coding-check.js';
 import { destruction } from './destruction.js';
+import { labTests } from './lab-tests.js';
 import { finishedGoods } from './finished-goods.js';
 import { formingCheck } from './forming-check.js';
 import { leakTest } from './leak-test.js';
@@ -34,10 +35,13 @@ import { serialSample } from './serial-sample.js';
 import { visionChallenge } from './vision-challenge.js';
 
 export type { Block, BlockField, BlockSetting } from './format.js';
+export { labelled } from './format.js';
 // The eleven blocks the injectables library reuses from TrueBatch Tablets, then the sterile blocks of library v1:
 // section 4.2 (dispensing, compounding, filtration, components, filling, sterilisation, inspection) and 4.3-4.8.
 export const BLOCKS: readonly Block[] = [
   weigh, charge, mix, check, lineClearance, subBatchCombine, qaSample, stageYield, blendUniformity, sieve, dryConstant,
+  // Fix round 21 Nov 2026 (Tablets A2, ported): up to three in-process lab tests in one step.
+  labTests,
   ...Object.values(common),
   ...Object.values(special),
   containerIssue, containerIssue2, containerIssue3, containerReturn, containerReturn2,

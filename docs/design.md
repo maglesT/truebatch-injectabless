@@ -400,6 +400,12 @@ answering) or **ok**.
     number field of the injectables blocks feeds it (`shared/engine/readings.ts`; kept in the database as
     `reading_parameters`, not published, compared by a test; a block with several versions once, as its latest has it).
     Packing does not migrate it. Read by Operations (CPV).
+  - *In-process lab tests of each master, for LIMS* (Tablets fix round 21 Nov 2026, A12, `db/migrations/0035`):
+    `report.master_lab_field_v1`, one row per in-process lab test of each master version not retired (nor deleted):
+    `product_code`, `master_version`, `master_state`, `stage_title`, `step_title`, `code` (as `lab_request_v1` names
+    it, '<block id>.<field>', '@<n>' for a block twice), `label`, `unit`, `individual`, `data_as_of`. Same name and
+    columns in every TrueBatch edition (packing publishes it too). reading_v1 also lists the in-process lab tests
+    block's numbers (0034).
   - *Device assembly* (Tablets round 46, block `device-assembly`, for prefilled syringes into autoinjectors or safety
     devices): a yield step with one component lot (MMS, or by hand), the assembly line, the units fed and the devices
     out; a function test (at least the master's number tested, none failing, works and complete, the activation force
