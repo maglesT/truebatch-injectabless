@@ -128,3 +128,42 @@ describe('part 3: the cheap master checks', () => {
     expect(all(doc({}, [api({ mg: '50.0' }), { key: 'x', materialItemId: 'x', code: 'X', name: 'Sodium chloride', mg: '9.0', role: 'excipient' }]))).toMatch(/No line is made up to volume/);
   });
 });
+
+describe('part 4: counts through I22, limits from the clean-air table', () => {
+  const api = { key: 'a', materialItemId: 'm', code: 'M', name: 'Examplol', mg: '50.0', role: 'api' };
+  const liquid = { batchUnit: 'L', batchSize: '100', densityGPerMl: '1.0', fillVolumeMl: '10.0', fillExcessMl: '0.5', claimPer: 'mL' };
+  const doc = (id: string, settings: object): MasterDoc => { const b = latestBlock(id)!; return masterSchema.parse({ header: { ...header, ...liquid }, formula: [api],
+    stages: [{ key: 's', name: 'Stage', kind: 'normal', steps: [{ ...stepFrom(b, []), key: 't', settings: { ...stepFrom(b, []).settings, ...settings } }] }] }); };
+  const all = (d: MasterDoc) => msgs(d).join('|');
+  it('the new blocks are valid', () => {
+    for (const id of ['em-filling', 'incubated-em', 'incubated-bioburden']) expect([id, blockProblems(latestBlock(id)!)]).toEqual([id, []]);
+    expect([latestBlock('em-filling')!.version, latestBlock('incubated-em')!.version]).toEqual([2, 2]);
+  });
+  it('em-filling: particles against the table for the grade and state; a tighter limit is allowed, a looser one refused', () => {
+    const d = doc('em-filling', { grade: 'B', state: 'in operation' });
+    const v = (a: string, b: string) => ({ location: 'Filling needle', particles05: { value: a, unit: 'particles/m³' }, particles5: { value: b, unit: 'particles/m³' } });
+    expect(run(d, v('300000', '2000')).particles05Check).toMatchObject({ ok: true, check: { pass: true } });
+    expect(run(d, v('400000', '2000')).particles05Check).toMatchObject({ ok: true, check: { pass: false } });
+    expect(run(doc('em-filling', { grade: 'A', state: 'in operation' }), v('4000', '10')).particles05Check).toMatchObject({ check: { pass: false } });
+    expect(all(doc('em-filling', { grade: 'B', state: 'in operation', limit05: '300000 particles/m³' }))).not.toMatch(/looser/);
+    expect(all(doc('em-filling', { grade: 'B', state: 'in operation', limit05: '900000 particles/m³' }))).toMatch(/looser than the clean-air table for grade B in operation \(352000 particles\/m³\)/);
+  });
+  it('incubated-em: the count of an air sample is turned to per m³ from the litres sampled, and a plate is kept per plate', () => {
+    const d = doc('incubated-em', { grade: 'B' });
+    const base = { sampleId: 'S1', incubationStart: '2026-11-21T08:00:00Z', incubationEnd: '2026-11-26T08:00:00Z' };
+    const air = run(d, { ...base, kind: 'air', count: { value: '2', unit: 'CFU' }, sampled: { value: '1000', unit: 'L' } });
+    expect(air.countCheck).toMatchObject({ ok: true, check: { pass: true } });
+    expect((air.countCheck as { shown: string }).shown).toMatch(/2 CFU\/m³/);
+    expect(run(d, { ...base, kind: 'air', count: { value: '20', unit: 'CFU' }, sampled: { value: '1000', unit: 'L' } }).countCheck).toMatchObject({ check: { pass: false } });
+    expect(run(d, { ...base, kind: 'settle plate', count: { value: '6', unit: 'CFU' } }).countCheck).toMatchObject({ check: { pass: false } });
+  });
+  it('bioburden: the count per 100 mL from the millilitres filtered (check 45: a limit per mL is asked about)', () => {
+    const d = doc('incubated-bioburden', { bioburdenLimit: '10 CFU/100 mL' });
+    const r = run(d, { sampleId: 'B1', volume: { value: '50', unit: 'mL' }, count: { value: '3', unit: 'CFU' } });
+    expect(r.countCheck).toMatchObject({ ok: true, check: { pass: true } });
+    expect((r.countCheck as { shown: string }).shown).toMatch(/6\.00 CFU\/100 mL/);
+    expect(run(d, { sampleId: 'B1', volume: { value: '50', unit: 'mL' }, count: { value: '9', unit: 'CFU' } }).countCheck).toMatchObject({ check: { pass: false } });
+    expect(all(d)).not.toMatch(/100 times weaker/);
+    expect(all(doc('incubated-bioburden', { bioburdenLimit: '0.1 CFU/mL' }))).toMatch(/per mL: a bioburden limit is written per 100 mL/);
+  });
+});

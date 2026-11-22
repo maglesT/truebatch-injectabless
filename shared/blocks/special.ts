@@ -98,6 +98,21 @@ export const emFilling: Block = {
   ],
 };
 
+// 27b. Environmental monitoring during filling, version 2 (template round part 4, I22): the limit is the clean-air table's
+// for the room's grade and state, never looser; the master may only set a tighter action limit.
+const GRADE = { name: 'grade', label: 'Room grade', kind: 'text' as const, options: ['A', 'B', 'C', 'D'] };
+export const emFilling2: Block = {
+  ...emFilling, version: 2,
+  settings: [GRADE, { name: 'state', label: 'Room state', kind: 'text', options: ['at rest', 'in operation'] },
+    { name: 'limit05', label: 'Tighter action limit ≥ 0.5 µm (e.g. "3000 particles/m³"; none: the table\'s)', kind: 'text', optional: true },
+    { name: 'limit5', label: 'Tighter action limit ≥ 5 µm (none: the table\'s)', kind: 'text', optional: true }],
+  calcs: [
+    { name: 'particles05Check', label: 'Particles ≥ 0.5 µm against the clean-air table', template: 'I22', args: { sample: 'particles ≥0.5 µm', counts: '$particles05', grade: '$grade', state: '$state', actionLimit: '$limit05?' } },
+    { name: 'particles5Check', label: 'Particles ≥ 5 µm against the clean-air table', template: 'I22', args: { sample: 'particles ≥5 µm', counts: '$particles5', grade: '$grade', state: '$state', actionLimit: '$limit5?' } },
+    ...emFilling.calcs.filter((c) => c.name === 'exposure' || c.name === 'done'),
+  ],
+};
+
 // 28. Interventions and stoppages (TI-28): an event log (engine change 2). An intervention not on the master's list of
 // validated ones fails the check and needs a deviation note (F3).
 export const interventions: Block = {
@@ -136,6 +151,32 @@ export const incubatedEm: Block = {
   ],
   settings: [limit('countLimit', 'Action limit (from the clean-air table)', false), limit('incubationLimit', 'Incubation time limits')],
   calcs: [within('countCheck', 'Count', 'count', 'countLimit'), duration('incubation', 'Incubation time', 'incubationStart', 'incubationEnd', 'incubationLimit?')],
+};
+
+// 29a, version 2 (I22): the count turned to its basis (per m³ of air from the litres sampled, per plate, per glove) and
+// checked against the clean-air table for the room's grade; a tighter action limit may be set, never a looser one.
+export const incubatedEm2: Block = {
+  ...incubatedEm, version: 2,
+  fields: [
+    text('sampleId', 'Sample ID'), { name: 'kind', label: 'Sample', kind: 'choice', options: ['air', 'settle plate', 'contact plate', 'glove print'] },
+    time('incubationStart', 'Incubation start'), time('incubationEnd', 'Incubation end'), num('count', 'Count', 'CFU'),
+    num('sampled', 'Air sampled (an air sample)', 'L', true), num('exposure', 'Plate exposure (a settle plate)', 'h', true),
+  ],
+  settings: [GRADE, { name: 'limit', label: 'Tighter action limit (e.g. "5 CFU/plate"; none: the table\'s)', kind: 'text', optional: true }, limit('incubationLimit', 'Incubation time limits')],
+  calcs: [
+    { name: 'countCheck', label: 'Count against the clean-air table', template: 'I22', args: { sample: '$kind', counts: '$count', sampled: '$sampled?', exposure: '$exposure?', grade: '$grade', actionLimit: '$limit?' } },
+    duration('incubation', 'Incubation time', 'incubationStart', 'incubationEnd', 'incubationLimit?'),
+  ],
+};
+
+// 29c. Bioburden before filtration or sterilisation (template round part 4): the count per 100 mL of product from the
+// millilitres filtered (I22), a QC lab result picked from LIMS as the biological indicator's is.
+export const incubatedBioburden: Block = {
+  id: 'incubated-bioburden', version: 1, name: 'Bioburden results (per 100 mL)', checker: true,
+  instruction: 'Pick the count of each bioburden sample from LIMS once QC has approved it (typed from the QC report only while LIMS cannot be reached) and the volume of product filtered.',
+  fields: [text('sampleId', 'Sample ID'), num('volume', 'Product filtered', 'mL'), { ...num('count', 'Count', 'CFU'), qc: 'in_process' }],
+  settings: [{ name: 'bioburdenLimit', label: 'Bioburden limit (per 100 mL, e.g. "10 CFU/100 mL")', kind: 'text' }, { name: 'alertLimit', label: 'Alert limit (per 100 mL)', kind: 'text', optional: true }],
+  calcs: [{ name: 'countCheck', label: 'Bioburden per 100 mL', template: 'I22', args: { sample: 'bioburden', counts: '$count', sampled: '$volume', actionLimit: '$bioburdenLimit', alertLimit: '$alertLimit?' } }],
 };
 
 // 29b. Biological indicator and bioburden results: QC lab tests of the batch's samples, picked from LIMS's approved

@@ -10,6 +10,7 @@
  */
 import { findBlock } from '../blocks/index.js';
 import { Dec } from '../templates/index.js';
+import { CLEAN_AIR, particleLimit } from './clean-air.js';
 import type { Limit, MasterDoc, SettingValue, Step } from './schema.js';
 import type { Answer } from './schema.js';
 
@@ -202,7 +203,7 @@ export function sterileChecks(doc: MasterDoc, ask: Ask, refuse: Refuse): void {
   if (fills && !ids.has('leak-test-100') && !ids.has('seal-check') && !ids.has('headspace-gas')) refuse('stages', 'The master closes and checks the containers (seal check or 100 % container-closure test)', 'TI-29');
   if (fills) need('visual-inspect', 'Every filled unit is inspected (100 % visual inspection)', 'TI-30');
   if (ids.has('lyo-cycle') && (!ids.has('lyo-load') || !ids.has('lyo-unload'))) refuse('stages', 'Freeze-drying has its loading and its stoppering and unloading with the cycle', 'TI-31');
-  const LATER = ['incubated-results', 'incubated-em', 'incubated-lab'];
+  const LATER = ['incubated-results', 'incubated-em', 'incubated-lab', 'incubated-bioburden'];
   if (LATER.some((id) => ids.has(id)) && !doc.stages.some((s) => s.startsAfter && s.steps.some((t) => LATER.includes(t.block.id)))) {
     refuse('stages', 'Incubated results (EM, BIs, bioburden) are read in a stage that starts after the step that took the samples', 'TI-26');
   }
@@ -214,6 +215,25 @@ export function sterileChecks(doc: MasterDoc, ask: Ask, refuse: Refuse): void {
   // 50 / 21 ⛔ a suspension filled by the plain fill block: stirring is optional there, so it could never be recorded.
   if (SUSPENSION.test(h.productName)) {
     for (const x of steps.filter((y) => y.id === 'fill')) refuse(x.path, 'A suspension or emulsion is filled with the block that checks the stirring every round ("Fill a suspension or emulsion"), not the plain fill (library check 50)');
+  }
+
+  // Template round part 4 (I22). The clean-air table is the limit: a tighter action limit may be set, never a looser one (also
+  // refused at the step by I22). 45 ⚠️ a bioburden limit written per mL instead of per 100 mL.
+  for (const x of steps.filter((y) => y.id === 'em-filling' && y.t.block.version >= 2)) {
+    const grade = x.t.settings.grade as keyof typeof CLEAN_AIR.particles | undefined, state = x.t.settings.state === 'at rest' ? 'atRest' : x.t.settings.state === 'in operation' ? 'inOperation' : undefined;
+    if (!grade || !state) continue;
+    for (const [name, size] of [['limit05', '0.5'], ['limit5', '5']] as const) {
+      const v = x.t.settings[name];
+      if (typeof v !== 'string') continue;
+      const m = /^(\d+(?:\.\d+)?)\s*particles\/m³$/.exec(v.trim());
+      const table = particleLimit(grade, state, size);
+      if (!m) refuse(`${x.path}.settings.${name}`, `Write the action limit in particles/m³, like the clean-air table ("${v}" is not)`);
+      else if (table !== null && new Dec(m[1]!).gt(table)) refuse(`${x.path}.settings.${name}`, `The action limit ${v} is looser than the clean-air table for grade ${grade} ${String(x.t.settings.state)} (${table} particles/m³): a master may only set a tighter limit`);
+    }
+  }
+  for (const x of steps.filter((y) => y.id === 'incubated-bioburden')) {
+    const v = x.t.settings.bioburdenLimit;
+    if (typeof v === 'string' && /\/\s*mL\b/i.test(v)) ask(`${x.path}.settings.bioburdenLimit`, `bioburden-basis/${x.s.key}/${x.t.key}`, `The bioburden limit "${v}" is per mL: a bioburden limit is written per 100 mL (a limit per mL is 100 times weaker). Rewrite it per 100 mL, or confirm with a reason.`, ['per mL confirmed'], true);
   }
 
   // Template round part 3: the cheap master checks.
