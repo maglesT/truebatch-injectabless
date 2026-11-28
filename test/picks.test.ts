@@ -91,7 +91,7 @@ describe('machine pickers on the demo master-data types', () => {
     const vessel = field('dissolve', 'machine');
     const all = [{ code: 'EQ-V-01', type: 'Compounding vessel', room: 'RM-107' }, { code: 'EQ-N', type: null, room: null }, { code: 'EQ-AC-01', type: 'Autoclave', room: 'RM-103' }];
     expect(emptyNote(stage, vessel, all, ROOMS)).toBe('No vessel or mixer can be used here: EQ-V-01 stands in RM-107 (Coating), not in a room this stage allows (RM-103): the master names the rooms each stage runs in. '
-      + '1 machine has no type in master data, so it is not offered. Engineering moves one into a room this stage allows, or adds one, in master data (the LEAD shows where each stands).');
+      + '1 machine has no type in master data, so it is not offered. Engineering moves one into a room this stage allows, or adds one, in master data (LEAD shows where each stands).');
     expect(emptyNote(stage, vessel, all.slice(1), ROOMS)).toBe('Master data has no active vessel or mixer. 1 machine has no type in master data, so it is not offered. Engineering adds it in master data.');
   });
 

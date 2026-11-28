@@ -276,13 +276,15 @@ describe('the review list for QA', () => {
       events: events.map((e) => ({ ...e, personName: 'RAMESH' })), batchEvents: batchEvents.map((b) => ({ ...b, personName: 'MEERA' })), now: at(1000), versionNo: 1, issuedByName: 'SUPER', signatures: [] }, 'QA'));
     const ended = record([be('rejected', { terminated: true, reason: 'The filling line broke down' })]);
     expect(ended.match(/pH = 9: not reached in this round; the next round followed/g)).toHaveLength(1);
-    expect(ended.match(/NOT YET: the rounds go on/g)).toHaveLength(1);
+    expect(ended.match(/NOT REACHED IN THIS ROUND: the next round followed/g)).toHaveLength(1);
+    expect(ended).not.toContain('NOT YET: the rounds go on');
     expect(ended.match(/pH = 9: not reached \(terminated\)/g)).toHaveLength(1);
     expect(ended.match(/NOT REACHED: terminated/g)).toHaveLength(1);
     expect(ended.indexOf('the next round followed')).toBeLessThan(ended.indexOf('not reached (terminated)'));
-    // In production both rounds read as before.
+    // In production the open round goes on; the round another followed reads as history (fix 1128).
     const live = record([]);
-    expect(live.match(/NOT YET: the rounds go on/g)).toHaveLength(2);
+    expect(live.match(/NOT YET: the rounds go on/g)).toHaveLength(1);
+    expect(live.match(/NOT REACHED IN THIS ROUND: the next round followed/g)).toHaveLength(1);
     expect(live).not.toContain('terminated');
   });
 });
