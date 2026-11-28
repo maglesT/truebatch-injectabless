@@ -182,7 +182,7 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
   // A10 (fix round 21 Nov 2026): every room the stage allows is busy or not clean: say how the master gets its own room.
   const allBusy = (f: BlockField) => { const p = picksFor(f); return f.kind === 'room' && p.length > 0 && p.every((x) => x.notFit); };
   const noteFor = (f: BlockField) => [mdRead && !fits(f).length ? emptyNote(stage, f, md.machine, md.room, dispensingRooms(doc, md.room), qty) : null, pickOf(f).note,
-    allBusy(f) ? `Every room this stage allows (${stage.roomTypes.join(', ')}) is in use or not fit in the LEAD. Wait for one, or the master names another room for this stage (by its code, in the stage settings of a new master version); a new room is added in master data first.` : null];
+    allBusy(f) ? `Every room this stage allows (${stage.roomTypes.join(', ')}) is in use or not fit in LEAD. Wait for one, or the master names another room for this stage (by its code, in the stage settings of a new master version); a new room is added in master data first.` : null];
 
   const post = (action: string, body: object = {}, key = row.id) => api('POST', `/api/batches/${d.batch.id}/steps/${key}/${action}`, body);
   const run = async (fn: () => Promise<unknown>) => {
@@ -460,11 +460,11 @@ export function StepScreen({ me, d, blocks, row, now, reload }: { me: Me; d: Bat
 /** The signer's training in the step's skill, as Recruitment answered when the dialog opened. */
 type TrainingRead = { skill: Skill; link: 'ok' | 'absent' | 'down'; ok: boolean; training?: Training; message?: string };
 function TrainingCheck({ skill, read, ticked, onTick }: { skill: Skill; read: TrainingRead | null; ticked: boolean; onTick: (b: boolean) => void }) {
-  if (!read) return <p className="muted">Reading your training from Recruitment…</p>;
+  if (!read) return <p className="muted">Reading your training from TIDE…</p>;
   if (read.link === 'ok') return read.ok ? <p className="notice info">Your training: {trainingText(read.training!)}.</p> : <p className="notice bad">{read.message}</p>;
   return (
     <div className="notice warn">
-      <p>Recruitment {read.link === 'absent' ? 'is not linked' : 'cannot be reached'}: this step needs a person trained in it. Your signature will be marked “training typed by hand” for QA.</p>
+      <p>TIDE {read.link === 'absent' ? 'is not linked' : 'cannot be reached'}: this step needs a person trained in it. Your signature will be marked “training typed by hand” for QA.</p>
       <label className="check"><input type="checkbox" checked={ticked} onChange={(e) => onTick(e.target.checked)} />{tickText(skill)}</label>
     </div>
   );

@@ -123,11 +123,11 @@ export function Review({ me, version, doc, blocked, onChanged, onGo, onDeleted }
       )}
       {doing === 'approve' && !ccDone && (
         <Dialog title="Approve: change control" onCancel={close} onSubmit={() => (cc.trim() ? setCcDone(true) : setError('Type the change control number.'))} submit="Continue to sign" error={error}>
-          <label>Change control number<input autoFocus value={cc} onChange={(e) => setCc(e.target.value)} list="cc-picks" placeholder={changes.length ? 'Pick the change control from QMS' : 'e.g. CC-2026-014'} /></label>
+          <label>Change control number<input autoFocus value={cc} onChange={(e) => setCc(e.target.value)} list="cc-picks" placeholder={changes.length ? 'Pick the change control from ASSURE' : 'e.g. CC-2026-014'} /></label>
           {changes.length > 0 && <datalist id="cc-picks">{changes.map((c) => <option key={c.number} value={c.number}>{c.title}</option>)}</datalist>}
-          {changes.find((c) => c.number === cc.trim())?.names === 'none' && <p className="notice warn">QMS names no product for {cc.trim()}: check that it covers {doc.header.productCode} {doc.header.productName} before you sign.</p>}
+          {changes.find((c) => c.number === cc.trim())?.names === 'none' && <p className="notice warn">ASSURE names no product for {cc.trim()}: check that it covers {doc.header.productCode} {doc.header.productName} before you sign.</p>}
           <p className="muted small">The QA-approved change control under which this version is introduced.{!changes.some((c) => c.number === cc.trim())
-            && ' Without the QMS link it is typed, and another person makes the version effective.'}</p>
+            && ' Without the ASSURE link it is typed, and another person makes the version effective.'}</p>
         </Dialog>
       )}
       {doing === 'return' && (

@@ -88,9 +88,9 @@ describe('the training a step needs, in the master', () => {
 
   it('TI-32 the plain view says who may sign it: "Done by a person trained in SOP-STR-004 …"', () => {
     const lines = describeMaster(small([{ steps: [{ checker: true, training: SKILL }, {}] }])).flatMap((s) => s.lines.map((l) => l.text));
-    expect(lines.find((l) => l.startsWith('1.'))).toContain('Done by a person trained in SOP-STR-004 Operating the stirrer; checked by a person trained in it too (Recruitment).');
+    expect(lines.find((l) => l.startsWith('1.'))).toContain('Done by a person trained in SOP-STR-004 Operating the stirrer; checked by a person trained in it too (TIDE).');
     expect(lines.find((l) => l.startsWith('2.'))).not.toContain('trained');
-    expect(neededText({ code: 'SOP-X' }, false)).toBe('Done by a person trained in SOP-X (Recruitment).');
+    expect(neededText({ code: 'SOP-X' }, false)).toBe('Done by a person trained in SOP-X (TIDE).');
   });
 
   it('TI-32 the designer picks the skill from those Recruitment publishes (each once); none while the link is off or down', async () => {
@@ -117,7 +117,7 @@ describe('signing a step that names a training', () => {
     expect((await sign('asha', id, 'done')).statusCode).toBe(200);
     const done = (await eventsOf(id)).find((e) => e.kind === 'done')!;
     expect(done.payload.training).toMatchObject({ code: 'SOP-STR-004', title: 'Operating the stirrer', from: 'recruitment', trainedOn: '2026-01-10', validUntil: '2027-01-09' });
-    expect(trainingText(done.payload.training as never)).toBe('trained: SOP-STR-004 Operating the stirrer, valid until 9 Jan 2027 (Recruitment)');
+    expect(trainingText(done.payload.training as never)).toBe('trained: SOP-STR-004 Operating the stirrer, valid until 9 Jan 2027 (TIDE)');
     const [audit] = await t.owner<{ new_value: { training?: object } }[]>`select new_value from audit_log where action = 'step.done' and object_id = ${id}`;
     expect(audit!.new_value.training).toMatchObject({ code: 'SOP-STR-004' });
   });
@@ -128,9 +128,9 @@ describe('signing a step that names a training', () => {
     // ravi's training expired (qualified false); kiran has none.
     const expired = await sign('ravi', id, 'check');
     expect(expired.statusCode).toBe(409);
-    expect(expired.json()).toEqual({ error: 'not_trained', problems: ['RAVI has no valid training in SOP-STR-004 Operating the stirrer (Recruitment): ask QA, or another trained person signs.'] });
+    expect(expired.json()).toEqual({ error: 'not_trained', problems: ['RAVI has no valid training in SOP-STR-004 Operating the stirrer (TIDE): ask QA, or another trained person signs.'] });
     expect(((await as('kiran', 'GET', `/api/batches/${id}/steps/0.1.0.1/training`)).json() as { ok: boolean; message: string }))
-      .toMatchObject({ ok: false, message: 'KIRAN has no valid training in SOP-STR-004 Operating the stirrer (Recruitment): ask QA, or another trained person signs.' });
+      .toMatchObject({ ok: false, message: 'KIRAN has no valid training in SOP-STR-004 Operating the stirrer (TIDE): ask QA, or another trained person signs.' });
     expect((await sign('kiran', id, 'check')).json()).toMatchObject({ error: 'not_trained' });
     // A tick does not overrule Recruitment while it answers.
     expect((await sign('kiran', id, 'check', { trained: true })).json()).toMatchObject({ error: 'not_trained' });
@@ -146,7 +146,7 @@ describe('signing a step that names a training', () => {
       expect((await as('kiran', 'GET', `/api/batches/${id}/steps/0.1.0.1/training`)).json()).toMatchObject({ link: 'down', ok: false });
       const unticked = await sign('asha', id, 'done');
       expect(unticked.statusCode).toBe(409);
-      expect(unticked.json()).toMatchObject({ error: 'training_tick', problems: ['Recruitment cannot be reached: tick “I am trained in SOP-STR-004 Operating the stirrer” to sign, or another trained person signs.'] });
+      expect(unticked.json()).toMatchObject({ error: 'training_tick', problems: ['TIDE cannot be reached: tick “I am trained in SOP-STR-004 Operating the stirrer” to sign, or another trained person signs.'] });
       expect((await sign('asha', id, 'done', { trained: true })).statusCode).toBe(200);
       // Not trained in Recruitment, but it cannot say so now: the tick is the person's word, marked for QA.
       expect((await sign('kiran', id, 'check', { trained: true })).statusCode).toBe(200);
@@ -157,9 +157,9 @@ describe('signing a step that names a training', () => {
     const r = (await as('qaperson', 'GET', `/api/batches/${id}/review`)).json() as { trainingTyped: { kind: string; personName: string; code: string }[] };
     expect(r.trainingTyped.map((x) => [x.kind, x.personName, x.code])).toEqual([['done', 'ASHA', 'SOP-STR-004'], ['checked', 'KIRAN', 'SOP-STR-004']]);
     const pdf = JSON.stringify(batchRecordDoc(await recordInput(t.sql, (await loadBatch(t.sql, id))!), 'QA'));
-    expect(pdf).toContain('Training typed by hand (Recruitment not reachable)');
-    expect(pdf).toContain('TRAINING TYPED BY HAND (RECRUITMENT NOT REACHABLE): SOP-STR-004 OPERATING THE STIRRER');
-    expect(pdf).toContain('SOP-STR-004 Operating the stirrer: ticked \\"I am trained\\", Recruitment link down');
+    expect(pdf).toContain('Training typed by hand (TIDE not reachable)');
+    expect(pdf).toContain('TRAINING TYPED BY HAND (TIDE NOT REACHABLE): SOP-STR-004 OPERATING THE STIRRER');
+    expect(pdf).toContain('SOP-STR-004 Operating the stirrer: ticked \\"I am trained\\", TIDE link down');
   });
 
   it('TI-32 Recruitment not linked (absent): the same tick, marked "not linked"', async () => {
@@ -187,7 +187,7 @@ describe('signing a step that names a training', () => {
     const row = { code: 'S', title: 'Skill', qualified: true, trainedOn: '2026-01-01', validUntil: '2027-01-01', dataAsOf: null };
     expect(trainingCheck({ code: 'S' }, 'A', { state: 'ok', value: row }, false)).toMatchObject({ ok: true, training: { from: 'recruitment', title: 'Skill' } });
     expect(trainingCheck({ code: 'S' }, 'A', { state: 'ok', value: { ...row, qualified: false } }, true)).toMatchObject({ ok: false, error: 'not_trained' });
-    expect(trainingCheck({ code: 'S' }, 'A', { state: 'ok', value: null }, true)).toMatchObject({ ok: false, error: 'not_trained', message: 'A has no valid training in S (Recruitment): ask QA, or another trained person signs.' });
+    expect(trainingCheck({ code: 'S' }, 'A', { state: 'ok', value: null }, true)).toMatchObject({ ok: false, error: 'not_trained', message: 'A has no valid training in S (TIDE): ask QA, or another trained person signs.' });
     expect(trainingCheck({ code: 'S' }, 'A', { state: 'down' }, false)).toMatchObject({ ok: false, error: 'training_tick' });
     expect(trainingCheck({ code: 'S' }, 'A', { state: 'absent' }, true)).toEqual({ ok: true, training: { code: 'S', from: 'hand', state: 'absent' } });
     expect(trainingTyped([ev('done', '0.1.0.1', { payload: { training: { code: 'S', from: 'recruitment' } } })])).toEqual([]);

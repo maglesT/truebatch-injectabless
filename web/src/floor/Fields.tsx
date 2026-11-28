@@ -139,7 +139,7 @@ export function FieldInput({ f, unit, saved, picks = [], note, options = [], res
         <div className="picks" role="group" aria-label={f.label}>
           {picks.map((p) => (
             <button key={p.itemId} type="button" className={raw === p.itemId ? 'on' : ''} aria-pressed={raw === p.itemId} disabled={disabled} onClick={() => tap(p.itemId)}>
-              <b>{p.code}</b><small>{p.name}</small>{p.notFit && <small className="not-fit">{p.notFit} in the LEAD</small>}
+              <b>{p.code}</b><small>{p.name}</small>{p.notFit && <small className="not-fit">{p.notFit} in LEAD</small>}
             </button>
           ))}
         </div>

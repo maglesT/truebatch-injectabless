@@ -367,7 +367,7 @@ export const fill: Block = {
   calcs: [
     { name: 'target', label: 'Target net fill weight', template: 'I18', args: { mode: 'convert', quantity: '$fillTarget', density: '$density', unit: 'g', decimals: 3 } },
     { name: 'mean', label: 'Mean fill weight', template: 'T7', args: { readings: '$weights', limit: '$meanLimit' } },
-    { name: 'each', label: 'Each needle', template: 'C3', args: { readings: '$weights', band: { plusMinusPercent: '$band', of: { target: '$target' } } } },
+    { name: 'each', label: 'Each needle', template: 'C3', args: { readings: '$weights', band: { plusMinusPercent: '$band', of: { target: '$target', decimals: 3 } } } },
     observe('stopperCheck', 'Stoppers seated (and stirring on)', ['stoppers', 'stirring?']),
     within('headspaceCheck', 'Headspace oxygen', 'headspace?', 'headspaceLimit?'),
     { name: 'done', label: 'Filling finished', template: 'C4', args: { question: 'Filling', answers: ['$filling'], expected: ['finished'], options: ['going on', 'finished'] } },
@@ -450,7 +450,7 @@ export const powderFill2: Block = {
     { name: 'target', label: 'Fill weight for this lot', template: 'T9', args: { standard: '$labelClaim', basis: '$basis', assay: '$assay', water: '$water?', lod: '$lod?', standardIs: '$standardIs', excess: '$excess?', unit: 'g', decimals: 4 } },
     { name: 'mean', label: 'Mean fill weight', template: 'T7', args: { readings: '$weights' } },
     { name: 'meanCheck', label: 'Mean against the fill weight', template: 'C1', args: { value: '$mean', around: { centre: '$target', name: 'fill weight for this lot', plusMinusPercent: '$meanBand', centreDecimals: 4 } } },
-    { name: 'each', label: 'Each fill weight', template: 'C3', args: { readings: '$weights', band: { plusMinusPercent: '$eachBand', of: { target: '$target' } } } },
+    { name: 'each', label: 'Each fill weight', template: 'C3', args: { readings: '$weights', band: { plusMinusPercent: '$eachBand', of: { target: '$target', decimals: 4 } } } },
     within('otherCheck', 'Other active per unit', 'otherPerUnit?', 'otherLimit?'),
     within('humidityCheck', 'Room humidity', 'humidity', 'humidityLimit'), observe('stopperCheck', 'Stoppers seated', ['stoppers']), finished('filling', 'Filling'),
   ],

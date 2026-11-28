@@ -21,6 +21,6 @@ export const PACKING: Product = {
     'truebatch_injectables_packing.qa.release': 'QA review and release of packed batches',
     'truebatch_injectables_packing.view': 'View packing records and packing master versions',
     'truebatch_injectables_packing.demo.skip': 'Skip a running wait (demo installations only)',
-    'truebatch_injectables_packing.exception.decide': 'Decide a deviation note without a number: close it here (reason and e-signature) or send it to Deviations',
+    'truebatch_injectables_packing.exception.decide': 'Decide a deviation note without a number: close it here (reason and e-signature) or send it to DIVE',
   },
 };

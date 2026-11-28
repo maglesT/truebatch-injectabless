@@ -19,13 +19,13 @@ export interface TrainingRead { code: string; title: string | null; qualified: b
 
 export const skillText = (s: Skill) => (s.title?.trim() ? `${s.code} ${s.title.trim()}` : s.code);
 /** The master's step in plain words. */
-export const neededText = (s: Skill, checker: boolean) => `Done by a person trained in ${skillText(s)}${checker ? '; checked by a person trained in it too' : ''} (Recruitment).`;
-export const notTrainedText = (name: string, s: Skill) => `${name} has no valid training in ${skillText(s)} (Recruitment): ask QA, or another trained person signs.`;
+export const neededText = (s: Skill, checker: boolean) => `Done by a person trained in ${skillText(s)}${checker ? '; checked by a person trained in it too' : ''} (TIDE).`;
+export const notTrainedText = (name: string, s: Skill) => `${name} has no valid training in ${skillText(s)} (TIDE): ask QA, or another trained person signs.`;
 export const tickText = (s: Skill) => `I am trained in ${skillText(s)}`;
-export const TYPED_BY_HAND = 'training typed by hand (Recruitment not reachable)';
+export const TYPED_BY_HAND = 'training typed by hand (TIDE not reachable)';
 /** What the signature records, as the step, the review and the PDF show it. */
 export const trainingText = (t: Training) => (t.from === 'hand' ? `${TYPED_BY_HAND}: ${skillText(t)}`
-  : `trained: ${skillText(t)}${t.validUntil ? `, valid until ${plantDate(t.validUntil)}` : ''} (Recruitment)`);
+  : `trained: ${skillText(t)}${t.validUntil ? `, valid until ${plantDate(t.validUntil)}` : ''} (TIDE)`);
 
 export type TrainingAnswer = { ok: true; training: Training } | { ok: false; error: 'not_trained' | 'training_tick'; message: string };
 /**
@@ -34,7 +34,7 @@ export type TrainingAnswer = { ok: true; training: Training } | { ok: false; err
  */
 export function trainingCheck(skill: Skill, name: string, read: { state: 'ok'; value: TrainingRead | null } | { state: 'absent' | 'down' }, ticked: boolean): TrainingAnswer {
   if (read.state !== 'ok') {
-    if (!ticked) return { ok: false, error: 'training_tick', message: `Recruitment cannot be reached: tick “${tickText(skill)}” to sign, or another trained person signs.` };
+    if (!ticked) return { ok: false, error: 'training_tick', message: `TIDE cannot be reached: tick “${tickText(skill)}” to sign, or another trained person signs.` };
     return { ok: true, training: { code: skill.code, ...(skill.title ? { title: skill.title } : {}), from: 'hand', state: read.state } };
   }
   const r = read.value;

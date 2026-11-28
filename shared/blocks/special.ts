@@ -42,7 +42,7 @@ export const asepticReady2: Block = {
 // glove test (and the decontamination) through the isolator or RABS field. The line's media fill stays typed.
 export const asepticReady3: Block = {
   ...asepticReady2, version: 3,
-  instruction: 'Before aseptic work: the isolator or RABS fit for use in the LEAD (its glove test and decontamination), people in grade A/B qualified, the line\'s media fill in date, sterilised items within their use-by, grade A airflow and pressure as specified, and the aseptic assembly done.',
+  instruction: 'Before aseptic work: the isolator or RABS fit for use in LEAD (its glove test and decontamination), people in grade A/B qualified, the line\'s media fill in date, sterilised items within their use-by, grade A airflow and pressure as specified, and the aseptic assembly done.',
   fields: asepticReady2.fields.filter((f) => f.name !== 'gloves'),
   calcs: [observe('ready', 'Ready for aseptic work', ['people', 'airflow', 'assembly'])],
 };
@@ -52,7 +52,7 @@ export const asepticReady3: Block = {
 // in place the Logbook decides. Version 3 stays for the recorded batches.
 export const asepticReady4: Block = {
   ...asepticReady3, version: 4,
-  instruction: 'Before aseptic work: the isolator, RABS or blow-fill-seal machine fit for use in the LEAD, people in grade A/B qualified, the line\'s media fill in date, sterilised items within their use-by, grade A airflow and pressure as specified, and the aseptic assembly done.',
+  instruction: 'Before aseptic work: the isolator, RABS or blow-fill-seal machine fit for use in LEAD, people in grade A/B qualified, the line\'s media fill in date, sterilised items within their use-by, grade A airflow and pressure as specified, and the aseptic assembly done.',
   fields: asepticReady3.fields.map((f) => (f.name === 'isolator' ? { ...f, label: 'Isolator, RABS or blow-fill-seal machine', types: ['isolator', 'rabs', 'blow'] } : f)),
 };
 

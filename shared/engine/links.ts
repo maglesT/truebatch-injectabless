@@ -11,7 +11,7 @@ import type { BlockField } from '../blocks/format.js';
 export const PROVIDERS = ['deviations', 'qms', 'logbook', 'mms', 'truebatch_injectables', 'qual', 'recruitment', 'lims'] as const;
 export type Provider = (typeof PROVIDERS)[number];
 export type LinkState = 'absent' | 'down' | 'ok';
-export const PROVIDER_NAME: Record<Provider, string> = { deviations: 'DIVE', qms: 'QMS', logbook: 'LEAD', mms: 'MMS', truebatch_injectables: 'TrueBatch Injectables', qual: 'Qualification', recruitment: 'Recruitment', lims: 'QLIMS' };
+export const PROVIDER_NAME: Record<Provider, string> = { deviations: 'DIVE', qms: 'ASSURE', logbook: 'LEAD', mms: 'MMS', truebatch_injectables: 'TrueBatch Injectables', qual: 'Qualification', recruitment: 'TIDE', lims: 'QLIMS' };
 
 /**
  * Pulled through a link (with what was read, PL-07), or typed by hand while the link was absent or down. Round 43: or

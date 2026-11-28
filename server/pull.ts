@@ -32,13 +32,13 @@ export async function pullItem(app: FastifyInstance, block: Block, f: BlockField
   const r = await app.links.logbook.status(item.itemId);
   if (r.state !== 'ok' || r.value === 'stale') return hand('logbook', r.state === 'absent' ? 'absent' : 'down');
   const s = r.value;
-  if (!s) return refused(`${item.code} is not in the LEAD, so it cannot be used.`);
+  if (!s) return refused(`${item.code} is not in LEAD, so it cannot be used.`);
   // The line clearance after packing clears the line this batch has just used (it may already be dirty: a stage that
   // names no rooms does not keep the line in use, equipment_use_v1).
   if (!s.fitForUse && block.id !== 'pack-clearance-after') return refused(`${item.code} is not fit for use (LEAD): ${clauses(s.blockers) || stateWords(s.state)}.`);
   // Owner 17 Nov 2026: after an antibiotic, only that product may follow until a product-changeover cleaning is verified in the Logbook.
   if (s.onlyProduct && s.onlyProduct !== productCode) {
-    return refused(`${item.code} was last used for an antibiotic (${s.onlyProduct}): a product-changeover cleaning is needed in the LEAD before ${productCode}.`);
+    return refused(`${item.code} was last used for an antibiotic (${s.onlyProduct}): a product-changeover cleaning is needed in LEAD before ${productCode}.`);
   }
   if (s.inUseBatch && s.inUseBatch !== batchNo) return refused(`${item.code} is in use by batch ${s.inUseBatch} (LEAD).`);
   const source: Source = { from: 'logbook', asOf: s.checkedAt, shown: clauses([`${item.code}: ${stateWords(s.state)}`, ...s.warnings]) };

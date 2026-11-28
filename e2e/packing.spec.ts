@@ -111,7 +111,7 @@ test('TI-P2 packing journey: packing master from the skeleton (labelling, carton
   try {
     await iss.page.getByRole('row', { name: /Effective/ }).getByRole('button', { name: 'Issue a batch' }).click();
     await expect(issue.getByRole('group', { name: 'Packing line' }).getByRole('button')).toHaveText([/LL-01/]);
-    await expect(issue.getByText(/Not offered, because the LEAD does not have/)).toHaveCount(0);
+    await expect(issue.getByText(/Not offered, because LEAD does not have/)).toHaveCount(0);
     await issue.getByRole('group', { name: 'Packing line' }).getByRole('button', { name: /LL-01/ }).click();
     await issue.getByLabel('Batch no. of the filled units').fill('TI260001');
     // Pull, don't type: the units issued are what is left of the batch's good units, from TrueBatch Injectables,

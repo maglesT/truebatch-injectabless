@@ -75,6 +75,13 @@ describe('fix2 1122: powder fill from the lot needs a potency-adjusted dispensin
     expect(target).toMatch(/^\d\.\d{4}$/);
     expect((r.meanCheck as { shown: string }).shown).toContain(`from ${target} g`);
   });
+  it('fix 1128: the each-weight check shows the target rounded too ("of the target 1.1170 g")', () => {
+    const d = one('powder-fill', { ...settings, basis: 'as is', labelClaim: '500 mg', excess: '25 mg' });
+    const r = run(d, { assay: pct('47.13'), weights: ['1.1140', '1.1140', '1.1140', '1.1140'].map(g), humidity: { value: '28', unit: '%RH' }, stoppers: 'yes', counter: { value: '10', unit: 'units' }, filling: 'going on' });
+    const target = /= ([\d.]+) g/.exec((r.target as { shown: string }).shown)![1]!;
+    expect((r.each as { check: { shown: string } }).check.shown).toContain(`of the target ${target} g`);
+    expect(JSON.stringify(r.each)).not.toContain('…');
+  });
 });
 
 describe('part 2: a hold above the validated maximum (check 49)', () => {

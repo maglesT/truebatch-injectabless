@@ -186,11 +186,11 @@ export function batchRecordDoc(r: RecordInput, by: string, printedAt = new Date(
   // Signatures whose training was typed by hand because Recruitment was not reachable, for QA (owner, 17 Nov 2026);
   // only when the master names a training.
   if (doc.stages.some((s) => s.steps.some((t) => t.training))) {
-    content.push(heading('Training typed by hand (Recruitment not reachable)'));
+    content.push(heading('Training typed by hand (TIDE not reachable)'));
     content.push(table([170, 150, 120, '*'], ['Step', 'Signed by', 'When', 'Training'], trainingTyped(events).map((x) => [
       small(stepLabel(x.step)), small(`${who(x.person)} (${x.kind === 'checked' ? 'checked' : 'performed'})`), small(plant(x.at)),
-      small(`${skillText(x)}: ticked "I am trained", Recruitment ${x.state === 'down' ? 'link down' : 'not linked'}`, { color: RED }),
-    ]), 'None: every training was read from Recruitment.'));
+      small(`${skillText(x)}: ticked "I am trained", TIDE ${x.state === 'down' ? 'link down' : 'not linked'}`, { color: RED }),
+    ]), 'None: every training was read from TIDE.'));
   }
 
   // Every signature of the batch with its meaning.
@@ -263,7 +263,7 @@ function resultLines(block: Block, st: Step, v: StepView, who: (id: number | nul
       small(lead, h ? { bold: true } : {}),
       ...(h ? [small(shown, { color: '#555555', margin: [8, 0, 0, 0] })] : []),
       ...checks.filter(([, c]) => c.shown !== r.shown).map(([, c]) => small(withoutVerdict(text(c.shown)), { color: '#555555', margin: [8, 0, 0, 0] })),
-      ...checks.map(([, c]) => small(c.pass ? 'PASS' : notYet ? (terminated ? 'NOT REACHED: terminated' : 'NOT YET: the rounds go on') : 'FAIL: out of limits', { bold: true, color: c.pass ? '#1b6e3a' : notYet ? '#666666' : RED, margin: [8, 0, 0, 2] })),
+      ...checks.map(([, c]) => small(c.pass ? 'PASS' : notYet ? (terminated ? 'NOT REACHED: terminated' : followed ? 'NOT REACHED IN THIS ROUND: the next round followed' : 'NOT YET: the rounds go on') : 'FAIL: out of limits', { bold: true, color: c.pass ? '#1b6e3a' : notYet ? '#666666' : RED, margin: [8, 0, 0, 2] })),
     ];
   });
   if (v.inputChanged.length) out.push(small(`Worked out again: an input was corrected later (${v.inputChanged.map((e) => `${who(e.person)}, ${plant(e.at)}`).join('; ')})`, { color: RED }));

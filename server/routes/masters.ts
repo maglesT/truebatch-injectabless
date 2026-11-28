@@ -207,7 +207,7 @@ export function reviewRefusal(action: ReviewAction, l: Loaded, user: SessionUser
     // TI-02: a change control number typed by hand at approval (QMS absent or down) is confirmed by a second person.
     const approved = l.events.filter((e) => e.kind === 'approved').at(-1);
     if (isHand(approved?.payload.source?.changeControl) && approved!.person === user.id) {
-      return no(403, 'same_person', 'The change control number was typed by hand at approval: another person makes the version effective, after checking the number and its QA approval in QMS or its paper record.');
+      return no(403, 'same_person', 'The change control number was typed by hand at approval: another person makes the version effective, after checking the number and its QA approval in ASSURE or its paper record.');
     }
   }
   return null;
@@ -221,12 +221,12 @@ async function changeControlSource(app: FastifyInstance, number: string, product
   const r = await app.links.qms.change(number);
   if (r.state !== 'ok') return { from: 'hand', link: 'qms', state: r.state };
   const c = r.value;
-  if (!c) throw new ReviewError(409, 'unknown_change_control', [`${number} is not a change control in QMS.`]);
+  if (!c) throw new ReviewError(409, 'unknown_change_control', [`${number} is not a change control in ASSURE.`]);
   // The change control must name the master's product; one that names no product is taken, with a warning for QA.
   const names = product ? namesProduct(c, product) : 'yes';
-  if (names === 'no') throw new ReviewError(409, 'other_product', [`${number} is for ${c.products} in QMS, not for ${product!.productCode} ${product!.productName}: pick the change control of this product.`]);
-  if (!approvedChange(c)) throw new ReviewError(409, 'change_not_approved', [`${number} is at the step “${c.status.replaceAll('_', ' ')}” in QMS${c.qaApprovedAt ? '' : ' and not approved by QA'}: only a QA-approved change control (${CHANGE_STEPS.join(', ')}) can carry a new version.`]);
-  return { from: 'qms', asOf: c.qaApprovedAt, shown: `${c.number}: ${c.title ?? ''} (${c.status}, QA approved ${c.qaApprovedAt})${c.products ? `; products: ${c.products}` : `; QMS names no product: QA checked that it covers ${product?.productCode ?? 'this product'}`}` };
+  if (names === 'no') throw new ReviewError(409, 'other_product', [`${number} is for ${c.products} in ASSURE, not for ${product!.productCode} ${product!.productName}: pick the change control of this product.`]);
+  if (!approvedChange(c)) throw new ReviewError(409, 'change_not_approved', [`${number} is at the step “${c.status.replaceAll('_', ' ')}” in ASSURE${c.qaApprovedAt ? '' : ' and not approved by QA'}: only a QA-approved change control (${CHANGE_STEPS.join(', ')}) can carry a new version.`]);
+  return { from: 'qms', asOf: c.qaApprovedAt, shown: `${c.number}: ${c.title ?? ''} (${c.status}, QA approved ${c.qaApprovedAt})${c.products ? `; products: ${c.products}` : `; ASSURE names no product: QA checked that it covers ${product?.productCode ?? 'this product'}`}` };
 }
 
 class ReviewError extends Error {

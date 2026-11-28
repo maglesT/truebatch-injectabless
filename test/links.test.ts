@@ -205,7 +205,7 @@ describe('TI-11 LEAD: equipment and rooms fit for use', () => {
     // A picker with choices has no note; an empty one names what the Logbook does not have.
     expect(picks.note).toBeNull();
     expect(inLogbook(stirrers.filter((m) => m.code === 'STR-05'), r.items)).toEqual({ offered: [],
-      note: 'Not offered, because the LEAD does not have it: STR-05. Only what the LEAD has can be used while it is linked.' });
+      note: 'Not offered, because LEAD does not have it: STR-05. Only what LEAD has can be used while it is linked.' });
     expect(inLogbook(t.master.rooms_, r.items).offered.map((x) => x.code)).toEqual(['GRN-01']);
     await cut(S.lb);
     try {
@@ -219,7 +219,7 @@ describe('TI-11 LEAD: equipment and rooms fit for use', () => {
     await act('asha', b.id, '0.1.1.1', 'start');
     expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str2' }))).toEqual(['STR-02 is not fit for use (LEAD): Dirty: clean and verify before the next use; Calibration overdue.']);
     expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str3' }))).toEqual(['STR-03 is in use by batch XB26001 (LEAD).']);
-    expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str5' }))).toEqual(['STR-05 is not in the LEAD, so it cannot be used.']);
+    expect(await problems(record(b.id, '0.1.1.1', { machine: 'eq-str5' }))).toEqual(['STR-05 is not in LEAD, so it cannot be used.']);
   });
 
   it('TI-11 F19 the aseptic set-up records the isolator or RABS: refused while the LEAD says it is not fit (glove test, decontamination); taken when fit', async () => {
@@ -533,7 +533,7 @@ describe('TI-02 QMS: a new master version needs a QA-approved change control', (
     const { id, review } = await draft();
     expect((await review('quality', 'approve', { changeControl: 'CC-404' })).json()).toMatchObject({ error: 'unknown_change_control' });
     expect((await review('quality', 'approve', { changeControl: 'CC-2026-0002' })).json())
-      .toMatchObject({ error: 'change_not_approved', message: 'CC-2026-0002 is at the step “qa” in QMS and not approved by QA: only a QA-approved change control (implementation, closure, closed) can carry a new version.' });
+      .toMatchObject({ error: 'change_not_approved', message: 'CC-2026-0002 is at the step “qa” in ASSURE and not approved by QA: only a QA-approved change control (implementation, closure, closed) can carry a new version.' });
     expect((await review('quality', 'approve', { changeControl: 'CC-2026-0003' })).json()).toMatchObject({ error: 'change_not_approved' });
     expect((await review('quality', 'approve', { changeControl: 'CC-2026-0001' })).statusCode).toBe(200);
     const [e] = await t.owner<{ payload: { source: { changeControl: { from: string; shown: string } } } }[]>`
@@ -559,10 +559,10 @@ describe('TI-02 QMS: a new master version needs a QA-approved change control', (
       expect(await picks()).toEqual([['CC-2026-0001', 'none']]);
     } finally { await set('PRD-001', 'New supplier of lactose'); }
     expect((await review('quality', 'approve', { changeControl: 'CC-2026-0004' })).json()).toMatchObject({ error: 'other_product',
-      message: 'CC-2026-0004 is for FG-PCM500 Paracetamol 500 mg tablets in QMS, not for PRD-001 Examplol 100 mg film-coated tablets: pick the change control of this product.' });
+      message: 'CC-2026-0004 is for FG-PCM500 Paracetamol 500 mg tablets in ASSURE, not for PRD-001 Examplol 100 mg film-coated tablets: pick the change control of this product.' });
     expect((await review('quality', 'approve', { changeControl: 'CC-2026-0005' })).statusCode).toBe(200);
     const [e] = await t.owner<{ payload: { source: { changeControl: { shown: string } } } }[]>`select payload from master_events where version_id = ${id} and kind = 'approved'`;
-    expect(e!.payload.source.changeControl.shown).toMatch(/QMS names no product: QA checked that it covers PRD-001$/);
+    expect(e!.payload.source.changeControl.shown).toMatch(/ASSURE names no product: QA checked that it covers PRD-001$/);
     const c = (products: string | null) => ({ number: 'CC', status: 'closed', title: null, qaApprovedAt: 'x', products });
     const prd = { productCode: 'FG-ATV20', productName: 'Atorvastatin calcium tablets 20 mg' };
     expect([c('fg-atv20, FG-ATV40'), c('ATORVASTATIN CALCIUM TABLETS 20 MG'), c('FG-ATV200'), c('FG-ATV20-C5 carton'), c(' '), c(null)].map((x) => namesProduct(x, prd))).toEqual(['yes', 'yes', 'no', 'no', 'none', 'none']);
@@ -926,7 +926,7 @@ describe('TI-11 LEAD: an antibiotic\'s line kept for it', () => {
       const c = await issue(small([{ machineTypes: ['stirrer'], steps: [{ block: { id: 'mix', version: 1 }, settings: {} }, yieldStep] }]));
       await act('asha', c.id, '0.1.0.1', 'start');
       expect(await problems(record(c.id, '0.1.0.1', { machine: 'eq-str' }))).toEqual(
-        ['STR-01 was last used for an antibiotic (FG-PWD-EXC1): a product-changeover cleaning is needed in the LEAD before P.']);
+        ['STR-01 was last used for an antibiotic (FG-PWD-EXC1): a product-changeover cleaning is needed in LEAD before P.']);
       // The same product follows: allowed, pulled.
       await t.owner.unsafe(`update ${S.lb}.equipment_status_v1 set only_product = 'P' where master_id = 'eq-str'`);
       expect((await record(c.id, '0.1.0.1', { machine: 'eq-str', speed: '300' })).statusCode).toBe(200);

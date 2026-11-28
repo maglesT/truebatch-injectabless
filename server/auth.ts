@@ -17,7 +17,7 @@ export const PERMISSIONS = {
   'truebatch_injectables.qa.release': 'QA review and release of filled, inspected units',
   'truebatch_injectables.view': 'View batch records and master versions',
   'truebatch_injectables.demo.skip': 'Skip a running wait (demo installations only)',
-  'truebatch_injectables.exception.decide': 'Decide a deviation note without a number: close it here (reason and e-signature) or send it to Deviations',
+  'truebatch_injectables.exception.decide': 'Decide a deviation note without a number: close it here (reason and e-signature) or send it to DIVE',
   // Confirmed by the owner (16 November 2026): QA grants and removes these under its procedures; no training dates are kept here.
   'truebatch_injectables.batch.aseptic': 'Aseptic operator: record and sign the steps of aseptic stages (granted by QA)',
   'truebatch_injectables.batch.inspect': 'Visual inspector: record and sign 100 % visual inspection (granted by QA)',

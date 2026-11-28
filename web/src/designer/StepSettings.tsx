@@ -142,16 +142,16 @@ function TrainingNeeded({ value, onChange }: { value?: Skill; onChange: (s: Skil
     // A skill the master names that Recruitment no longer lists stays offered, marked.
     const skills = value && !read.skills.some((x) => x.code === value.code) ? [...read.skills, value] : read.skills;
     return (
-      <label>Training needed (from Recruitment)
+      <label>Training needed (from TIDE)
         <select aria-label="Training needed" value={value?.code ?? ''} onChange={(e) => onChange(skills.find((x) => x.code === e.target.value))}>
           <option value="">(none: anyone with the permission signs)</option>
-          {skills.map((x) => <option key={x.code} value={x.code}>{skillText(x)}{read.skills.includes(x) ? '' : ' (not in Recruitment now)'}</option>)}
+          {skills.map((x) => <option key={x.code} value={x.code}>{skillText(x)}{read.skills.includes(x) ? '' : ' (not in TIDE now)'}</option>)}
         </select>
       </label>
     );
   }
   return (
-    <label>Training needed (Recruitment is {read.link === 'absent' ? 'not linked' : 'not reachable'}: type the skill code)
+    <label>Training needed (TIDE is {read.link === 'absent' ? 'not linked' : 'not reachable'}: type the skill code)
       <input aria-label="Training needed" placeholder="none, e.g. SOP-STR-004" value={value?.code ?? ''}
         onChange={(e) => onChange(e.target.value.trim() ? { code: e.target.value.trim() } : undefined)} />
     </label>
